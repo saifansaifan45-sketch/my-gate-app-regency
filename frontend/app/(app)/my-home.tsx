@@ -13,8 +13,9 @@ import { Skeleton } from '../../src/components/ui/Skeleton';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
-import { homeLayout } from '../../src/components/home/homeSurface';
-import { householdApi, HouseholdMemberRecord } from '../../src/api/household';
+import { homeLayout, homeSurface } from '../../src/components/home/homeSurface';
+import { cardSystem } from '../../src/components/ui/cardSystem';
+import { householdApi } from '../../src/api/household';
 
 const RELATIONSHIP_COLORS: Record<string, { bg: string; text: string }> = {
   OWNER: { bg: '#ECFDF5', text: '#047857' },
@@ -88,7 +89,7 @@ export default function MyHomeScreen() {
           <PremiumPressable
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             onPress={() => router.push('/profile-settings')}
-            style={styles.headerIconBtn}
+            style={styles.settingsBtn}
           >
             <Feather name="settings" size={18} color={theme.colors.textSecondary} />
           </PremiumPressable>
@@ -111,11 +112,11 @@ export default function MyHomeScreen() {
             <View style={styles.heroOverlay} />
             <View style={styles.heroContent}>
               <View style={styles.heroBadge}>
-                <Feather name="home" size={13} color="#FFFFFF" />
+                <Feather name="home" size={12} color="#FFFFFF" />
                 <Text style={styles.heroBadgeText}>My Residence</Text>
               </View>
-              <Text style={styles.unitNumber}>{unitNumber}</Text>
-              <Text style={styles.unitAddress}>Regency Salma Township</Text>
+              <Text style={styles.heroUnit}>{unitNumber}</Text>
+              <Text style={styles.heroAddress}>Regency Salma Township</Text>
             </View>
           </View>
         </ScreenEntrance>
@@ -124,16 +125,16 @@ export default function MyHomeScreen() {
         <ScreenEntrance delay={80}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Registered Residents</Text>
-              <Text style={styles.sectionCount}>{allResidents.length}</Text>
+              <Text style={homeLayout.sectionTitle}>Registered Residents</Text>
+              <Text style={styles.residentCount}>{allResidents.length}</Text>
             </View>
 
-            <View style={styles.card}>
+            <View style={homeSurface}>
               {isLoading ? (
                 <View style={styles.skeletonWrap}>
                   {[1, 2, 3].map((i) => (
                     <View key={i} style={styles.skeletonRow}>
-                      <Skeleton width={44} height={44} style={{ borderRadius: 22 }} />
+                      <Skeleton width={42} height={42} style={{ borderRadius: 14 }} />
                       <View style={{ flex: 1, gap: 6 }}>
                         <Skeleton width="60%" height={14} style={{ borderRadius: 4 }} />
                         <Skeleton width="40%" height={11} style={{ borderRadius: 4 }} />
@@ -185,9 +186,9 @@ export default function MyHomeScreen() {
               onPress={() => router.push('/family-members')}
               scaleTo={0.97}
             >
-              <Feather name="users" size={16} color={theme.colors.primary} />
+              <Feather name="users" size={15} color={theme.colors.primary} />
               <Text style={styles.manageLinkText}>Manage household members</Text>
-              <Feather name="arrow-right" size={14} color={theme.colors.primary} />
+              <Feather name="arrow-right" size={13} color={theme.colors.primary} />
             </PremiumPressable>
           </View>
         </ScreenEntrance>
@@ -195,8 +196,8 @@ export default function MyHomeScreen() {
         {/* Unit Details */}
         <ScreenEntrance delay={120}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Unit Details</Text>
-            <View style={styles.card}>
+            <Text style={homeLayout.sectionTitle}>Unit Details</Text>
+            <View style={[homeSurface, { marginTop: homeLayout.headingSpacing }]}>
               <View style={styles.detailRow}>
                 <View style={styles.detailIconBox}>
                   <Feather name="home" size={16} color={theme.colors.primary} />
@@ -230,25 +231,27 @@ export default function MyHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  headerIconBtn: {
+  settingsBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   content: { paddingTop: 4 },
 
   /* Hero */
   heroContainer: {
     height: 200,
-    borderRadius: 24,
+    borderRadius: cardSystem.radius,
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: cardSystem.sectionSpacing,
     position: 'relative',
     justifyContent: 'flex-end',
-    padding: 22,
+    padding: 20,
   },
   heroImage: {
     position: 'absolute',
@@ -276,7 +279,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: 98,
     marginBottom: 12,
   },
   heroBadgeText: {
@@ -285,71 +288,51 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-  unitNumber: {
+  heroUnit: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 32,
     color: '#FFF',
     letterSpacing: -0.5,
     marginBottom: 2,
   },
-  unitAddress: {
+  heroAddress: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
     color: 'rgba(255,255,255,0.75)',
   },
 
   /* Sections */
-  section: { marginBottom: 28 },
+  section: {
+    marginBottom: cardSystem.sectionSpacing,
+    paddingHorizontal: cardSystem.pagePadding,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-    paddingHorizontal: 4,
   },
-  sectionTitle: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
-    letterSpacing: -0.3,
-    color: theme.colors.textPrimary,
-  },
-  sectionCount: {
+  residentCount: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 13,
     color: theme.colors.primary,
     backgroundColor: '#E8F5E9',
     paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-
-  /* Card */
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    borderRadius: 98,
   },
 
   /* Residents */
   residentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    gap: 14,
+    padding: 15,
+    gap: 12,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -358,7 +341,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textPrimary,
   },
   avatarTextPrimary: {
@@ -374,7 +357,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   residentName: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 15,
     color: theme.colors.textPrimary,
     flex: 1,
@@ -383,7 +366,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 98,
   },
   youBadgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -403,7 +386,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.2,
   },
-  divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginHorizontal: 16 },
+  divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginHorizontal: 15 },
 
   /* Manage link */
   manageLink: {
@@ -414,9 +397,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
+    borderColor: theme.colors.border,
   },
   manageLinkText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -428,14 +411,14 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 15,
     gap: 12,
   },
   detailIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#F0FDF4',
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -452,11 +435,11 @@ const styles = StyleSheet.create({
   },
 
   /* Skeleton */
-  skeletonWrap: { padding: 16 },
+  skeletonWrap: { padding: 15 },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     marginBottom: 16,
   },
 });
