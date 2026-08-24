@@ -4,6 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { Text } from './Text';
 import { theme } from '../../theme';
 import { AnimatedEntrance } from './AnimatedEntrance';
+import { cardSurface } from './cardSystem';
 
 interface EmptyStateProps {
   icon: keyof typeof Feather.glyphMap;
@@ -28,18 +29,11 @@ export function EmptyState({ icon, title, description }: EmptyStateProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    ...cardSurface,
+    borderRadius: 16,
     padding: 32,
     alignItems: 'center',
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
   },
   icon: { marginBottom: 16, opacity: 0.8 },
   title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: theme.colors.textPrimary, textAlign: 'center', marginBottom: 8 },

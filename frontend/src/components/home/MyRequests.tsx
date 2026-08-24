@@ -5,7 +5,8 @@ import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
 import { Skeleton } from '../ui/Skeleton';
 import { TicketItem } from '../../api/manager';
-import { homeLayout, homeSurface } from './homeSurface';
+import { homeLayout } from './homeSurface';
+import { theme } from '../../theme';
 
 interface MyRequestsProps {
   requests: TicketItem[];
@@ -28,70 +29,50 @@ const getStatusLabel = (status: TicketItem['status']) => {
   return labels[status];
 };
 
-const formatCreatedAt = (createdAt: string) =>
-  new Date(createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-
 export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = false, error = false, onPress }) => {
-  const requestSummary = `${requests.length} Active Request${requests.length === 1 ? '' : 's'}`;
+  const latestRequest = requests[0];
+  const summary = `${requests.length} active request${requests.length === 1 ? '' : 's'}`;
+  const title = error ? 'Requests unavailable' : latestRequest ? summary : 'All caught up';
+  const description = error
+    ? 'Pull to refresh and try again.'
+    : latestRequest
+      ? `${latestRequest.title} · ${getStatusLabel(latestRequest.status)}`
+      : 'Your maintenance requests will appear here.';
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>My requests</Text>
-        {!loading && !error && requests.length > 0 ? <Text style={styles.summary}>{requestSummary}</Text> : null}
-      </View>
-
       {loading ? (
         <View style={styles.loadingCard} accessibilityLabel="Loading maintenance requests">
-          <Skeleton width="48%" height={16} borderRadius={7} />
-          <Skeleton width="78%" height={14} borderRadius={7} style={styles.loadingLine} />
-        </View>
-      ) : error ? (
-        <View style={styles.emptyState}>
-          <Feather name="alert-circle" size={20} color="#B45309" />
-          <View style={styles.emptyCopy}>
-            <Text style={styles.emptyTitle}>Requests are unavailable</Text>
-            <Text style={styles.emptyDescription}>Pull to refresh and try again.</Text>
-          </View>
-        </View>
-      ) : requests.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Feather name="check-circle" size={20} color="#166534" />
-          <View style={styles.emptyCopy}>
-            <Text style={styles.emptyTitle}>No active requests</Text>
-            <Text style={styles.emptyDescription}>Your maintenance requests will appear here.</Text>
-          </View>
+          <Skeleton width="36%" height={13} borderRadius={7} />
+          <Skeleton width="62%" height={22} borderRadius={7} style={styles.loadingTitle} />
+          <Skeleton width="82%" height={13} borderRadius={7} />
         </View>
       ) : (
-        <View style={styles.list}>
-          {requests.slice(0, 2).map((request) => (
-            <PremiumPressable
-              key={request.id}
-              style={styles.requestRow}
-              onPress={onPress}
-              scaleTo={0.98}
-              accessibilityRole="button"
-              accessibilityLabel={`${request.title}, ${getStatusLabel(request.status)}`}
-            >
-              <View style={styles.requestCopy}>
-                <Text style={styles.requestTitle} numberOfLines={1}>{request.title}</Text>
-                <Text style={styles.requestDate}>{formatCreatedAt(request.createdAt)}</Text>
-              </View>
-              <View style={[styles.statusBadge, request.status === 'IN_PROGRESS' && styles.statusBadgeProgress, request.status === 'PENDING_RESIDENT_CONFIRMATION' && styles.statusBadgeReview]}>
-                <Text style={[styles.statusText, request.status === 'IN_PROGRESS' && styles.statusTextProgress, request.status === 'PENDING_RESIDENT_CONFIRMATION' && styles.statusTextReview]}>
-                  {getStatusLabel(request.status)}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={16} color="#6B7280" />
-            </PremiumPressable>
-          ))}
-          {requests.length > 2 ? (
-            <PremiumPressable style={styles.viewAllButton} onPress={onPress} scaleTo={0.97}>
-              <Text style={styles.viewAllText}>View all requests</Text>
-              <Feather name="arrow-up-right" size={15} color="#166534" />
-            </PremiumPressable>
-          ) : null}
-        </View>
+        <PremiumPressable
+          style={styles.card}
+          onPress={onPress}
+          scaleTo={0.98}
+          accessibilityRole="button"
+          accessibilityLabel={`My requests. ${title}. ${description}`}
+        >
+          <View style={styles.backgroundIcon} pointerEvents="none">
+            <Feather name="tool" size={136} color="rgba(255, 255, 255, 0.07)" />
+          </View>
+          <View style={styles.content}>
+            <View style={styles.iconBox}>
+              <Feather name={error ? 'alert-circle' : latestRequest ? 'tool' : 'check-circle'} size={24} color={theme.colors.onPrimary} />
+            </View>
+            <View style={styles.copy}>
+              <Text style={styles.eyebrow}>My requests</Text>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+              <Text style={styles.description} numberOfLines={1}>{description}</Text>
+            </View>
+            <View style={styles.action}>
+              <Text style={styles.actionText}>View requests</Text>
+              <Feather name="chevron-right" size={15} color={theme.colors.onPrimary} />
+            </View>
+          </View>
+        </PremiumPressable>
       )}
     </View>
   );
@@ -99,26 +80,51 @@ export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = fals
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: homeLayout.pagePadding, marginBottom: homeLayout.sectionSpacing },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: homeLayout.headingSpacing },
-  sectionTitle: homeLayout.sectionTitle,
-  summary: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: '#166534' },
-  loadingCard: { ...homeSurface, padding: homeLayout.cardPadding },
-  loadingLine: { marginTop: 10 },
-  emptyState: { minHeight: 96, padding: homeLayout.cardPadding, ...homeLayout.emptyState, alignItems: 'center', gap: 8 },
-  emptyCopy: { alignItems: 'center' },
-  emptyTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: '#143D2A', marginBottom: 2 },
-  emptyDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, color: '#6B7280', lineHeight: 18 },
-  list: { ...homeSurface, backgroundColor: '#F1F7F2', padding: 0 },
-  requestRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: homeLayout.cardPadding, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(20, 61, 42, 0.07)' },
-  requestCopy: { flex: 1 },
-  requestTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: '#111827', marginBottom: 3 },
-  requestDate: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11.5, color: '#6B7280' },
-  statusBadge: { backgroundColor: '#ECFDF5', borderRadius: 98, paddingHorizontal: 9, paddingVertical: 4 },
-  statusBadgeProgress: { backgroundColor: '#EFF6FF' },
-  statusBadgeReview: { backgroundColor: '#FFF7ED' },
-  statusText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10.5, color: '#166534' },
-  statusTextProgress: { color: '#1D4ED8' },
-  statusTextReview: { color: '#C2410C' },
-  viewAllButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44 },
-  viewAllText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12.5, color: '#166534' },
+  card: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    paddingHorizontal: homeLayout.cardPaddingLarge,
+    paddingVertical: homeLayout.cardPadding,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  loadingCard: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 16,
+    minHeight: 82,
+    paddingHorizontal: homeLayout.cardPaddingLarge,
+    paddingVertical: homeLayout.cardPadding,
+    gap: 7,
+  },
+  loadingTitle: { opacity: 0.76 },
+  backgroundIcon: { position: 'absolute', right: -18, bottom: -36 },
+  content: { flexDirection: 'row', alignItems: 'center' },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  copy: { flex: 1, minWidth: 0 },
+  eyebrow: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(255, 255, 255, 0.65)',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  title: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 20, lineHeight: 26, color: theme.colors.onPrimary, letterSpacing: -0.4, marginBottom: 3 },
+  description: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: 'rgba(255, 255, 255, 0.75)' },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 6 },
+  actionText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: 'rgba(255, 255, 255, 0.9)' },
 });

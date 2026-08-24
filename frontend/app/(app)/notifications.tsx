@@ -105,12 +105,12 @@ export default function NotificationsScreen() {
     activeFilter === 'UNREAD' ? notifications.filter((n: NotificationItem) => !n.readStatus) : notifications;
 
   const getNotifIcon = (type: string) => {
-    if (type === 'EMERGENCY_SOS') return { name: 'alert-triangle', color: '#DC2626', bg: '#FEE2E2' };
-    if (type.includes('TICKET_CREATED')) return { name: 'alert-circle', color: '#D97706', bg: '#FEF3C7' };
-    if (type.includes('TASK_ASSIGNED')) return { name: 'user-check', color: '#2563EB', bg: '#EFF6FF' };
-    if (type.includes('IN_PROGRESS') || type.includes('STARTED')) return { name: 'tool', color: '#7C3AED', bg: '#F5F3FF' };
-    if (type.includes('COMPLETED') || type.includes('VERIFIED')) return { name: 'check-circle', color: '#059669', bg: '#ECFDF5' };
-    return { name: 'bell', color: theme.colors.primary, bg: '#ECFDF5' };
+    if (type === 'EMERGENCY_SOS') return { name: 'alert-triangle', ...theme.status.danger };
+    if (type.includes('TICKET_CREATED')) return { name: 'alert-circle', ...theme.status.warning };
+    if (type.includes('TASK_ASSIGNED')) return { name: 'user-check', ...theme.status.info };
+    if (type.includes('IN_PROGRESS') || type.includes('STARTED')) return { name: 'tool', ...theme.status.info };
+    if (type.includes('COMPLETED') || type.includes('VERIFIED')) return { name: 'check-circle', ...theme.status.success };
+    return { name: 'bell', foreground: theme.colors.primary, background: theme.colors.surfaceGreen };
   };
 
   return (
@@ -176,14 +176,14 @@ export default function NotificationsScreen() {
                   style={[styles.notifCard, isUnread && styles.notifCardUnread]}
                   onPress={() => handleMarkRead(notif.id, notif.metadata)}
                 >
-                  <View style={[styles.iconWrap, { backgroundColor: iconMeta.bg }]}>
-                    <Feather name={iconMeta.name as any} size={18} color={iconMeta.color} />
+                  <View style={[styles.iconWrap, { backgroundColor: iconMeta.background }]}>
+                    <Feather name={iconMeta.name as any} size={18} color={iconMeta.foreground} />
                   </View>
 
                   <View style={styles.notifContent}>
                     <View style={styles.titleRow}>
                       <Text style={[styles.title, isUnread && styles.titleUnread]}>{notif.title}</Text>
-                      {isUnread && <View style={styles.unreadDot} />}
+                      {isUnread && <Text style={styles.unreadLabel}>Unread</Text>}
                     </View>
                     <Text style={styles.message} numberOfLines={2}>{notif.message}</Text>
                     <Text style={styles.time}>
@@ -225,15 +225,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: cardSystem.pagePadding,
     paddingVertical: 10,
     gap: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: theme.colors.border,
   },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 98,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.colors.surfaceMuted,
   },
   tabActive: { backgroundColor: theme.colors.primary },
   tabText: {
@@ -241,26 +241,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textSecondary,
   },
-  tabTextActive: { color: '#FFFFFF' },
+  tabTextActive: { color: theme.colors.onPrimary },
   list: { padding: 20, paddingTop: 14 },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
+    borderColor: theme.colors.border,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 1,
   },
   notifCardUnread: {
-    backgroundColor: '#FAFDFB',
-    borderColor: 'rgba(20, 61, 42, 0.15)',
+    backgroundColor: theme.colors.surfaceGreen,
+    borderColor: theme.status.success.border,
   },
   iconWrap: {
     width: 42,
@@ -281,12 +281,11 @@ const styles = StyleSheet.create({
   titleUnread: {
     fontFamily: 'PlusJakartaSans_700Bold',
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
-    backgroundColor: theme.colors.primary,
-    marginLeft: 6,
+  unreadLabel: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 11,
+    color: theme.colors.primary,
+    marginLeft: 8,
   },
   message: {
     fontFamily: 'PlusJakartaSans_400Regular',

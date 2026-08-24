@@ -4,6 +4,7 @@ import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { PremiumPressable } from './PremiumPressable';
 import { Text } from './Text';
 import { cardSurface, cardSystem } from './cardSystem';
+import { theme } from '../../theme';
 
 interface ActionCardProps {
   icon: React.ReactNode;
@@ -28,7 +29,7 @@ export function ActionCard({
   description,
   supportingLabel,
   onPress,
-  accentColor = '#166534',
+  accentColor = theme.colors.primary,
   style,
   trailing,
 }: ActionCardProps) {

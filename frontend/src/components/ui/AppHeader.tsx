@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    backgroundColor: theme.colors.surfaceMuted,
   },
   titleColumn: {
     flex: 1,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    backgroundColor: theme.colors.surfaceMuted,
   },
   unreadDot: {
     position: 'absolute',

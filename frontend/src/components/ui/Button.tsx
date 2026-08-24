@@ -78,17 +78,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(20, 61, 42, 0.22)',
   },
   danger: {
-    backgroundColor: '#DC2626',
-    shadowColor: '#DC2626',
+    backgroundColor: theme.status.danger.foreground,
+    shadowColor: theme.status.danger.foreground,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 4,
   },
   dangerOutline: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: theme.status.danger.background,
     borderWidth: 1,
-    borderColor: 'rgba(220, 38, 38, 0.25)',
+    borderColor: theme.status.danger.border,
   },
   disabled: {
     opacity: 0.6,
@@ -100,9 +100,9 @@ const styles = StyleSheet.create({
 });
 
 const VARIANTS = {
-  primary: { container: styles.primary, textColor: '#FFFFFF' },
+  primary: { container: styles.primary, textColor: theme.colors.onPrimary },
   secondary: { container: styles.secondary, textColor: theme.colors.textPrimary },
   outline: { container: styles.outline, textColor: theme.colors.primary },
-  danger: { container: styles.danger, textColor: '#FFFFFF' },
-  dangerOutline: { container: styles.dangerOutline, textColor: '#B91C1C' },
+  danger: { container: styles.danger, textColor: theme.colors.onPrimary },
+  dangerOutline: { container: styles.dangerOutline, textColor: theme.status.danger.foreground },
 };

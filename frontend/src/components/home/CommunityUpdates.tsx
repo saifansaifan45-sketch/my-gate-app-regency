@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
+import { Skeleton } from '../ui/Skeleton';
 import { homeLayout } from './homeSurface';
 import { CommunityAnnouncement } from '../../api/community';
 import { theme } from '../../theme';
@@ -31,239 +32,119 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   onAnnouncementPress,
   onCreateNotice,
 }) => {
-  const publishedList = announcements.slice(0, 1);
+  const announcement = announcements[0];
+  const hasUnread = announcements.some((item) => !item.isRead);
+  const title = announcement ? announcement.title : 'All quiet in your community';
+  const description = announcement
+    ? `${hasUnread ? 'New update' : announcement.category || announcement.priority} - ${relativeTime(announcement.createdAt)}`
+    : 'Published notices from management will appear here.';
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.sectionTitle}>Community updates</Text>
-          {announcements.some((a) => !a.isRead) && <View style={styles.unreadBadgeDot} />}
-        </View>
-        <View style={styles.headerActions}>
-          {onCreateNotice && (
-            <PremiumPressable
-              style={styles.createBtn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={onCreateNotice}
-              scaleTo={0.94}
-            >
-              <Feather name="plus" size={14} color="#FFFFFF" />
-              <Text style={styles.createBtnText}>Create</Text>
-            </PremiumPressable>
-          )}
-          <PremiumPressable
-            style={styles.viewAllBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={onViewAllPress}
-            scaleTo={0.94}
-          >
-            <Text style={styles.viewAllText}>View all</Text>
-            <Feather name="chevron-right" size={15} color="#166534" />
-          </PremiumPressable>
-        </View>
-      </View>
-
       {loading ? (
-        <View style={styles.card}>
-          <Text style={styles.placeholderText}>Loading updates...</Text>
-        </View>
-      ) : publishedList.length > 0 ? (
-        <View style={styles.cardStack}>
-          {publishedList.map((item) => {
-            const isUrgent = item.priority === 'URGENT';
-            const isImportant = item.priority === 'IMPORTANT';
-            const badgeBg = isUrgent ? '#FDEBEC' : isImportant ? '#FEF3D6' : '#EAF6EE';
-            const badgeText = isUrgent ? '#B42318' : isImportant ? '#A46100' : '#1F7A45';
-
-            return (
-              <PremiumPressable
-                key={item.id}
-                style={styles.card}
-                onPress={() => onAnnouncementPress ? onAnnouncementPress(item) : onViewAllPress()}
-                scaleTo={0.98}
-              >
-                <View style={styles.metaRow}>
-                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                    <Text style={[styles.badgeText, { color: badgeText }]}>
-                      {item.category || item.priority}
-                    </Text>
-                  </View>
-                  <Text style={styles.timeText} numberOfLines={1}>
-                    {!item.isRead ? 'New · ' : ''}{relativeTime(item.createdAt)}
-                  </Text>
-                </View>
-
-                <Text style={styles.titleText} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={styles.bodyText} numberOfLines={2}>
-                  {item.content}
-                </Text>
-              </PremiumPressable>
-            );
-          })}
+        <View style={styles.loadingCard} accessibilityLabel="Loading community updates">
+          <Skeleton width="36%" height={13} borderRadius={7} />
+          <Skeleton width="72%" height={22} borderRadius={7} style={styles.loadingTitle} />
+          <Skeleton width="56%" height={13} borderRadius={7} />
         </View>
       ) : (
-        <View style={styles.emptyCard}>
-          <View style={styles.emptyIconBox}>
-            <Feather name="bell" size={20} color="#166534" />
+        <PremiumPressable
+          style={[styles.card, onCreateNotice && styles.cardWithCreate]}
+          onPress={() => announcement && onAnnouncementPress ? onAnnouncementPress(announcement) : onViewAllPress()}
+          scaleTo={0.98}
+          accessibilityRole="button"
+          accessibilityLabel={`Community updates. ${title}. ${description}`}
+        >
+          <View style={styles.backgroundIcon} pointerEvents="none">
+            <Feather name="bell" size={136} color="rgba(255, 255, 255, 0.07)" />
           </View>
-          <View style={styles.emptyContent}>
-            <Text style={styles.emptyTitle}>All quiet in your community</Text>
-            <Text style={styles.emptySub}>Published notices from management will appear here.</Text>
+          {onCreateNotice ? (
+            <PremiumPressable style={styles.createButton} onPress={onCreateNotice} scaleTo={0.94} accessibilityLabel="Create community notice">
+              <Feather name="plus" size={14} color={theme.colors.onPrimary} />
+              <Text style={styles.createButtonText}>Create</Text>
+            </PremiumPressable>
+          ) : null}
+          <View style={styles.content}>
+            <View style={styles.iconBox}>
+              <Feather name={announcement ? 'bell' : 'check-circle'} size={24} color={theme.colors.onPrimary} />
+            </View>
+            <View style={styles.copy}>
+              <Text style={styles.eyebrow}>Community updates</Text>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+              <Text style={styles.description} numberOfLines={1}>{description}</Text>
+            </View>
+            <View style={styles.action}>
+              <Text style={styles.actionText}>View updates</Text>
+              <Feather name="chevron-right" size={15} color={theme.colors.onPrimary} />
+            </View>
           </View>
-        </View>
+        </PremiumPressable>
       )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: homeLayout.pagePadding,
-    marginBottom: homeLayout.sectionSpacing,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: homeLayout.headingSpacing,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionTitle: homeLayout.sectionTitle,
-  unreadBadgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#DC2626',
-  },
-  viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  viewAllText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 14,
-    color: '#166534',
-  },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  createBtnText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  cardStack: {
-    gap: 10,
-  },
+  container: { paddingHorizontal: homeLayout.pagePadding, marginBottom: homeLayout.sectionSpacing },
   card: {
-    width: '100%',
-    backgroundColor: '#FFFDF8',
+    backgroundColor: theme.colors.community,
     borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(20, 61, 42, 0.06)',
-    shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    alignItems: 'flex-start',
+    paddingHorizontal: homeLayout.cardPaddingLarge,
+    paddingVertical: homeLayout.cardPadding,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: theme.colors.community,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 3,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    alignSelf: 'stretch',
+  cardWithCreate: { paddingRight: 80 },
+  loadingCard: {
+    backgroundColor: theme.colors.community,
+    borderRadius: 16,
+    minHeight: 82,
+    paddingHorizontal: homeLayout.cardPaddingLarge,
+    paddingVertical: homeLayout.cardPadding,
+    gap: 7,
   },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 97,
-  },
-  badgeText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  timeText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  titleText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
-    lineHeight: 20,
-    color: theme.colors.textPrimary,
-    marginBottom: 6,
-  },
-  bodyText: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    color: theme.colors.textSecondary,
-  },
-  placeholderText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  emptyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#F3F8F4',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(20, 61, 42, 0.06)',
-    shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#EAF6EE',
+  loadingTitle: { opacity: 0.76 },
+  backgroundIcon: { position: 'absolute', right: -18, bottom: -36 },
+  content: { flexDirection: 'row', alignItems: 'center' },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
-  emptyContent: {
-    flex: 1,
+  copy: { flex: 1, minWidth: 0 },
+  eyebrow: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(255, 255, 255, 0.65)',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 3,
   },
-  emptyTitle: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 14,
-    color: theme.colors.textPrimary,
-    marginBottom: 2,
+  title: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 20, lineHeight: 26, color: theme.colors.onPrimary, letterSpacing: -0.4, marginBottom: 3 },
+  description: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: 'rgba(255, 255, 255, 0.75)' },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 6 },
+  actionText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: 'rgba(255, 255, 255, 0.9)' },
+  createButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    minHeight: 32,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
-  emptySub: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
+  createButtonText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: theme.colors.onPrimary },
 });

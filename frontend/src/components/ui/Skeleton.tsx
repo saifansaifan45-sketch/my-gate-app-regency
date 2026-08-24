@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform, Animated, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
+import { theme } from '../../theme';
 
 interface SkeletonProps {
   width?: DimensionValue;
@@ -41,6 +42,6 @@ export function Skeleton({ width = '100%', height = 20, style, borderRadius = 4 
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#E5E0D8', // subtle warm-gray/ivory tone
+    backgroundColor: theme.colors.surfaceMuted,
   },
 });

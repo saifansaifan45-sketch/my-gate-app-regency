@@ -14,12 +14,12 @@ export type ServiceEntry = {
 
 export const QUICK_ACTION_VISUALS = {
   standard: {
-    background: '#F0EBE3',
-    icon: '#8B6F47',
+    background: '#E9F4EA',
+    icon: '#1B4D36',
   },
   emergency: {
-    background: '#FEE2E2',
-    icon: '#DC2626',
+    background: '#FDECEA',
+    icon: '#B42318',
   },
 } as const;
 

@@ -37,14 +37,14 @@ export default function ServicesScreen() {
           <View style={styles.categoryBlock}>
              <Text style={styles.categoryTitle}>Manager Operations</Text>
              <ActionCard
-                style={{ backgroundColor: '#F3F8F5', borderColor: 'rgba(20, 61, 42, 0.18)', marginBottom: 12 }}
+                style={{ backgroundColor: theme.colors.surfaceGreen, borderColor: theme.status.success.border, marginBottom: 12 }}
                 onPress={() => router.push('/manager')}
-                icon={<MaterialCommunityIcons name="shield-account" size={24} color="#FFFFFF" />}
-                iconBackground="#143D2A"
+                icon={<MaterialCommunityIcons name="shield-account" size={24} color={theme.colors.onPrimary} />}
+                iconBackground={theme.colors.primary}
                 title="Manager Dashboard"
                 description="Tickets, personnel assignments & staff attendance"
                 supportingLabel="Manage community"
-accentColor="#143D2A"
+                accentColor={theme.colors.primary}
 />
           </View>
         )}
@@ -55,17 +55,17 @@ accentColor="#143D2A"
             {categories[cat].map(service => (
               <ActionCard
                 key={service.id}
-                style={service.isEmergency ? { backgroundColor: '#FFF7F7', borderColor: '#FFCDD2', marginBottom: 12 } : { marginBottom: 12 }}
+                style={service.isEmergency ? { backgroundColor: theme.status.danger.background, borderColor: theme.status.danger.border, marginBottom: 12 } : { marginBottom: 12 }}
                 onPress={() => {
                   if (service.isEmergency) setIsEmergencySOSVisible(true);
                   else router.push(service.route);
                 }}
                 icon={<Feather name={service.icon as any} size={22} color={service.isEmergency ? theme.colors.error : theme.colors.primary} />}
-                iconBackground={service.isEmergency ? '#FFEBEE' : '#E8F5E9'}
+                iconBackground={service.isEmergency ? theme.status.danger.background : theme.colors.surfaceGreen}
                 title={service.label}
                 description={service.description}
                 supportingLabel={service.category}
-accentColor={service.isEmergency ? theme.colors.error : theme.colors.primary}
+                accentColor={service.isEmergency ? theme.status.danger.foreground : theme.colors.primary}
 />
             ))}
           </View>
@@ -81,5 +81,5 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
   categoryBlock: { marginBottom: 20 },
-  categoryTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#374151', marginBottom: 12, marginLeft: 4 }
+  categoryTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: theme.colors.textPrimary, marginBottom: 12, marginLeft: 4 }
 });

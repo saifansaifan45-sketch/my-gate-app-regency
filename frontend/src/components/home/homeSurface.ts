@@ -1,5 +1,6 @@
 import { ViewStyle, TextStyle } from 'react-native';
 import { cardSurface, cardSystem } from '../ui/cardSystem';
+import { theme } from '../../theme';
 
 /**
  * The Home page follows the same quiet, elevated surface language as auth:
@@ -24,13 +25,13 @@ export const homeLayout = {
   sectionTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 16,
-    color: '#111827',
+    color: theme.colors.textPrimary,
     letterSpacing: -0.3,
   } as TextStyle,
   emptyState: {
     borderRadius: cardSystem.radius,
-    backgroundColor: 'rgba(20, 61, 42, 0.05)',
+    backgroundColor: theme.colors.surfaceGreen,
     borderWidth: 1,
-    borderColor: 'rgba(20, 61, 42, 0.08)',
+    borderColor: theme.status.success.border,
   } as ViewStyle,
 };

@@ -15,14 +15,14 @@ export const cardSystem = {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 15,
     lineHeight: 20,
-    color: '#111827',
+    color: theme.colors.textPrimary,
     letterSpacing: -0.1,
   } as TextStyle,
   description: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 12.5,
     lineHeight: 17,
-    color: '#6B7280',
+    color: theme.colors.textSecondary,
   } as TextStyle,
 };
 
@@ -30,8 +30,8 @@ export const cardSurface: ViewStyle = {
   backgroundColor: theme.colors.surface,
   borderRadius: cardSystem.radius,
   borderWidth: 1,
-  borderColor: 'rgba(20, 61, 42, 0.06)',
-  shadowColor: '#143D2A',
+  borderColor: theme.colors.border,
+  shadowColor: theme.colors.primary,
   shadowOffset: { width: 0, height: 5 },
   shadowOpacity: 0.06,
   shadowRadius: 14,

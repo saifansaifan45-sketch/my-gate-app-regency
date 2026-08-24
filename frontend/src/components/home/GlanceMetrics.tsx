@@ -45,7 +45,7 @@ export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPr
           scaleTo={0.94}
         >
           <Text style={styles.viewAllText}>View all</Text>
-          <Feather name="chevron-right" size={15} color="#166534" />
+          <Feather name="chevron-right" size={15} color={theme.colors.primary} />
         </PremiumPressable>
       </View>
 
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 14,
-    color: '#166534',
+    color: theme.colors.primary,
   },
   grid: {
     flexDirection: 'row',
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
-    color: '#6B7280',
+    color: theme.colors.textSecondary,
     marginBottom: 8,
   },
   count: {
@@ -118,6 +118,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 11,
-    color: '#9CA3AF',
+    color: theme.colors.textTertiary,
   },
 });
