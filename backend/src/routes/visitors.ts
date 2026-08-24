@@ -29,7 +29,6 @@ const createVisitorSchema = z.object({
   purpose: z.string().optional(),
   vehicleNumber: z.string().optional(),
   visitorType: z.nativeEnum(VisitorType).default(VisitorType.GUEST),
-  isPreApproved: z.boolean().default(false),
   validFrom: z.string().optional(),
   validUntil: z.string().optional(),
   provider: z.string().optional(),
@@ -41,9 +40,14 @@ function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-/** A passcode is reserved for expected guests. Gate-confirmed service arrivals do not need one. */
+/** Only GUEST visitors require OTP verification. CAB, DELIVERY, SERVICE never need OTP. */
 function visitorRequiresOtp(visitor: { visitorType: VisitorType; otp: string | null }) {
   return visitor.visitorType === VisitorType.GUEST && Boolean(visitor.otp);
+}
+
+/** Determine if a visitor type should have OTP generated. Only GUEST gets OTP. */
+function shouldGenerateOtp(visitorType: VisitorType): boolean {
+  return visitorType === VisitorType.GUEST;
 }
 
 async function getResidentActiveUnit(userId: string) {
@@ -153,7 +157,7 @@ router.post('/unannounced', requireSecurityOrLeadership, async (req: AuthRequest
 });
 
 // ----------------------------------------------------
-// 1. POST /visitors (Resident creates an expected visitor / pass)
+// 1. POST /visitors (Resident creates an expected visitor / pass - always pre-approved)
 // ----------------------------------------------------
 router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -165,11 +169,13 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
       return res.status(403).json({ error: { message: 'Verified residence required.' } });
     }
 
-    const initialStatus = body.isPreApproved ? VisitorStatus.APPROVED : VisitorStatus.PENDING;
+    // All resident-created passes are pre-approved
+    const initialStatus = VisitorStatus.APPROVED;
     let plaintextOtp: string | undefined;
     let hashedOtp: string | null = null;
 
-    if (body.isPreApproved && body.visitorType === VisitorType.GUEST) {
+    // Only GUEST visitors get OTP
+    if (shouldGenerateOtp(body.visitorType)) {
       plaintextOtp = generateOtp();
       hashedOtp = await bcrypt.hash(plaintextOtp, 10);
     }
@@ -181,14 +187,14 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
 
     const visitor = await prisma.visitor.create({
       data: {
-        name: body.name?.trim() || body.provider?.trim() || 'Unannounced',
+        name: body.name?.trim() || body.provider?.trim() || 'Visitor',
         phone: body.phone?.trim() || null,
         purpose: body.purpose?.trim() || 'Visitor',
         vehicleNumber: body.vehicleNumber?.trim() || null,
         visitorType: body.visitorType,
         status: initialStatus,
-        otp: hashedOtp, // ONLY STORE HASH
-        isPreApproved: body.isPreApproved,
+        otp: hashedOtp,
+        isPreApproved: true,
         createdById: userId,
         unitId: unit!.id,
         communityId: unit.communityId,
@@ -201,14 +207,15 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
       include: { unit: true, createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } } },
     });
 
+    const isGuest = visitor.visitorType === VisitorType.GUEST;
     await prisma.notification.create({
       data: {
         userId,
         type: 'VISITOR_PASS_CREATED',
-        title: body.isPreApproved ? 'Entry Pass Generated' : 'Visitor Request Submitted',
-        message: body.isPreApproved
-          ? `Pass generated for ${visitor.name}.`
-          : `Visitor request for ${visitor.name} has been sent to the gate.`,
+        title: isGuest ? 'Guest Pass Generated' : 'Entry Pre-Approved',
+        message: isGuest
+          ? `Pass generated for ${visitor.name}. OTP: ${plaintextOtp}`
+          : `${visitor.visitorType} pre-approved for ${visitor.name}. No OTP required.`,
         metadata: { visitorId: visitor.id },
       },
     });
@@ -428,7 +435,7 @@ router.get('/:id/audit', requireWorkforceOrManager, async (req: AuthRequest, res
 });
 
 // ----------------------------------------------------
-// POST /visitors/:id/approve (Resident)
+// POST /visitors/:id/approve (Resident approves unannounced arrival)
 // ----------------------------------------------------
 router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -444,11 +451,11 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
       return res.status(400).json({ error: { message: 'Visitor is already in a terminal state: ' + visitor.status } });
     }
     
-    const isUnannounced = !visitor.isPreApproved && visitor.createdById !== req.user!.userId;
+    // Only GUEST visitors get OTP when approved (for both unannounced and resident's own)
     let plaintextOtp: string | null = null;
     let hashedOtp: string | null = null;
     
-    if (!isUnannounced && visitor.visitorType === VisitorType.GUEST) {
+    if (shouldGenerateOtp(visitor.visitorType)) {
       plaintextOtp = generateOtp();
       hashedOtp = await bcrypt.hash(plaintextOtp, 10);
     }
@@ -471,7 +478,8 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
         data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_APPROVED', metadata: { visitorId: v.id } }
       });
 
-      if (v.otp === null && v.unitId) {
+      // Notify all residents of the unit
+      if (v.unitId) {
         const residents = await tx.user.findMany({
           where: {
             OR: [
@@ -487,21 +495,13 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
               userId: resident.id,
               type: 'VISITOR_APPROVED',
               title: `${v.visitorType} Approved`,
-              message: `${v.name}'s entry has been approved.`,
+              message: shouldGenerateOtp(v.visitorType)
+                ? `${v.name}'s entry approved. OTP: ${plaintextOtp}`
+                : `${v.name}'s entry approved. No OTP required.`,
               metadata: { visitorId: v.id }
             }
           });
         }
-      } else {
-        await tx.notification.create({
-          data: {
-            userId: v.createdById,
-            type: 'VISITOR_APPROVED',
-            title: `${v.visitorType} Approved`,
-            message: `${v.name}'s entry has been approved.`,
-            metadata: { visitorId: v.id }
-          }
-        });
       }
       return v;
     });

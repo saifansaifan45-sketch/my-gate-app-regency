@@ -29,7 +29,6 @@ export function AddVisitorModal({
   initialType = 'GUEST',
   initialVisitorType,
   initialPurpose,
-  initialPreApproved,
   title,
   onSuccess
 }: {
@@ -38,7 +37,6 @@ export function AddVisitorModal({
   initialType?: VisitorType;
   initialVisitorType?: VisitorType;
   initialPurpose?: string;
-  initialPreApproved?: boolean;
   title?: string;
   onSuccess?: () => void;
 }) {
@@ -61,8 +59,6 @@ export function AddVisitorModal({
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [orderReference, setOrderReference] = useState('');
   
-  const [isPreApproved, setIsPreApproved] = useState(true);
-  
   const [submitting, setSubmitting] = useState(false);
   const [generatedPass, setGeneratedPass] = useState<any>(null);
 
@@ -70,7 +66,6 @@ export function AddVisitorModal({
     if (visible) {
       setVisitorType(initialVisitorType || initialType);
       setPurpose(initialPurpose || '');
-      setIsPreApproved(initialPreApproved !== undefined ? initialPreApproved : true);
       setProviderPreset('');
       setCustomProvider('');
       setDurationPreset(15);
@@ -109,7 +104,6 @@ export function AddVisitorModal({
         purpose: purpose || undefined,
         vehicleNumber: vehicleNumber || undefined,
         visitorType,
-        isPreApproved,
         provider: isExternal ? activeProvider : undefined,
         orderReference: orderReference || undefined,
         validFrom: now.toISOString(),
@@ -121,7 +115,12 @@ export function AddVisitorModal({
       if (res.visitor.otp) {
         setGeneratedPass(res.visitor);
       } else {
-        showToast({ title: 'Success', message: 'Request created successfully', type: 'success' });
+        const isGuest = visitorType === 'GUEST';
+        showToast({ 
+          title: 'Success', 
+          message: isGuest ? 'Guest pass generated with OTP' : `${visitorType} pre-approved. No OTP required.`, 
+          type: 'success' 
+        });
         if (onSuccess) onSuccess();
         onClose();
       }
@@ -275,26 +274,25 @@ export function AddVisitorModal({
                   placeholderTextColor={theme.colors.textSecondary}
                 />
 
-                <View style={styles.toggleCard}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleTitle}>{requiresOtp ? 'Pre-Approve guest pass' : 'Pre-Approve gate entry'}</Text>
-                    <Text style={styles.toggleDesc}>
+                <View style={styles.infoCard}>
+                  <View style={styles.infoIcon}>
+                    <Feather name={requiresOtp ? 'shield' : 'check-circle'} size={20} color={requiresOtp ? theme.colors.primary : '#10B981'} />
+                  </View>
+                  <View style={styles.infoText}>
+                    <Text style={styles.infoTitle}>
+                      {requiresOtp ? 'OTP will be generated for guest' : 'No OTP needed - gate confirms on arrival'}
+                    </Text>
+                    <Text style={styles.infoDesc}>
                       {requiresOtp
-                        ? 'Generates a secure OTP for the watchman to verify at the gate.'
-                        : 'The watchman will confirm their approved arrival and record entry. No OTP is needed.'}
+                        ? 'Share the OTP with your guest. The watchman will verify it at the gate.'
+                        : 'The watchman will confirm their approved arrival and record entry. No OTP required.'}
                     </Text>
                   </View>
-                  <Switch
-                    value={isPreApproved}
-                    onValueChange={setIsPreApproved}
-                    trackColor={{ false: '#E5E7EB', true: theme.colors.primary }}
-                    thumbColor="#FFFFFF"
-                  />
                 </View>
               </ScrollView>
 
               <Button
-                label={isPreApproved ? (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry') : 'Request gate approval'}
+                label={requiresOtp ? 'Generate guest pass' : 'Pre-approve entry'}
                 icon="shield"
                 onPress={handleCreate}
                 loading={submitting}
@@ -330,10 +328,11 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: '#4B5563' },
   chipTextSelected: { color: theme.colors.primary, fontFamily: 'PlusJakartaSans_600SemiBold' },
   input: { height: 50, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 16, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary, backgroundColor: '#FFFFFF', marginBottom: 12 },
-  toggleCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F3F8F5', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 8, marginBottom: 20, gap: 12 },
-  toggleInfo: { flex: 1 },
-  toggleTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: theme.colors.primary, marginBottom: 2 },
-  toggleDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary },
+  infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F3F8F5', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 8, marginBottom: 20, gap: 12 },
+  infoIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  infoText: { flex: 1 },
+  infoTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: theme.colors.primary, marginBottom: 2 },
+  infoDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary },
   successContent: { alignItems: 'center', paddingVertical: 12 },
   successIcon: { width: 56, height: 56, borderRadius: 26, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
   passTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: theme.colors.textPrimary, marginBottom: 4, textAlign: 'center' },

@@ -536,9 +536,8 @@ export default function HomeScreen() {
       <AddVisitorModal
         visible={isAddVisitorVisible}
         onClose={() => setIsAddVisitorVisible(false)}
-        initialType={visitorPassConfig.visitorType}
+        initialVisitorType={visitorPassConfig.visitorType}
         initialPurpose={visitorPassConfig.purpose}
-        initialPreApproved={visitorPassConfig.preApproved}
         title={visitorPassConfig.title}
         onSuccess={() => {
           setIsAddVisitorVisible(false);

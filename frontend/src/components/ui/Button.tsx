@@ -17,9 +17,9 @@ interface ButtonProps extends Omit<TouchableOpacityProps, 'children'> {
 }
 
 const SIZES = {
-  sm: { minHeight: 44, fontSize: 14, iconSize: 16, radius: 97, paddingVertical: 10 },
-  md: { minHeight: 52, fontSize: 16, iconSize: 18, radius: 97, paddingVertical: 13 },
-  lg: { minHeight: 58, fontSize: 17, iconSize: 20, radius: 97, paddingVertical: 16 },
+  sm: { minHeight: 38, fontSize: 13, iconSize: 14, radius: 90, paddingVertical: 8 },
+  md: { minHeight: 46, fontSize: 14, iconSize: 16, radius: 90, paddingVertical: 11 },
+  lg: { minHeight: 52, fontSize: 15, iconSize: 18, radius: 90, paddingVertical: 13 },
 };
 
 export function Button({ label, variant = 'primary', size = 'md', icon, iconPosition = 'left', loading, style, disabled, ...props }: ButtonProps) {

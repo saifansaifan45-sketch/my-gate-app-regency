@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
 
   /* Hero */
   heroContainer: {
-    height: 220,
+    height: 180,
     borderRadius: cardSystem.radius,
     overflow: 'hidden',
     marginBottom: cardSystem.sectionSpacing,
@@ -387,8 +387,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100%',
-    height: '100%',
+    width: undefined,
+    height: undefined,
   },
   heroGradient: {
     position: 'absolute',
@@ -453,13 +453,13 @@ const styles = StyleSheet.create({
   recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    gap: 12,
+    padding: 13,
+    gap: 10,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
@@ -469,16 +469,16 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.textPrimary,
   },
   avatarTextPrimary: {
     color: '#FFFFFF',
   },
   recordIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
@@ -570,9 +570,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   detailIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
