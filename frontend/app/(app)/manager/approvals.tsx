@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
 import { Button } from '../../../src/components/ui/Button';
+import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
 import { Skeleton } from '../../../src/components/ui/Skeleton';
@@ -14,78 +15,73 @@ import { theme } from '../../../src/theme';
 import { useToast } from '../../../src/store/toast';
 import { managerApi, PendingWorkforceItem } from '../../../src/api/manager';
 import { parseApiError } from '../../../src/utils/api-error';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function ManagerWorkforceApprovalsScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [pendingList, setPendingList] = useState<PendingWorkforceItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{ type: 'approve' | 'reject' | null; item: PendingWorkforceItem | null }>({ type: null, item: null });
 
-  const loadPendingWorkforce = useCallback(async () => {
-    try {
+  const { data: pendingList = [], isLoading } = useQuery<PendingWorkforceItem[]>({
+    queryKey: ['manager-pending-workforce'],
+    queryFn: async () => {
       const res = await managerApi.getPendingWorkforce();
-      setPendingList(res.pendingWorkforce || []);
-    } catch (err) {
-      console.warn('Failed to load pending workforce applications:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadPendingWorkforce();
-  }, [loadPendingWorkforce]);
+      return res.pendingWorkforce || [];
+    },
+  });
 
   const onRefresh = () => {
-    setRefreshing(true);
-    loadPendingWorkforce();
+    queryClient.invalidateQueries({ queryKey: ['manager-pending-workforce'] });
   };
 
   const handleApprove = async (item: PendingWorkforceItem) => {
-    setActionLoadingId(item.id);
-    try {
-      await managerApi.approveWorkforce(item.id);
-      showToast({
-        title: 'Workforce Approved',
-        message: `${item.user.firstName || 'Staff applicant'} is now active with default Off Duty status.`,
-        type: 'success',
-      });
-      await loadPendingWorkforce();
-    } catch (err) {
-      showToast({
-        title: 'Approval Failed',
-        message: parseApiError(err, 'Could not approve workforce application.'),
-        type: 'error',
-      });
-    } finally {
-      setActionLoadingId(null);
-    }
+    setConfirmState({ type: 'approve', item });
   };
 
   const handleReject = async (item: PendingWorkforceItem) => {
+    setConfirmState({ type: 'reject', item });
+  };
+
+  const handleConfirmAction = async () => {
+    const { type, item } = confirmState;
+    if (!type || !item) return;
+
     setActionLoadingId(item.id);
     try {
-      await managerApi.rejectWorkforce(item.id);
-      showToast({
-        title: 'Application Rejected',
-        message: `Workforce application for ${item.user.firstName || 'Applicant'} was rejected.`,
-        type: 'info',
-      });
-      await loadPendingWorkforce();
+      if (type === 'approve') {
+        await managerApi.approveWorkforce(item.id);
+        showToast({
+          title: 'Workforce Approved',
+          message: `${item.user.firstName || 'Staff applicant'} is now active with default Off Duty status.`,
+          type: 'success',
+        });
+      } else {
+        await managerApi.rejectWorkforce(item.id);
+        showToast({
+          title: 'Application Rejected',
+          message: `Workforce application for ${item.user.firstName || 'Applicant'} was rejected.`,
+          type: 'info',
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['manager-pending-workforce'] });
     } catch (err) {
       showToast({
-        title: 'Rejection Failed',
-        message: parseApiError(err, 'Could not reject workforce application.'),
+        title: type === 'approve' ? 'Approval Failed' : 'Rejection Failed',
+        message: parseApiError(err, type === 'approve' ? 'Could not approve workforce application.' : 'Could not reject workforce application.'),
         type: 'error',
       });
     } finally {
       setActionLoadingId(null);
+      setConfirmState({ type: null, item: null });
     }
+  };
+
+  const handleCancelConfirm = () => {
+    setConfirmState({ type: null, item: null });
   };
 
   return (
@@ -99,7 +95,6 @@ export default function ManagerWorkforceApprovalsScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         {/* Review Notice */}
         <ScreenEntrance delay={40}>
@@ -111,7 +106,7 @@ export default function ManagerWorkforceApprovalsScreen() {
           </View>
         </ScreenEntrance>
 
-        {loading ? (
+        {isLoading ? (
           <View style={{ gap: 12 }}>
             <Skeleton width="100%" height={150} style={{ borderRadius: 18 }} />
             <Skeleton width="100%" height={150} style={{ borderRadius: 18 }} />
@@ -182,6 +177,30 @@ export default function ManagerWorkforceApprovalsScreen() {
           />
         )}
       </ScrollView>
+      <ConfirmationModal
+        visible={confirmState.type === 'approve' && confirmState.item !== null}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title="Approve Application"
+        message={`Are you sure you want to approve ${confirmState.item?.user.firstName || 'this applicant'}? They will receive an active profile with default Off Duty status.`}
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+        variant="default"
+        confirmIcon="check"
+        loading={actionLoadingId === confirmState.item?.id}
+      />
+      <ConfirmationModal
+        visible={confirmState.type === 'reject' && confirmState.item !== null}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title="Reject Application"
+        message={`Are you sure you want to reject ${confirmState.item?.user.firstName || 'this applicant'}'s workforce application? This action cannot be undone.`}
+        confirmLabel="Reject"
+        cancelLabel="Cancel"
+        variant="danger"
+        confirmIcon="x"
+        loading={actionLoadingId === confirmState.item?.id}
+      />
     </View>
   );
 }

@@ -18,6 +18,29 @@ const router = Router();
 // Apply auth to all manager routes
 router.use(requireAuth);
 
+function normalizeWorkCategory(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+}
+
+function isPersonnelCompatibleWithTicket(personnelCategory: PersonnelCategory, ticketCategory: string): boolean {
+  const personnel = normalizeWorkCategory(personnelCategory);
+  const ticket = normalizeWorkCategory(ticketCategory);
+  const isSecurityTicket = ['SECURITY', 'GATE', 'VISITOR', 'ACCESS', 'EMERGENCY'].some((term) => ticket.includes(term));
+
+  // Security personnel are gate/security operators, not maintenance technicians.
+  if (personnel === 'SECURITY') return isSecurityTicket;
+  if (isSecurityTicket) return personnel === 'SECURITY';
+
+  if (ticket.includes('PLUMB')) return personnel === 'PLUMBER';
+  if (ticket.includes('ELECTRIC')) return personnel === 'ELECTRICIAN';
+  if (ticket.includes('CLEAN') || ticket.includes('HOUSEKEEP')) return personnel === 'CLEANER';
+  if (ticket.includes('GARDEN') || ticket.includes('LANDSCAP')) return personnel === 'GARDENER';
+
+  // General maintenance may be handled by a maintenance worker or an
+  // appropriately trained trade worker, but never by Security.
+  return ['MAINTENANCE', 'ELECTRICIAN', 'PLUMBER', 'CLEANER', 'GARDENER', 'OTHER'].includes(personnel);
+}
+
 // Helper to get start and end of a given date (default today)
 function getDateRange(dateStr?: string) {
   const date = dateStr ? new Date(dateStr) : new Date();
@@ -430,6 +453,15 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
       return res.status(400).json({
         error: {
           message: `Personnel ${personnel.name} is currently ${personnel.employmentStatus.toLowerCase()} and cannot receive assignments.`,
+        },
+      });
+    }
+
+    if (!isPersonnelCompatibleWithTicket(personnel.category, ticket.category)) {
+      return res.status(400).json({
+        error: {
+          code: 'PERSONNEL_CATEGORY_MISMATCH',
+          message: `${personnel.name} (${personnel.category}) cannot be assigned to a ${ticket.category} task. Assign a worker with the matching trade or department.`,
         },
       });
     }

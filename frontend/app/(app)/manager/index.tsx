@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
@@ -13,19 +13,15 @@ import { theme } from '../../../src/theme';
 import { useSession } from '../../../src/store/auth';
 import { managerApi, DashboardData, PendingWorkforceItem } from '../../../src/api/manager';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
+import { useQuery } from '@tanstack/react-query';
 
 export default function ManagerDashboardScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const { hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess } = useSession();
 
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [pendingWorkforce, setPendingWorkforce] = useState<PendingWorkforceItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
   // Security Guard: Only users with approved MANAGER or LEADERSHIP can enter
-  useEffect(() => {
+  React.useEffect(() => {
     if (!hasManagerAccess() && !hasLeadershipAccess()) {
       if (hasResidentAccess() || hasOwnerAccess()) {
         router.replace('/(app)/home');
@@ -35,35 +31,21 @@ export default function ManagerDashboardScreen() {
     }
   }, [hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, router]);
 
-  const fetchDashboard = useCallback(async () => {
-    try {
-      const [dashRes, pendingRes] = await Promise.allSettled([
-        managerApi.getDashboard(),
-        managerApi.getPendingWorkforce(),
-      ]);
+  const { data: dashboardData, isLoading: dashLoading } = useQuery<DashboardData>({
+    queryKey: ['manager-dashboard'],
+    queryFn: () => managerApi.getDashboard(),
+  });
 
-      if (dashRes.status === 'fulfilled') {
-        setData(dashRes.value);
-      }
-      if (pendingRes.status === 'fulfilled') {
-        setPendingWorkforce(pendingRes.value.pendingWorkforce || []);
-      }
-    } catch (err) {
-      console.warn('Failed to load manager dashboard:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const { data: pendingWorkforce = [], isLoading: pendingLoading } = useQuery<PendingWorkforceItem[]>({
+    queryKey: ['manager-pending-workforce'],
+    queryFn: async () => {
+      const res = await managerApi.getPendingWorkforce();
+      return res.pendingWorkforce || [];
+    },
+  });
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchDashboard();
-  };
+  const loading = dashLoading || pendingLoading;
+  const data = dashboardData;
 
   const stats = data?.stats;
   const attendance = data?.attendanceStats;
@@ -91,7 +73,6 @@ export default function ManagerDashboardScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         {/* Operations Hub Banner */}
         <ScreenEntrance delay={40}>

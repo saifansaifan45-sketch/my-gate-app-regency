@@ -14,6 +14,7 @@ import { theme } from '../../../../src/theme';
 import { managerApi, PersonnelItem, TicketItem } from '../../../../src/api/manager';
 import { useToast } from '../../../../src/store/toast';
 import { cardSystem } from '../../../../src/components/ui/cardSystem';
+import { isPersonnelCompatibleWithTicket } from '../../../../src/utils/personnel';
 
 export default function AssignPersonnelScreen() {
   const { ticketId, category } = useLocalSearchParams<{ ticketId: string; category?: string }>();
@@ -42,7 +43,7 @@ export default function AssignPersonnelScreen() {
       const matched = personnelData.personnel.find(
         (p) =>
           p.availabilityStatus === 'AVAILABLE' &&
-          (category ? p.category.toLowerCase().includes(category.toLowerCase()) : true)
+          isPersonnelCompatibleWithTicket(p.category, category || '')
       );
       if (matched) setSelectedPersonnelId(matched.id);
     } catch (err) {
@@ -131,8 +132,12 @@ export default function AssignPersonnelScreen() {
               <Skeleton height={74} borderRadius={16} />
             </View>
           ) : (() => {
+            const effectiveCategory = ticket?.category || category || '';
             const availableWorkers = personnelList.filter(
-              (p) => (p.employmentStatus === undefined || p.employmentStatus === 'ACTIVE') && p.availabilityStatus === 'AVAILABLE'
+              (p) =>
+                (p.employmentStatus === undefined || p.employmentStatus === 'ACTIVE') &&
+                p.availabilityStatus === 'AVAILABLE' &&
+                isPersonnelCompatibleWithTicket(p.category, effectiveCategory)
             );
 
             if (availableWorkers.length === 0) {
@@ -151,7 +156,7 @@ export default function AssignPersonnelScreen() {
               <View style={styles.personnelList}>
                 {availableWorkers.map((person) => {
                   const isSelected = selectedPersonnelId === person.id;
-                  const isRecommended = category && person.category.toLowerCase().includes(category.toLowerCase());
+                  const isRecommended = isPersonnelCompatibleWithTicket(person.category, effectiveCategory);
 
                   return (
                     <PremiumPressable
