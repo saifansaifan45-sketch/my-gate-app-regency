@@ -19,10 +19,10 @@ import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ACTION_SIZE = 56;
+const ACTION_SIZE = 64;
 const ACTION_RADIUS = ACTION_SIZE / 2;
-const ORBIT_RADIUS = 100;
-const CENTER_BUTTON_SIZE = 56;
+const ORBIT_RADIUS = 110;
+const CENTER_BUTTON_SIZE = 60;
 
 const DEFAULT_VISIBLE = ['add-visitor', 'help-desk', 'announcements', 'maintenance'];
 
@@ -351,7 +351,7 @@ export function QuickActionsRadial() {
               },
             ]}
           >
-            <Feather name="plus" size={24} color="#FFFFFF" />
+            <Feather name="plus" size={28} color="#FFFFFF" />
           </Animated.View>
         </Pressable>
         <Text style={styles.centerLabel}>Quick</Text>
@@ -421,7 +421,7 @@ export function QuickActionsRadial() {
                   >
                     <Feather
                       name={action.service.icon as any}
-                      size={22}
+                      size={26}
                       color={visuals.icon}
                     />
                   </Pressable>
