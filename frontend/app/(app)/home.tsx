@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { QuickActionsEditorModal, QuickActionItem } from '../../src/components/quick-actions-editor-modal';
@@ -43,6 +44,20 @@ const ACTIVE_TICKET_STATUSES = new Set<TicketItem['status']>([
   'COMPLETED_BY_WORKER',
   'PENDING_RESIDENT_CONFIRMATION',
 ]);
+
+const DEFAULT_VISIBLE_QUICK_ACTIONS = ['add-visitor', 'help-desk', 'announcements', 'maintenance'];
+
+const createQuickActions = (role?: string): QuickActionItem[] =>
+  SERVICE_CATALOG
+    .filter((service) => service.availableRoles.includes(role || ''))
+    .map((service) => ({
+      id: service.id,
+      icon: service.icon as QuickActionItem['icon'],
+      label: service.label,
+      bgColor: service.isEmergency ? '#FEE2E2' : '#E8F5E9',
+      iconColor: service.isEmergency ? '#DC2626' : '#166534',
+      visible: DEFAULT_VISIBLE_QUICK_ACTIONS.includes(service.id),
+    }));
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -116,17 +131,46 @@ export default function HomeScreen() {
   const [isEmergencySOSVisible, setIsEmergencySOSVisible] = useState(false);
   const [dismissedGateVisitorId, setDismissedGateVisitorId] = useState<string | null>(null);
 
-  // Quick Action Preferences
-  const [quickActionsList, setQuickActionsList] = useState<QuickActionItem[]>(
-    SERVICE_CATALOG.filter((s: any) => s.availableRoles.includes(user?.role || '')).map(s => ({
-      id: s.id,
-      icon: s.icon as any,
-      label: s.label,
-      bgColor: s.isEmergency ? '#FEE2E2' : '#E8F5E9',
-      iconColor: s.isEmergency ? '#DC2626' : '#166534',
-      visible: true
-    }))
-  );
+  // Quick Action Preferences are stored per user so a hard refresh does not reset them.
+  const quickActionsStorageKey = user?.id ? `quick-actions:${user.id}` : null;
+  const [quickActionsList, setQuickActionsList] = useState<QuickActionItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const defaults = createQuickActions(user?.role);
+
+    if (!quickActionsStorageKey) {
+      setQuickActionsList(defaults);
+      return () => { cancelled = true; };
+    }
+
+    setQuickActionsList(defaults);
+    AsyncStorage.getItem(quickActionsStorageKey)
+      .then((stored) => {
+        if (cancelled || !stored) return;
+
+        try {
+          const saved = JSON.parse(stored) as QuickActionItem[];
+          if (!Array.isArray(saved)) return;
+
+          const currentById = new Map(defaults.map((action) => [action.id, action]));
+          const restored = saved
+            .filter((action) => currentById.has(action.id))
+            .map((action) => ({ ...currentById.get(action.id)!, visible: Boolean(action.visible) }));
+          const savedIds = new Set(restored.map((action) => action.id));
+          const merged = [...restored, ...defaults.filter((action) => !savedIds.has(action.id))];
+
+          if (!cancelled && merged.length > 0) setQuickActionsList(merged);
+        } catch {
+          // Ignore malformed local settings and keep the safe defaults.
+        }
+      })
+      .catch(() => {
+        // Storage can be unavailable in restricted environments; defaults remain usable.
+      });
+
+    return () => { cancelled = true; };
+  }, [quickActionsStorageKey, user?.role]);
 
   const { data: homeData, isLoading: isHomeLoading, isFetching: isHomeFetching, refetch } = useQuery({
     queryKey: homeDashboardQueryKey,
@@ -205,9 +249,6 @@ export default function HomeScreen() {
       label: 'Visitors',
       count: homeData?.visitorCount === null || homeData?.visitorCount === undefined ? 'N/A' : String(homeData.visitorCount),
       subtitle: 'Today',
-      icon: 'users',
-      iconColor: '#166534',
-      iconBgColor: '#DCFCE7',
       countColor: '#166534',
       onPress: () => router.push('/visitors'),
     },
@@ -216,9 +257,6 @@ export default function HomeScreen() {
       label: 'Deliveries',
       count: homeData?.deliveryCount === null || homeData?.deliveryCount === undefined ? 'N/A' : String(homeData.deliveryCount),
       subtitle: 'Today',
-      icon: 'package',
-      iconColor: '#D97706',
-      iconBgColor: '#FEF3C7',
       countColor: '#D97706',
       onPress: () => router.push('/visitors'),
     },
@@ -235,9 +273,6 @@ export default function HomeScreen() {
         : activeTickets.some((ticket) => ticket.status === 'ASSIGNED')
         ? 'Assigned'
         : 'Open',
-      icon: 'tool',
-      iconColor: '#2563EB',
-      iconBgColor: '#DBEAFE',
       countColor: '#2563EB',
       onPress: () => router.push('/services/maintenance'),
     },
@@ -253,26 +288,29 @@ export default function HomeScreen() {
       iconColor: action.iconColor,
       iconBgColor: action.bgColor,
       onPress: () => {
-        if (action.id === '1') {
+        if (action.id === 'add-visitor') {
           handleProtectedAction(() => {
             setVisitorPassConfig({ visitorType: 'GUEST', purpose: '', title: 'Pre-approve Visitor', preApproved: true });
             setIsAddVisitorVisible(true);
           });
-        } else if (action.id === '2') {
+        } else if (action.id === 'help-desk') {
           handleProtectedAction(() => router.push('/help-desk'));
-        } else if (action.id === '3') {
+        } else if (action.id === 'announcements') {
           router.push('/announcements');
-        } else if (action.id === '4') {
+        } else if (action.id === 'family') {
           handleProtectedAction(() => router.push('/family-members'));
-        } else if (action.id === '5') {
+        } else if (action.id === 'house-help') {
           handleProtectedAction(() => {
             setVisitorPassConfig({ visitorType: 'SERVICE', purpose: 'House Help', title: 'House Help Entry Pass', preApproved: true });
             setIsAddVisitorVisible(true);
           });
-        } else if (action.id === '6') {
+        } else if (action.id === 'sos') {
           setIsEmergencySOSVisible(true);
-        } else if (action.id === '7') {
+        } else if (action.id === 'activity-log') {
           router.push('/activity-log');
+        } else {
+          const service = SERVICE_CATALOG.find((entry) => entry.id === action.id);
+          if (service) router.push(service.route);
         }
       },
     }));
@@ -362,7 +400,7 @@ export default function HomeScreen() {
               announcements={announcements}
               loading={isAnnouncementsLoading}
               onViewAllPress={() => router.push('/announcements')}
-              onAnnouncementPress={() => router.push('/announcements')}
+              onAnnouncementPress={(ann) => router.push(`/announcement/${ann.id}`)}
             />
           </ScreenEntrance>
         </ScreenEntrance>
@@ -373,9 +411,20 @@ export default function HomeScreen() {
         visible={isQuickActionsVisible}
         actions={quickActionsList}
         onClose={() => setIsQuickActionsVisible(false)}
-        onSave={(updated) => {
+        onSave={async (updated) => {
           setQuickActionsList(updated);
           setIsQuickActionsVisible(false);
+          if (quickActionsStorageKey) {
+            try {
+              await AsyncStorage.setItem(quickActionsStorageKey, JSON.stringify(updated));
+            } catch {
+              showToast({
+                title: 'Settings not saved',
+                message: 'Quick Actions could not be saved on this device.',
+                type: 'error',
+              });
+            }
+          }
         }}
       />
 
@@ -389,6 +438,8 @@ export default function HomeScreen() {
         title={visitorPassConfig.title}
         onSuccess={() => {
           setIsAddVisitorVisible(false);
+          queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
+          queryClient.invalidateQueries({ queryKey: ['my-visitors'] });
         }}
       />
       <EmergencySOSModal visible={isEmergencySOSVisible} onClose={() => setIsEmergencySOSVisible(false)} />

@@ -2,7 +2,7 @@ import { communityApi, CommunityAnnouncement } from './community';
 import { TicketItem } from './manager';
 import { managerApi } from './manager';
 import { ticketsApi } from './tickets';
-import { VisitorItem, visitorsApi } from './visitors';
+import { isActiveVisitor, isGuestVisitor, isVisitorToday, VisitorItem, visitorsApi } from './visitors';
 
 export const homeDashboardQueryKey = ['home-dashboard'] as const;
 
@@ -26,9 +26,6 @@ export interface HomeDashboardData {
   communityError: boolean;
 }
 
-const isActiveVisitor = (visitor: VisitorItem) =>
-  visitor.status === 'PENDING' || visitor.status === 'APPROVED' || visitor.status === 'CHECKED_IN';
-
 /**
  * A single server snapshot for the resident Home screen. Mutations invalidate
  * this key, so every visible Home card reads the same post-mutation state.
@@ -43,8 +40,10 @@ export const getHomeDashboard = async (includeStaff = false): Promise<HomeDashbo
   const [ticketsRes, visitorsRes, spacesRes, attendanceRes] = results;
 
   const tickets = ticketsRes.status === 'fulfilled' ? ticketsRes.value.tickets : [];
-  const visitors = visitorsRes.status === 'fulfilled' ? visitorsRes.value.visitors.filter(isActiveVisitor) : [];
-  const guestVisits = visitors.filter((visitor) => visitor.visitorType !== 'DELIVERY');
+  const visitors = visitorsRes.status === 'fulfilled'
+    ? visitorsRes.value.visitors.filter((visitor) => isActiveVisitor(visitor) && isVisitorToday(visitor))
+    : [];
+  const guestVisits = visitors.filter(isGuestVisitor);
   const deliveryVisits = visitors.filter((visitor) => visitor.visitorType === 'DELIVERY');
 
   let announcements: HomeAnnouncement[] = [];

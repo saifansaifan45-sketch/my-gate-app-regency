@@ -14,6 +14,7 @@ import workforceRoutes from './routes/workforce';
 import emergencyRoutes from './routes/emergency';
 import householdRoutes from './routes/household';
 import activityLogRoutes from './routes/activity-log';
+// Disabled feature: no lost-found route or persistence implementation exists yet.
 // import lostFoundRoutes from './routes/lost-found';
 
 dotenv.config();
@@ -94,6 +95,7 @@ app.use('/visitors', visitorsRoutes);
 app.use('/emergency', emergencyRoutes);
 app.use('/household', householdRoutes);
 app.use('/activity-log', activityLogRoutes);
+// Disabled feature: keep this unmounted until the lost-found backend is implemented.
 // app.use('/lost-found', lostFoundRoutes);
 
 // Centralized safe error handling — never leaks raw Zod or Prisma objects

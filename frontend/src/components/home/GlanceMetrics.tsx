@@ -10,9 +10,6 @@ export interface GlanceCardItem {
   label: string;
   count: string;
   subtitle: string;
-  icon: React.ComponentProps<typeof Feather>['name'];
-  iconColor: string;
-  iconBgColor: string;
   countColor: string;
   onPress: () => void;
 }
@@ -48,12 +45,7 @@ export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPr
             accessibilityRole="button"
             accessibilityLabel={`${card.label}: ${card.count}`}
           >
-            <View style={styles.cardTop}>
-              <View style={[styles.iconChip, { backgroundColor: card.iconBgColor }]}>
-                <Feather name={card.icon} size={18} color={card.iconColor} />
-              </View>
-              <Text style={styles.label} numberOfLines={2}>{card.label}</Text>
-            </View>
+            <Text style={styles.label} numberOfLines={2}>{card.label}</Text>
             <Text style={[styles.count, { color: card.countColor }]} numberOfLines={1}>
               {card.count}
             </Text>
@@ -89,38 +81,20 @@ const styles = StyleSheet.create({
   },
   bento: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
   },
   card: {
     flex: 1,
-    flexShrink: 1,
-    minWidth: 0,
+    minWidth: 100,
     padding: 14,
     minHeight: 100,
     justifyContent: 'space-between',
-  },
-  cardTop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  iconChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   label: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
     color: '#6B7280',
-    flex: 1,
-    minWidth: 0,
+    marginBottom: 8,
   },
   count: {
     fontFamily: 'PlusJakartaSans_700Bold',

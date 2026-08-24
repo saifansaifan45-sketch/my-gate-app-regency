@@ -65,12 +65,7 @@ export default function ProfileSettingsScreen() {
           ])}
         </ScreenEntrance>
 
-        <ScreenEntrance delay={400}>
-          {renderSection('Availability', [
-            
-            { label: 'Calendar', icon: 'calendar', onClick: () => router.push('/calendar') },
-          ])}
-        </ScreenEntrance>
+        {/* Calendar disabled until event storage and API support are available. */}
       </ScrollView>
     </View>
   );
