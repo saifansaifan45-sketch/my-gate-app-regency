@@ -13,6 +13,7 @@ import { Text } from '../../src/components/ui/Text';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { smartBack } from '../../src/navigation/history';
 import { useToast } from '../../src/store/toast';
+import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
 import { cardSystem } from '../../src/components/ui/cardSystem';
 
@@ -43,6 +44,7 @@ export default function FamilyMembersScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
+  const { user } = useSession();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<RecordTab>('members');
   const [formVisible, setFormVisible] = useState(false);
@@ -51,10 +53,18 @@ export default function FamilyMembersScreen() {
   const recordsQuery = useQuery({ queryKey: ['household-records'], queryFn: householdApi.getRecords });
   const records = recordsQuery.data;
   const canManage = records?.canManageAssets ?? false;
+  const residentName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'you';
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      if (activeTab === 'members') return householdApi.addMember(form as Omit<HouseholdMemberRecord, 'id'>);
+      if (activeTab === 'members') {
+        return householdApi.addMember({
+          name: form.name || '',
+          relationship: form.relationship || '',
+          phone: form.phone || undefined,
+          email: form.email || undefined,
+        });
+      }
       if (activeTab === 'vehicles') return householdApi.addVehicle(form as Omit<HouseholdVehicleRecord, 'id'>);
       return householdApi.addPet(form as Omit<HouseholdPetRecord, 'id'>);
     },
@@ -102,7 +112,11 @@ export default function FamilyMembersScreen() {
   };
 
   const detailFor = (item: HouseholdMemberRecord | HouseholdVehicleRecord | HouseholdPetRecord) => {
-    if (activeTab === 'members') return (item as HouseholdMemberRecord).relationship;
+    if (activeTab === 'members') {
+      const member = item as HouseholdMemberRecord;
+      const relationshipOwner = [member.createdBy?.firstName, member.createdBy?.lastName].filter(Boolean).join(' ');
+      return relationshipOwner ? `${member.relationship} of ${relationshipOwner}` : member.relationship;
+    }
     if (activeTab === 'vehicles') {
       const vehicle = item as HouseholdVehicleRecord;
       return [vehicle.make, vehicle.model, vehicle.color].filter(Boolean).join(' · ') || 'Vehicle enrolled for gate recognition';
@@ -172,8 +186,14 @@ export default function FamilyMembersScreen() {
         <View style={styles.overlay}><View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.sheetTitle}>Add a {activeTab === 'members' ? 'family member' : activeTab.slice(0, -1)}</Text>
-          <Text style={styles.sheetSubtitle}>{activeTab === 'vehicles' ? 'This lets security recognise an authorised vehicle.' : activeTab === 'pets' ? 'A simple record helps the community support every member of your household.' : 'Record the people who are part of your household.'}</Text>
-          {Object.keys(EMPTY_FORMS[activeTab]).map((key) => <View key={key} style={styles.field}><Text style={styles.fieldLabel}>{fieldLabel(key)}</Text><TextInput style={styles.input} value={form[key]} onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))} placeholderTextColor={theme.colors.textSecondary} autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'} keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'} /></View>)}
+          <Text style={styles.sheetSubtitle}>{activeTab === 'vehicles' ? 'This lets security recognise an authorised vehicle.' : activeTab === 'pets' ? 'A simple record helps the community support every member of your household.' : `Relationships are recorded relative to ${residentName}, so every family record stays unambiguous.`}</Text>
+          {activeTab === 'members' ? (
+            <View style={styles.relationshipContext}>
+              <Feather name="users" size={16} color={theme.colors.primary} />
+              <Text style={styles.relationshipContextText}>{form.relationship.trim() ? `${form.relationship.trim()} of ${residentName}` : `For example: Father of ${residentName}`}</Text>
+            </View>
+          ) : null}
+          {Object.keys(EMPTY_FORMS[activeTab]).map((key) => <View key={key} style={styles.field}><Text style={styles.fieldLabel}>{key === 'relationship' ? `Relationship to ${residentName} *` : fieldLabel(key)}</Text><TextInput style={styles.input} value={form[key]} onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))} placeholder={key === 'relationship' ? 'e.g. Father, Mother, Spouse' : undefined} placeholderTextColor={theme.colors.textSecondary} autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'} keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'} /></View>)}
           <View style={styles.sheetActions}><Button label="Cancel" variant="outline" onPress={() => setFormVisible(false)} style={styles.cancelButton} /><Button label="Save record" onPress={submit} loading={addMutation.isPending} style={styles.saveButton} /></View>
         </View></View>
       </Modal>
@@ -212,6 +232,6 @@ const styles = StyleSheet.create({
   tab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#ECECE5' }, tabSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary }, tabTextSelected: { color: '#FFFFFF' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary }, sectionMeta: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }, addButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 12, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4 }, addButtonDisabled: { backgroundColor: '#E7E7E1' }, addButtonText: { fontFamily: 'PlusJakartaSans_700Bold', color: '#FFFFFF', fontSize: 13 }, addButtonTextDisabled: { color: theme.colors.textSecondary }, loader: { paddingVertical: 48, alignItems: 'center' },
   recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card }, recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, vehicleIcon: { backgroundColor: '#FFF3D6' }, petIcon: { backgroundColor: '#FCE7F3' }, recordInfo: { flex: 1 }, recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary }, removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' }, sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 }, handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 18 }, sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 21, color: theme.colors.textPrimary, marginBottom: 5 }, sheetSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 18 }, field: { marginBottom: 10 }, fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 6 }, cancelButton: { flex: 1 }, saveButton: { flex: 1.3 },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' }, sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 }, handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 18 }, sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 21, color: theme.colors.textPrimary, marginBottom: 5 }, sheetSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 18 }, relationshipContext: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EDF6F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }, relationshipContextText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary }, field: { marginBottom: 10 }, fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 6 }, cancelButton: { flex: 1 }, saveButton: { flex: 1.3 },
   deleteModal: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 20, marginHorizontal: 20, marginTop: 'auto', marginBottom: 40, ...theme.shadows.floating }, deleteTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 6 }, deleteMessage: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 20, color: theme.colors.textSecondary, marginBottom: 18 }, deleteActions: { flexDirection: 'row', gap: 10 }, deleteConfirmBtn: { flex: 1, backgroundColor: '#DC2626' },
 });

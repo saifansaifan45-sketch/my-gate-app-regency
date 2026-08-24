@@ -157,7 +157,11 @@ router.get('/', requireVerifiedResidence, async (req: AuthRequest, res: Response
     const unitId = await getAccessibleUnit(req.user!.userId);
     if (!unitId) return res.json({ members: [], vehicles: [], pets: [], canManageAssets: false });
     const [members, vehicles, pets, ownerUnitId] = await Promise.all([
-      householdDb.householdMember.findMany({ where: { unitId }, orderBy: { createdAt: 'asc' } }),
+      householdDb.householdMember.findMany({
+        where: { unitId },
+        orderBy: { createdAt: 'asc' },
+        include: { createdBy: { select: { firstName: true, lastName: true } } },
+      }),
       householdDb.householdVehicle.findMany({ where: { unitId }, orderBy: { createdAt: 'asc' } }),
       householdDb.householdPet.findMany({ where: { unitId }, orderBy: { createdAt: 'asc' } }),
       getOwnedUnit(req.user!.userId),
@@ -171,7 +175,10 @@ router.post('/members', requireVerifiedResidence, async (req: AuthRequest, res: 
     const unitId = await getOwnedUnit(req.user!.userId);
     if (!unitId) return res.status(403).json({ error: { message: 'Only an active property owner can update household records.' } });
     const data = memberSchema.parse(req.body);
-    const member = await householdDb.householdMember.create({ data: { ...data, phone: data.phone || null, email: data.email || null, unitId, createdById: req.user!.userId } });
+    const member = await householdDb.householdMember.create({
+      data: { ...data, phone: data.phone || null, email: data.email || null, unitId, createdById: req.user!.userId },
+      include: { createdBy: { select: { firstName: true, lastName: true } } },
+    });
     res.status(201).json({ member });
   } catch (error) { next(error); }
 });

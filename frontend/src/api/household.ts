@@ -6,6 +6,10 @@ export interface HouseholdMemberRecord {
   relationship: string;
   phone?: string | null;
   email?: string | null;
+  createdBy?: {
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null;
 }
 
 export interface HouseholdVehicleRecord {
