@@ -9,6 +9,12 @@ export interface PropertyUnit {
   block?: string;
 }
 
+export interface UnitWithOwnershipStatus {
+  id: string;
+  unitNumber: string;
+  hasOwner: boolean;
+}
+
 export interface UnitResidencyRecord {
   id: string;
   userId: string;
@@ -59,6 +65,16 @@ export interface MyPropertiesResponse {
 }
 
 export const propertiesApi = {
+  getUnits: async (): Promise<{ units: UnitWithOwnershipStatus[] }> => {
+    const res = await api.get<{ units: UnitWithOwnershipStatus[] }>('/properties/units');
+    return res.data;
+  },
+
+  hasManager: async (): Promise<{ hasManager: boolean }> => {
+    const res = await api.get<{ hasManager: boolean }>('/properties/has-manager');
+    return res.data;
+  },
+
   getMyProperties: async (): Promise<MyPropertiesResponse> => {
     const res = await api.get<MyPropertiesResponse>('/properties/my-properties');
     return res.data;

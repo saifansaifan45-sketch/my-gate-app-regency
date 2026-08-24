@@ -17,6 +17,7 @@ import { useResidenceAuth } from '../../src/hooks/useResidenceAuth';
 import { ResidenceGuardBanner } from '../../src/components/ui/ResidenceGuardBanner';
 import { visitorsApi } from '../../src/api/visitors';
 import { communityApi } from '../../src/api/community';
+import { propertiesApi } from '../../src/api/properties';
 import { TicketItem } from '../../src/api/manager';
 import { getHomeDashboard, homeDashboardQueryKey } from '../../src/api/home-dashboard';
 import { theme } from '../../src/theme';
@@ -35,6 +36,8 @@ import {
   ActionItemConfig,
   MyRequests,
   CommunityUpdates,
+  PendingResidencyRequest,
+  ResidencyApprovalCard,
 } from '../../src/components/home';
 
 const ACTIVE_TICKET_STATUSES = new Set<TicketItem['status']>([
@@ -84,6 +87,7 @@ export default function HomeScreen() {
     hasManagerAccess,
     hasResidentAccess,
     hasOwnerAccess,
+    hasOwnership,
     primaryResidency,
     primaryOwnership,
   } = useSession();
@@ -92,6 +96,7 @@ export default function HomeScreen() {
   const isLeadership = hasLeadershipAccess();
   const isResident = hasResidentAccess();
   const isOwner = hasOwnerAccess();
+  const ownsAUnit = hasOwnership();
 
   // Redirect pure operational accounts to their dedicated workspace
   useEffect(() => {
@@ -127,7 +132,7 @@ export default function HomeScreen() {
   // Modal states
   const [isQuickActionsVisible, setIsQuickActionsVisible] = useState(false);
   const [isAddVisitorVisible, setIsAddVisitorVisible] = useState(false);
-  const [visitorPassConfig, setVisitorPassConfig] = useState<{ visitorType: 'GUEST' | 'SERVICE'; purpose: string; title: string; preApproved: boolean }>({ visitorType: 'GUEST', purpose: '', title: 'New Visitor Pass', preApproved: false });
+  const [visitorPassConfig, setVisitorPassConfig] = useState<{ visitorType: 'GUEST' | 'SERVICE' | 'CAB' | 'DELIVERY'; purpose: string; title: string; preApproved: boolean }>({ visitorType: 'GUEST', purpose: '', title: 'New Visitor Pass', preApproved: false });
   const [isEmergencySOSVisible, setIsEmergencySOSVisible] = useState(false);
   const [dismissedGateVisitorId, setDismissedGateVisitorId] = useState<string | null>(null);
 
@@ -186,6 +191,28 @@ export default function HomeScreen() {
     staleTime: 30_000,
   });
 
+  const { data: residencyRequests = [], refetch: refetchResidencyRequests } = useQuery({
+    queryKey: ['pending-residency-requests', user?.id, user?.ownerships],
+    queryFn: async (): Promise<PendingResidencyRequest[]> => {
+      const ownerships = user?.ownerships || [];
+      const results = await Promise.all(
+        ownerships.map(async (ownership) => {
+          const { residencies } = await propertiesApi.getUnitResidencies(ownership.unitId);
+          return residencies
+            .filter((residency) => residency.status === 'PENDING')
+            .map((residency) => ({
+              unitId: ownership.unitId,
+              unitNumber: ownership.unitNumber || 'your home',
+              residency,
+            }));
+        })
+      );
+      return results.flat();
+    },
+    enabled: Boolean(user?.id && ownsAUnit),
+    staleTime: 30_000,
+  });
+
   const announcements = announcementsData?.announcements || [];
 
   const activeTickets = (homeData?.tickets || []).filter(
@@ -202,7 +229,37 @@ export default function HomeScreen() {
     : null;
 
   const onRefresh = async () => {
-    await Promise.all([refetch(), refetchAnnouncements()]);
+    await Promise.all([refetch(), refetchAnnouncements(), refetchResidencyRequests()]);
+  };
+
+  const [residencyActionInProgress, setResidencyActionInProgress] = useState<string | null>(null);
+
+  const handleResidencyDecision = async (request: PendingResidencyRequest, decision: 'approve' | 'reject') => {
+    setResidencyActionInProgress(request.residency.id);
+    const applicantName = `${request.residency.user.firstName} ${request.residency.user.lastName || ''}`.trim();
+    try {
+      if (decision === 'approve') {
+        await propertiesApi.approveResidency(request.unitId, request.residency.id);
+      } else {
+        await propertiesApi.rejectResidency(request.unitId, request.residency.id);
+      }
+      showToast({
+        title: decision === 'approve' ? 'Residency approved' : 'Residency declined',
+        message: decision === 'approve'
+          ? `${applicantName} can now access Unit ${request.unitNumber}.`
+          : `${applicantName}'s request has been declined.`,
+        type: decision === 'approve' ? 'success' : 'info',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['pending-residency-requests'] });
+    } catch (error: any) {
+      showToast({
+        title: 'Action failed',
+        message: error?.response?.data?.error?.message || 'We could not update this residency request. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setResidencyActionInProgress(null);
+    }
   };
 
   // Gate Approval Actions
@@ -290,7 +347,7 @@ export default function HomeScreen() {
       onPress: () => {
         if (action.id === 'add-visitor') {
           handleProtectedAction(() => {
-            setVisitorPassConfig({ visitorType: 'GUEST', purpose: '', title: 'Pre-approve Visitor', preApproved: true });
+            setVisitorPassConfig({ visitorType: 'GUEST', purpose: '', title: 'Approve Entries', preApproved: true });
             setIsAddVisitorVisible(true);
           });
         } else if (action.id === 'help-desk') {
@@ -300,8 +357,15 @@ export default function HomeScreen() {
         } else if (action.id === 'family') {
           handleProtectedAction(() => router.push('/family-members'));
         } else if (action.id === 'house-help') {
+          handleProtectedAction(() => router.push({ pathname: '/services/raise-issue', params: { category: 'Custom', description: 'I need house help' } }));
+        } else if (action.id === 'cab-alert') {
           handleProtectedAction(() => {
-            setVisitorPassConfig({ visitorType: 'SERVICE', purpose: 'House Help', title: 'House Help Entry Pass', preApproved: true });
+            setVisitorPassConfig({ visitorType: 'CAB', purpose: '', title: 'Approve Entries', preApproved: true });
+            setIsAddVisitorVisible(true);
+          });
+        } else if (action.id === 'delivery') {
+          handleProtectedAction(() => {
+            setVisitorPassConfig({ visitorType: 'DELIVERY', purpose: '', title: 'Approve Entries', preApproved: true });
             setIsAddVisitorVisible(true);
           });
         } else if (action.id === 'sos') {
@@ -376,6 +440,18 @@ export default function HomeScreen() {
             />
           </ScreenEntrance>
 
+          {ownsAUnit && (
+            <ScreenEntrance animation="none">
+              <ResidencyApprovalCard
+                requests={residencyRequests}
+                actionInProgress={residencyActionInProgress}
+                onApprove={(request) => void handleResidencyDecision(request, 'approve')}
+                onReject={(request) => void handleResidencyDecision(request, 'reject')}
+                onReviewAll={() => router.push('/residency-requests')}
+              />
+            </ScreenEntrance>
+          )}
+
           {/* Quick Actions */}
           <ScreenEntrance animation="none">
             <QuickActions
@@ -432,7 +508,7 @@ export default function HomeScreen() {
       <AddVisitorModal
         visible={isAddVisitorVisible}
         onClose={() => setIsAddVisitorVisible(false)}
-        initialVisitorType={visitorPassConfig.visitorType}
+        initialType={visitorPassConfig.visitorType}
         initialPurpose={visitorPassConfig.purpose}
         initialPreApproved={visitorPassConfig.preApproved}
         title={visitorPassConfig.title}

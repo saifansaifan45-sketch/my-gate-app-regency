@@ -146,7 +146,7 @@ export function AddVisitorModal({
           <View style={styles.sheet}>
             <View style={styles.grabber} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{generatedPass ? 'Entry Pass Ready' : 'Add External Arrival'}</Text>
+              <Text style={styles.sheetTitle}>{generatedPass ? 'Entry Pass Ready' : 'Approve Entries'}</Text>
               <PremiumPressable style={styles.closeBtn} onPress={onClose}>
                 <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </PremiumPressable>
@@ -176,7 +176,8 @@ export function AddVisitorModal({
                 <Button label="Done" onPress={onClose} style={styles.actionBtn} />
               </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <View style={{ flex: 1 }}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
                 <Text style={styles.fieldLabel}>Type of Arrival</Text>
                 <View style={styles.typeRow}>
                   {['GUEST', 'CAB', 'DELIVERY', 'SERVICE'].map((type) => (
@@ -194,7 +195,7 @@ export function AddVisitorModal({
 
                 {isExternal && (
                   <>
-                    <Text style={styles.fieldLabel}>Provider *</Text>
+                    <Text style={styles.fieldLabel}>Provider <Text style={styles.required}>*</Text></Text>
                     <View style={styles.chipsRow}>
                       {COMMON_PROVIDERS.map((p) => (
                         <PremiumPressable
@@ -231,16 +232,19 @@ export function AddVisitorModal({
                   </>
                 )}
 
-                <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Optional Details</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Details</Text>
                 
                 {!isExternal && (
-                  <RNTextInput
-                    style={styles.input}
-                    placeholder="Visitor name *"
-                    value={name}
-                    onChangeText={setName}
-                    placeholderTextColor={theme.colors.textSecondary}
-                  />
+                  <>
+                    <Text style={styles.fieldLabel}>Visitor name <Text style={styles.required}>*</Text></Text>
+                    <RNTextInput
+                      style={styles.input}
+                      placeholder="Enter visitor name"
+                      value={name}
+                      onChangeText={setName}
+                      placeholderTextColor={theme.colors.textSecondary}
+                    />
+                  </>
                 )}
                 {isExternal && (
                   <RNTextInput
@@ -286,16 +290,17 @@ export function AddVisitorModal({
                     thumbColor="#FFFFFF"
                   />
                 </View>
-
-                <Button
-                  label={isPreApproved ? (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry') : 'Request gate approval'}
-                  icon="shield"
-                  onPress={handleCreate}
-                  loading={submitting}
-                  disabled={!canSubmit() || submitting}
-                  style={styles.actionBtn}
-                />
               </ScrollView>
+
+              <Button
+                label={isPreApproved ? (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry') : 'Request gate approval'}
+                icon="shield"
+                onPress={handleCreate}
+                loading={submitting}
+                disabled={!canSubmit() || submitting}
+                style={styles.actionBtn}
+              />
+              </View>
             )}
           </View>
         </KeyboardAvoidingView>
@@ -337,4 +342,5 @@ const styles = StyleSheet.create({
   otpCode: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 34, letterSpacing: 6, color: theme.colors.primary },
   otpWarning: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 24, paddingHorizontal: 12 },
   actionBtn: { width: '100%', marginBottom: 10 },
+  required: { color: '#DC2626' },
 });

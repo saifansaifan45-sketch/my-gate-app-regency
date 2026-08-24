@@ -74,8 +74,8 @@ export function EmergencySOSModal({ visible, onClose }: EmergencySOSModalProps) 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(17, 24, 39, 0.42)' },
   backdrop: { ...StyleSheet.absoluteFill },
-  keyboardView: { width: '100%' },
-  sheet: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 24, shadowColor: '#111827', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 8 },
+  keyboardView: { width: '100%', alignItems: 'center' },
+  sheet: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 24, maxWidth: 400, width: '100%', shadowColor: '#111827', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 8 },
   icon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.error, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: '#111827', marginBottom: 6 },
   description: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 20, color: '#6B7280', marginBottom: 18 },

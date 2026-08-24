@@ -24,8 +24,8 @@ export const SERVICE_CATALOG: ServiceEntry[] = [
   // { id: 'lost-found', label: 'Lost & Found', description: 'Report items', icon: 'search', route: '/community', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP'], requiresAuth: true },
   { id: 'activity-log', label: 'Activity Log', description: 'My gate history', icon: 'list', route: '/activity-log', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
   { id: 'announcements', label: 'Notice', description: 'Notices & updates', icon: 'bell', route: '/announcements', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
-  { id: 'family', label: 'Family Members', description: 'Manage access', icon: 'home', route: '/family-members', category: 'Support', availableRoles: ['OWNER', 'TENANT'], requiresAuth: true },
-  { id: 'community-hub', label: 'Community Hub', description: 'Rules & docs', icon: 'grid', route: '/community-hub', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
+  { id: 'family', label: 'Family', description: 'Manage access', icon: 'home', route: '/family-members', category: 'Support', availableRoles: ['OWNER', 'TENANT'], requiresAuth: true },
+  { id: 'community-hub', label: 'Community', description: 'Rules & docs', icon: 'grid', route: '/community-hub', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
   // Disabled: Calendar currently uses local seeded state and has no backend event API.
   // { id: 'calendar', label: 'Calendar', description: 'Events & bookings', icon: 'calendar', route: '/calendar', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP'], requiresAuth: true },
 ];

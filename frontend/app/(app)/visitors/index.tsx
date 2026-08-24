@@ -27,7 +27,7 @@ export default function VisitorsScreen() {
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['my-visitors'],
     queryFn: () => visitorsApi.getMyVisitors(),
-    refetchInterval: 15000,
+    staleTime: 30_000,
   });
 
   const visitors = data?.visitors || [];
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.colors.primary,
   },
-  listContent: { padding: 20 },
+  listContent: { padding: 20, alignItems: 'stretch' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
@@ -239,6 +239,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.06)',
     padding: 16,
     marginBottom: 12,
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.04,
@@ -252,6 +254,7 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'stretch',
   },
   avatar: {
     width: 44,

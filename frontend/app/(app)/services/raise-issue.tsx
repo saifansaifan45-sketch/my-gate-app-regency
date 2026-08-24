@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
@@ -19,11 +19,12 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function RaiseIssueScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; description?: string }>();
   const { bottom, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [category, setCategory] = useState(ISSUE_CATEGORIES[0].id);
-  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState(params.category || ISSUE_CATEGORIES[0].id);
+  const [description, setDescription] = useState(params.description || '');
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = description.trim().length > 0;

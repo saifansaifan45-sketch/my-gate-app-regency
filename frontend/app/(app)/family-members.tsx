@@ -202,7 +202,7 @@ export default function FamilyMembersScreen() {
         <View style={styles.overlay}>
           <View style={styles.deleteModal}>
             <Text style={styles.deleteTitle}>Remove record?</Text>
-            <Text style={styles.deleteMessage}>Are you sure you want to remove "{deleteTarget?.title}"? This action cannot be undone.</Text>
+            <Text style={styles.deleteMessage}>Are you sure you want to remove?</Text>
             <View style={styles.deleteActions}>
               <Button label="Cancel" variant="outline" onPress={() => setDeleteTarget(null)} style={styles.cancelButton} />
               <Button

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
@@ -22,11 +22,22 @@ interface QuickActionsProps {
 const CHIP_SIZE = 72;
 const CHIP_RADIUS = 22;
 const ICON_SIZE = 34;
+const ITEMS_PER_ROW = 4;
+const GRID_GAP = 12;
 
 export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress }) => {
+  const screenWidth = Dimensions.get('window').width;
+  const containerPadding = homeLayout.pagePadding * 2;
+  const availableWidth = screenWidth - containerPadding;
+  const itemWidth = (availableWidth - GRID_GAP * (ITEMS_PER_ROW - 1)) / ITEMS_PER_ROW;
+
+  const rows: ActionItemConfig[][] = [];
+  for (let i = 0; i < actions.length; i += ITEMS_PER_ROW) {
+    rows.push(actions.slice(i, i + ITEMS_PER_ROW));
+  }
+
   return (
     <View style={styles.container}>
-      {/* Section Header */}
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>Quick actions</Text>
         <PremiumPressable
@@ -39,24 +50,27 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress
         </PremiumPressable>
       </View>
 
-      {/* Flexible action grid keeps expanded household utilities easy to scan. */}
-      <View style={styles.gridRow}>
-        {actions.map((action) => (
-          <PremiumPressable
-            key={action.id}
-            style={styles.actionIcon}
-            onPress={action.onPress}
-            scaleTo={0.92}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-          >
-            <View style={[styles.iconBox, { backgroundColor: action.iconBgColor }]}>
-              <Feather name={action.icon} size={ICON_SIZE} color={action.iconColor} />
-            </View>
-            <Text style={styles.actionLabel} numberOfLines={2}>
-              {action.label}
-            </Text>
-          </PremiumPressable>
+      <View style={styles.grid}>
+        {rows.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.gridRow}>
+            {row.map((action) => (
+              <PremiumPressable
+                key={action.id}
+                style={[styles.actionIcon, { width: itemWidth }]}
+                onPress={action.onPress}
+                scaleTo={0.92}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <View style={[styles.iconBox, { backgroundColor: action.iconBgColor }]}>
+                  <Feather name={action.icon} size={ICON_SIZE} color={action.iconColor} />
+                </View>
+                <Text style={styles.actionLabel} numberOfLines={2}>
+                  {action.label}
+                </Text>
+              </PremiumPressable>
+            ))}
+          </View>
         ))}
       </View>
     </View>
@@ -72,7 +86,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   sectionTitle: homeLayout.sectionTitle,
   editBtn: {
@@ -84,20 +98,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
   },
+  grid: {
+    gap: GRID_GAP,
+  },
   gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
     justifyContent: 'flex-start',
-    columnGap: 16,
-    rowGap: 18,
+    gap: GRID_GAP,
   },
   actionIcon: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 4,
+    paddingVertical: 8,
   },
   iconBox: {
     width: CHIP_SIZE,

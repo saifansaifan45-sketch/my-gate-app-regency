@@ -322,7 +322,7 @@ export default function MaintenanceScreen() {
 
             <Text style={styles.modalTitle}>Delete Request?</Text>
             <Text style={styles.modalMessage}>
-              Are you sure you want to delete "{ticketToDelete?.title}"? This action cannot be undone.
+              Are you sure you want to delete?
             </Text>
 
             <View style={styles.modalActions}>

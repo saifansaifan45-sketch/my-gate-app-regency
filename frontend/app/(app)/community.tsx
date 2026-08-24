@@ -2,7 +2,7 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState, useRef } from 'react';
-import { Platform, View, StyleSheet, ScrollView, Animated, Dimensions, Alert } from 'react-native';
+import { Platform, View, StyleSheet, ScrollView, Animated, Easing, Dimensions, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -63,14 +63,16 @@ export default function CommunityScreen() {
   const changeCategory = (item: AnnouncementCategory | undefined) => {
     if (category === item) return;
     Animated.timing(contentOpacity, {
-      toValue: 0,
-      duration: 150,
+      toValue: 0.4,
+      duration: 100,
+      easing: Easing.inOut(Easing.ease),
       useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setCategory(item);
       Animated.timing(contentOpacity, {
         toValue: 1,
-        duration: 250,
+        duration: 200,
+        easing: Easing.inOut(Easing.ease),
         useNativeDriver: Platform.OS !== 'web',
       }).start();
     });

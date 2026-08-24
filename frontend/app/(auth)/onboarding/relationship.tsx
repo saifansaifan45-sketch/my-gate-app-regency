@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +12,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 
 import { Text } from '../../../src/components/ui/Text';
 import { Button } from '../../../src/components/ui/Button';
@@ -21,6 +22,7 @@ import { theme } from '../../../src/theme';
 import { useSession } from '../../../src/store/auth';
 import { useToast } from '../../../src/store/toast';
 import { EmployeeRole } from '../../../src/api/auth';
+import { propertiesApi, UnitWithOwnershipStatus } from '../../../src/api/properties';
 
 import { formatErrorMessage } from '../../../src/utils/errors';
 
@@ -51,6 +53,20 @@ export default function RelationshipOnboardingScreen() {
   const { showToast } = useToast();
 
   const [selectedType, setSelectedType] = useState<ConnectionType>(null);
+
+  // Fetch units with ownership status
+  const { data: unitsData } = useQuery({
+    queryKey: ['units'],
+    queryFn: () => propertiesApi.getUnits(),
+  });
+  const unitsWithOwnership = unitsData?.units || [];
+
+  // Fetch manager status
+  const { data: managerData } = useQuery({
+    queryKey: ['has-manager'],
+    queryFn: () => propertiesApi.hasManager(),
+  });
+  const hasRegisteredManager = managerData?.hasManager || false;
 
   // Owner Form State
   const [ownerFlat, setOwnerFlat] = useState('9A');
@@ -418,13 +434,22 @@ export default function RelationshipOnboardingScreen() {
                 <View style={styles.unitPillGrid}>
                   {POPULAR_UNITS.map((u) => {
                     const isSelected = ownerFlat === u;
+                    const unitStatus = unitsWithOwnership.find((unit) => unit.unitNumber === u);
+                    const isTaken = unitStatus?.hasOwner && unitStatus?.unitNumber !== user?.unitNumber;
                     return (
                       <TouchableOpacity
                         key={u}
-                        style={[styles.unitPill, isSelected && styles.unitPillActive]}
-                        onPress={() => setOwnerFlat(u)}
+                        style={[styles.unitPill, isSelected && styles.unitPillActive, isTaken && styles.unitPillDisabled]}
+                        onPress={() => {
+                          if (isTaken) {
+                            showToast({ title: 'Unit Unavailable', message: 'The Flat already has a owner.', type: 'error' });
+                            return;
+                          }
+                          setOwnerFlat(u);
+                        }}
+                        disabled={isTaken}
                       >
-                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive]}>{u}</Text>
+                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive, isTaken && styles.unitPillTextDisabled]}>{u}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -477,13 +502,22 @@ export default function RelationshipOnboardingScreen() {
                 <View style={styles.unitPillGrid}>
                   {POPULAR_UNITS.map((u) => {
                     const isSelected = residentFlat === u;
+                    const unitStatus = unitsWithOwnership.find((unit) => unit.unitNumber === u);
+                    const isTaken = unitStatus?.hasOwner && unitStatus?.unitNumber !== user?.unitNumber;
                     return (
                       <TouchableOpacity
                         key={u}
-                        style={[styles.unitPill, isSelected && styles.unitPillActive]}
-                        onPress={() => setResidentFlat(u)}
+                        style={[styles.unitPill, isSelected && styles.unitPillActive, isTaken && styles.unitPillDisabled]}
+                        onPress={() => {
+                          if (isTaken) {
+                            showToast({ title: 'Unit Unavailable', message: 'The Flat already has a owner.', type: 'error' });
+                            return;
+                          }
+                          setResidentFlat(u);
+                        }}
+                        disabled={isTaken}
                       >
-                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive]}>{u}</Text>
+                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive, isTaken && styles.unitPillTextDisabled]}>{u}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -723,12 +757,15 @@ const styles = StyleSheet.create({
   unitPillGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     marginBottom: 12,
   },
   unitPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    flex: 1,
+    minWidth: '18%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
@@ -738,13 +775,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
+  unitPillDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    opacity: 0.5,
+  },
   unitPillText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textPrimary,
   },
   unitPillTextActive: {
     color: '#FFFFFF',
+  },
+  unitPillTextDisabled: {
+    color: '#9CA3AF',
   },
   input: {
     height: 48,

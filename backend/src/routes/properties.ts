@@ -6,6 +6,40 @@ import { ResidencyStatus, ResidencyType, OwnershipStatus } from '@prisma/client'
 
 const router = Router();
 
+// ----------------------------------------------------
+// Public: GET /properties/units
+// Returns all units with their ownership status
+// ----------------------------------------------------
+router.get('/units', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    let community = await prisma.community.findFirst();
+    if (!community) {
+      return res.json({ units: [] });
+    }
+
+    const units = await prisma.unit.findMany({
+      where: { communityId: community.id },
+      include: {
+        ownerships: {
+          where: { status: OwnershipStatus.ACTIVE },
+          select: { userId: true },
+        },
+      },
+      orderBy: { unitNumber: 'asc' },
+    });
+
+    res.json({
+      units: units.map((unit) => ({
+        id: unit.id,
+        unitNumber: unit.unitNumber,
+        hasOwner: unit.ownerships.length > 0,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.use(requireAuth);
 
 // ----------------------------------------------------
@@ -324,3 +358,28 @@ router.post('/units/:unitId/residencies/:residencyId/reject', async (req: AuthRe
 });
 
 export default router;
+
+// ----------------------------------------------------
+// Public: GET /properties/has-manager
+// Check if community already has a registered manager
+// ----------------------------------------------------
+router.get('/has-manager', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const community = await prisma.community.findFirst();
+    if (!community) {
+      return res.json({ hasManager: false });
+    }
+
+    const managerCount = await prisma.membership.count({
+      where: {
+        communityId: community.id,
+        role: 'MANAGER',
+        status: 'APPROVED',
+      },
+    });
+
+    res.json({ hasManager: managerCount > 0 });
+  } catch (error) {
+    next(error);
+  }
+});

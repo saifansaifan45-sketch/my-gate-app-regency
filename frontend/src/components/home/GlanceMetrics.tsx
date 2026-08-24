@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
@@ -19,7 +19,15 @@ interface GlanceMetricsProps {
   onViewAllPress: () => void;
 }
 
+const GRID_GAP = 10;
+const COLS = 3;
+
 export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPress }) => {
+  const screenWidth = Dimensions.get('window').width;
+  const containerPadding = homeLayout.pagePadding * 2;
+  const availableWidth = screenWidth - containerPadding;
+  const itemWidth = (availableWidth - GRID_GAP * (COLS - 1)) / COLS;
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -35,11 +43,11 @@ export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPr
         </PremiumPressable>
       </View>
 
-      <View style={styles.bento}>
-        {cards.map((card) => (
+      <View style={styles.grid}>
+        {cards.slice(0, COLS).map((card) => (
           <PremiumPressable
             key={card.key}
-            style={[homeSurface, styles.card]}
+            style={[homeSurface, styles.card, { width: itemWidth }]}
             onPress={card.onPress}
             scaleTo={0.96}
             accessibilityRole="button"
@@ -79,13 +87,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
   },
-  bento: {
+  grid: {
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'space-between',
   },
   card: {
-    flex: 1,
-    minWidth: 100,
     padding: 14,
     minHeight: 100,
     justifyContent: 'space-between',

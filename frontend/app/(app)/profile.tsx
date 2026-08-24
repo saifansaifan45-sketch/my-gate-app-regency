@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import { Text } from '../../src/components/ui/Text';
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../src/components/ui/AppHeader';
+import { ConfirmationModal } from '../../src/components/ui/ConfirmationModal';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
 import { homeLayout, homeSurface } from '../../src/components/home/homeSurface';
@@ -16,6 +17,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(true);
   const { user, logout, hasManagerAccess, hasOwnership } = useSession();
+  const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const displayName = `${user?.firstName || 'Resident'} ${user?.lastName || ''}`.trim();
   const ownedUnits = user?.ownerships || [];
@@ -26,6 +29,16 @@ export default function ProfileScreen() {
   const phone = user?.phoneNumber || '';
 
   const isManager = hasManagerAccess();
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+      setIsLogoutConfirmVisible(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -263,7 +276,7 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account</Text>
             <View style={styles.card}>
-              <PremiumPressable style={styles.menuRow} onPress={logout}>
+              <PremiumPressable style={styles.menuRow} onPress={() => setIsLogoutConfirmVisible(true)}>
                 <View style={[styles.iconBox, { backgroundColor: '#FFEBEE' }]}>
                   <Feather name="log-out" size={20} color="#D32F2F" />
                 </View>
@@ -277,6 +290,18 @@ export default function ProfileScreen() {
           </View>
         </ScreenEntrance>
       </ScrollView>
+
+      <ConfirmationModal
+        visible={isLogoutConfirmVisible}
+        onClose={() => setIsLogoutConfirmVisible(false)}
+        onConfirm={handleLogout}
+        title="Log out?"
+        message="Are you sure you want to log out?"
+        confirmLabel="Log out"
+        variant="danger"
+        confirmIcon="log-out"
+        loading={isLoggingOut}
+      />
     </View>
   );
 }
