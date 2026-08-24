@@ -59,7 +59,7 @@ function formatExactTime(dateString: string): string {
 }
 
 function getActorDisplayName(actor: ActivityItem['actor']): string {
-  return `${actor.firstName} ${actor.lastName}`;
+  return `${actor.firstName} ${actor.lastName}`.trim();
 }
 
 function getRoleBadgeColor(role: string): string {
@@ -122,7 +122,7 @@ export default function ActivityLogScreen() {
   }, [refetch]);
 
   const renderSkeleton = () => (
-    <View style={[styles.listContent, { paddingBottom: bottomClearance + 16 }]}>
+    <View style={{ gap: 12 }}>
       {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
         <View key={index} style={styles.skeletonCard}>
           <View style={styles.skeletonIconBox} />
@@ -138,7 +138,7 @@ export default function ActivityLogScreen() {
   );
 
   const renderEmptyState = () => (
-    <View style={[styles.emptyWrapper, { paddingBottom: bottomClearance + 16 }]}>
+    <View style={styles.emptyWrapper}>
       <EmptyState
         icon="activity"
         title="No activity found"
@@ -152,7 +152,7 @@ export default function ActivityLogScreen() {
   );
 
   const renderErrorState = () => (
-    <View style={[styles.errorWrapper, { paddingBottom: bottomClearance + 16 }]}>
+    <View style={styles.errorWrapper}>
       <EmptyState
         icon="alert-triangle"
         title="Failed to load activity"
@@ -175,33 +175,6 @@ export default function ActivityLogScreen() {
       <AppHeader variant="subscreen" title="Activity Log" />
 
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        style={styles.filterScroll}
-      >
-        {FILTERS.map((item) => {
-          const selected = filter === item.id;
-          return (
-            <PremiumPressable
-              key={item.id}
-              style={[
-                styles.filterChip,
-                selected && styles.filterChipSelected,
-              ]}
-              onPress={() => setFilter(item.id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-            >
-              <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
-                {item.label}
-              </Text>
-            </PremiumPressable>
-          );
-        })}
-      </ScrollView>
-
-      <ScrollView
         ref={scrollViewRef}
         onScroll={handleScroll}
         showsVerticalScrollIndicator={false}
@@ -212,82 +185,111 @@ export default function ActivityLogScreen() {
             tintColor={theme.colors.primary}
           />
         }
-        contentContainerStyle={[{ paddingBottom: bottomClearance + 16 }, styles.listContent]}
+        contentContainerStyle={[{ paddingBottom: bottomClearance + 16 }]}
       >
-        {isLoading ? (
-          renderSkeleton()
-        ) : isError ? (
-          renderErrorState()
-        ) : activities.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <View style={styles.list}>
-            {activities.map((activity, index) => {
-              const isLast = index === activities.length - 1;
-              const config = ACTIVITY_TYPE_CONFIG[activity.type];
-              const roleColor = getRoleBadgeColor(activity.actor.role);
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+          style={styles.filterScroll}
+        >
+          {FILTERS.map((item) => {
+            const selected = filter === item.id;
+            return (
+              <PremiumPressable
+                key={item.id}
+                style={[
+                  styles.filterChip,
+                  selected && styles.filterChipSelected,
+                ]}
+                onPress={() => setFilter(item.id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+                  {item.label}
+                </Text>
+              </PremiumPressable>
+            );
+          })}
+        </ScrollView>
 
-              return (
-                <ScreenEntrance
-                  key={activity.id}
-                  delay={Math.min(60 + index * 30, 200)}
-                  distance={8}
-                >
-                  <View style={styles.cardWrapper} pointerEvents="box-none">
-                    <View style={[styles.timelineWrapper]}>
-                      {!isLast && (
-                        <View style={styles.timelineLine} pointerEvents="none" />
-                      )}
-                      <View style={[styles.timelineDot, { backgroundColor: config.color }]} pointerEvents="none" />
-                    </View>
-                    <View style={[styles.card, { borderLeftColor: config.color }]}>
-                      <View style={styles.cardHeader}>
-                        <View style={[styles.iconBox, { backgroundColor: config.background }]}>
-                          <Feather name={config.icon} size={18} color={config.color} />
-                        </View>
-                        <View style={styles.cardMain}>
-                          <Text style={styles.cardTitle} numberOfLines={1}>
-                            {activity.title}
-                          </Text>
-                          <Text style={styles.cardDescription} numberOfLines={2}>
-                            {activity.description}
-                          </Text>
-                          <View style={styles.cardMeta}>
-                            <View style={styles.actorRow}>
-                              <Text style={styles.actorName} numberOfLines={1}>
-                                {getActorDisplayName(activity.actor)}
-                              </Text>
-                              <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
-                                <Text style={styles.roleBadgeText}>
-                                  {activity.actor.role}
+        <View style={styles.listContent}>
+          {isLoading ? (
+            renderSkeleton()
+          ) : isError ? (
+            renderErrorState()
+          ) : activities.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <View style={styles.list}>
+              {activities.map((activity, index) => {
+                const isLast = index === activities.length - 1;
+                const config = ACTIVITY_TYPE_CONFIG[activity.type];
+                const roleColor = getRoleBadgeColor(activity.actor.role);
+
+                return (
+                  <ScreenEntrance
+                    key={activity.id}
+                    delay={Math.min(60 + index * 30, 200)}
+                    distance={8}
+                  >
+                    <View style={styles.cardWrapper} pointerEvents="box-none">
+                      <View style={[styles.timelineWrapper]}>
+                        {!isLast && (
+                          <View style={styles.timelineLine} pointerEvents="none" />
+                        )}
+                        <View style={[styles.timelineDot, { backgroundColor: config.color }]} pointerEvents="none" />
+                      </View>
+                      <View style={[styles.card, { borderLeftColor: config.color }]}>
+                        <View style={styles.cardHeader}>
+                          <View style={[styles.iconBox, { backgroundColor: config.background }]}>
+                            <Feather name={config.icon} size={18} color={config.color} />
+                          </View>
+                          <View style={styles.cardMain}>
+                            <Text style={styles.cardTitle} numberOfLines={1}>
+                              {activity.title}
+                            </Text>
+                            <Text style={styles.cardDescription} numberOfLines={2}>
+                              {activity.description}
+                            </Text>
+                            <View style={styles.cardMeta}>
+                              <View style={styles.actorRow}>
+                                <Text style={styles.actorName} numberOfLines={1}>
+                                  {getActorDisplayName(activity.actor)}
                                 </Text>
+                                <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
+                                  <Text style={styles.roleBadgeText}>
+                                    {activity.actor.role}
+                                  </Text>
+                                </View>
                               </View>
+                              {activity.unitNumber && (
+                                <View style={styles.unitRow}>
+                                  <Feather name="home" size={12} color={theme.colors.textSecondary} />
+                                  <Text style={styles.unitText}>Unit {activity.unitNumber}</Text>
+                                </View>
+                              )}
                             </View>
-                            {activity.unitNumber && (
-                              <View style={styles.unitRow}>
-                                <Feather name="home" size={12} color={theme.colors.textSecondary} />
-                                <Text style={styles.unitText}>Unit {activity.unitNumber}</Text>
-                              </View>
-                            )}
                           </View>
                         </View>
-                      </View>
-                      <View style={styles.cardFooter}>
-                        <Text style={styles.timeRelative}>{formatRelativeTime(activity.createdAt)}</Text>
-                        <Text style={styles.timeExact}>{formatExactTime(activity.createdAt)}</Text>
+                        <View style={styles.cardFooter}>
+                          <Text style={styles.timeRelative}>{formatRelativeTime(activity.createdAt)}</Text>
+                          <Text style={styles.timeExact}>{formatExactTime(activity.createdAt)}</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                </ScreenEntrance>
-              );
-            })}
-            {isFetchingNextPage && (
-              <View style={styles.loadMoreIndicator}>
-                <Text style={styles.loadMoreText}>Loading more...</Text>
-              </View>
-            )}
-          </View>
-        )}
+                  </ScreenEntrance>
+                );
+              })}
+              {isFetchingNextPage && (
+                <View style={styles.loadMoreIndicator}>
+                  <Text style={styles.loadMoreText}>Loading more...</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -328,8 +330,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: cardSystem.pagePadding,
-    paddingTop: 16,
-    gap: 12,
+    paddingTop: 12,
   },
   list: {
     gap: 12,

@@ -22,13 +22,59 @@ export interface ActivityActor {
 export interface ActivityItem {
   id: string;
   type: ActivityType;
+  action?: string;
   title: string;
   description: string;
   actor: ActivityActor;
   unitNumber?: string | null;
   unitId?: string | null;
+  targetId?: string | null;
   metadata?: Record<string, unknown>;
   createdAt: string;
+}
+
+interface BackendActivityItem {
+  id: string;
+  type: ActivityType;
+  action: string;
+  title: string;
+  description: string;
+  actorName: string;
+  actorRole: string;
+  actorId: string | null;
+  unitNumber: string | null;
+  targetId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface BackendActivityLogResponse {
+  activities: BackendActivityItem[];
+  cursor: string | null;
+  hasMore: boolean;
+}
+
+function toActivityItem(item: BackendActivityItem): ActivityItem {
+  const nameParts = item.actorName.trim().split(/\s+/).filter(Boolean);
+  const firstName = nameParts.shift() || (item.actorRole === 'SYSTEM' ? 'System' : 'Unknown');
+
+  return {
+    id: item.id,
+    type: item.type,
+    action: item.action,
+    title: item.title,
+    description: item.description,
+    actor: {
+      id: item.actorId || `system:${item.id}`,
+      firstName,
+      lastName: nameParts.join(' '),
+      role: item.actorRole || 'SYSTEM',
+    },
+    unitNumber: item.unitNumber,
+    targetId: item.targetId,
+    metadata: item.metadata,
+    createdAt: item.createdAt,
+  };
 }
 
 export interface ActivityLogResponse {
@@ -50,6 +96,11 @@ export const activityLogApi = {
     if (type) queryParams.type = type;
     if (cursor) queryParams.cursor = cursor;
     
-    return (await api.get('/activity-log', { params: queryParams })).data;
+    const response = (await api.get<BackendActivityLogResponse>('/activity-log', { params: queryParams })).data;
+    return {
+      items: response.activities.map(toActivityItem),
+      nextCursor: response.cursor,
+      hasMore: response.hasMore,
+    };
   },
 };

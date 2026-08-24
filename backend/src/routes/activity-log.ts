@@ -6,7 +6,8 @@ import { Role, OwnershipStatus, ResidencyStatus } from '@prisma/client';
 const router = Router();
 router.use(requireAuth);
 
-const PAGE_LIMIT = 50;
+const DEFAULT_PAGE_LIMIT = 20;
+const MAX_PAGE_LIMIT = 50;
 
 type ActivityType = 'VISITOR' | 'MAINTENANCE' | 'ANNOUNCEMENT' | 'GATE' | 'DELIVERY' | 'HOUSE_HELP' | 'SOS' | 'ATTENDANCE' | 'GENERAL';
 
@@ -18,10 +19,51 @@ interface ActivityItem {
   description: string;
   actorName: string;
   actorRole: string;
+  actorId: string | null;
   unitNumber: string | null;
   targetId: string | null;
   metadata: Record<string, unknown>;
   createdAt: Date;
+}
+
+interface ActivityCursor {
+  createdAt: Date;
+  id: string;
+}
+
+function decodeCursor(value: string | null): ActivityCursor | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { createdAt?: unknown; id?: unknown };
+    if (typeof parsed.createdAt !== 'string' || typeof parsed.id !== 'string') return null;
+    const createdAt = new Date(parsed.createdAt);
+    if (Number.isNaN(createdAt.getTime())) return null;
+    return { createdAt, id: parsed.id };
+  } catch {
+    // Cursors are opaque to clients. An invalid/legacy cursor starts a fresh page
+    // rather than being passed into unrelated Prisma tables.
+    return null;
+  }
+}
+
+function encodeCursor(activity: ActivityItem): string {
+  return Buffer.from(JSON.stringify({ createdAt: activity.createdAt.toISOString(), id: activity.id })).toString('base64url');
+}
+
+function applyCursor<T extends Record<string, unknown>>(where: T, cursor: ActivityCursor | null): T & Record<string, unknown> {
+  if (!cursor) return where;
+  return {
+    AND: [
+      where,
+      {
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      },
+    ],
+  } as unknown as T & Record<string, unknown>;
 }
 
 function personName(person?: { firstName: string | null; lastName: string | null } | null): string {
@@ -67,6 +109,8 @@ function mapNotificationType(type: string): { type: ActivityType; label: string 
     WORK_STARTED: { type: 'MAINTENANCE', label: 'Work Started' },
     WORK_COMPLETED: { type: 'MAINTENANCE', label: 'Work Completed' },
     TICKET_VERIFICATION_REQUEST: { type: 'MAINTENANCE', label: 'Verification Requested' },
+    ANNOUNCEMENT_PUBLISHED: { type: 'ANNOUNCEMENT', label: 'Announcement Published' },
+    EMERGENCY_SOS: { type: 'SOS', label: 'Emergency SOS' },
     ROLE_PROMOTED: { type: 'GENERAL', label: 'Role Promoted' },
     ROLE_REVOKED: { type: 'GENERAL', label: 'Role Revoked' },
     WORKFORCE_APPROVED: { type: 'GENERAL', label: 'Workforce Approved' },
@@ -151,7 +195,11 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     }
 
     const typeFilter = typeof req.query.type === 'string' ? req.query.type.toUpperCase() : null;
-    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null;
+    const cursor = decodeCursor(typeof req.query.cursor === 'string' ? req.query.cursor : null);
+    const requestedLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : DEFAULT_PAGE_LIMIT;
+    const pageLimit = Number.isInteger(requestedLimit)
+      ? Math.min(MAX_PAGE_LIMIT, Math.max(1, requestedLimit))
+      : DEFAULT_PAGE_LIMIT;
 
     const activities: ActivityItem[] = [];
 
@@ -171,7 +219,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       };
 
       // Residents: only audit logs for their unit's visitors
-      if (userScope.scope === 'RESIDENT' && userScope.unitIds.length > 0) {
+      if (userScope.scope === 'RESIDENT') {
         const unitVisitors = await prisma.visitor.findMany({
           where: { unitId: { in: userScope.unitIds } },
           select: { id: true },
@@ -181,15 +229,16 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
           // No visitors for this resident, skip audit log query for them
           auditWhere.id = '__none__';
         } else {
-          auditWhere.metadata = { path: ['visitorId'], in: visitorIds };
+          // Prisma JSON path filters do not consistently support `in` across
+          // providers. Build explicit equality predicates instead.
+          auditWhere.OR = visitorIds.map((visitorId) => ({ metadata: { path: ['visitorId'], equals: visitorId } }));
         }
       }
 
       const auditLogs = await prisma.auditLog.findMany({
-        where: auditWhere,
+        where: applyCursor(auditWhere, cursor),
         orderBy: { createdAt: 'desc' },
-        take: PAGE_LIMIT * 2,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        take: pageLimit * 2,
         include: { actor: { select: { firstName: true, lastName: true, role: true } } },
       });
 
@@ -228,6 +277,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
             : label,
           actorName: personName(log.actor),
           actorRole: log.actor?.role || 'UNKNOWN',
+          actorId: log.actorId,
           unitNumber: visitor?.unitNumber || null,
           targetId: visitorId,
           metadata: { visitorId, ...meta },
@@ -244,17 +294,28 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
       if (typeFilter === 'MAINTENANCE') {
         notifWhere.type = { in: ['NEW_TICKET', 'TICKET_ACCEPTED', 'TICKET_ASSIGNED', 'TICKET_IN_PROGRESS', 'TICKET_COMPLETED_BY_WORKER', 'TICKET_PENDING_RESIDENT_CONFIRMATION', 'TICKET_CLOSED', 'TICKET_REOPENED', 'TICKET_CANCELLED', 'TASK_ASSIGNED', 'NEW_TASK_ASSIGNED', 'WORK_STARTED', 'WORK_COMPLETED', 'TICKET_VERIFICATION_REQUEST'] };
-      } else if (typeFilter === 'VISITOR' || typeFilter === 'GATE' || typeFilter === 'DELIVERY') {
-        notifWhere.type = { in: ['VISITOR_PASS_CREATED', 'VISITOR_ARRIVAL', 'UNANNOUNCED_ARRIVAL', 'DELIVERY_HANDOFF'] };
+      } else if (typeFilter === 'VISITOR') {
+        notifWhere.type = { in: ['VISITOR_PASS_CREATED'] };
+      } else if (typeFilter === 'GATE') {
+        notifWhere.type = { in: ['VISITOR_ARRIVAL', 'UNANNOUNCED_ARRIVAL'] };
+      } else if (typeFilter === 'DELIVERY') {
+        notifWhere.type = { in: ['DELIVERY_HANDOFF'] };
+      } else if (typeFilter === 'ANNOUNCEMENT') {
+        notifWhere.type = { in: ['ANNOUNCEMENT_PUBLISHED'] };
+      } else if (typeFilter === 'SOS') {
+        notifWhere.type = { in: ['EMERGENCY_SOS'] };
+      } else if (typeFilter === 'HOUSE_HELP' || typeFilter === 'ATTENDANCE') {
+        notifWhere.type = { in: ['__NO_ACTIVITY_FOR_FILTER__'] };
       } else if (typeFilter === 'GENERAL') {
         notifWhere.type = { in: ['ROLE_PROMOTED', 'ROLE_REVOKED', 'WORKFORCE_APPROVED', 'WORKFORCE_REJECTED', 'EMPLOYMENT_TERMINATED', 'EMPLOYMENT_SUSPENDED', 'RESIDENCY_APPROVED', 'RESIDENCY_REJECTED'] };
+      } else if (typeFilter) {
+        notifWhere.type = { in: ['__NO_ACTIVITY_FOR_FILTER__'] };
       }
 
       const notifications = await prisma.notification.findMany({
-        where: notifWhere,
+        where: applyCursor(notifWhere, cursor),
         orderBy: { createdAt: 'desc' },
-        take: PAGE_LIMIT * 2,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        take: pageLimit * 2,
       });
 
       for (const notif of notifications) {
@@ -280,6 +341,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
           description: notif.message,
           actorName: 'System',
           actorRole: 'SYSTEM',
+          actorId: null,
           unitNumber,
           targetId: meta.ticketId ? String(meta.ticketId) : null,
           metadata: meta,
@@ -291,8 +353,10 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     // ----------------------------------------------------------
     // 3. PersonnelActivity (attendance, tasks) — managers & leadership only
     // ----------------------------------------------------------
-    if (userScope.scope === 'MANAGER' || userScope.scope === 'LEADERSHIP') {
-      const personnelActivityWhere: any = {};
+    if ((userScope.scope === 'MANAGER' || userScope.scope === 'LEADERSHIP') && userScope.communityIds.length > 0) {
+      const personnelActivityWhere: any = {
+        personnel: { communityId: { in: userScope.communityIds } },
+      };
       if (typeFilter === 'ATTENDANCE') {
         personnelActivityWhere.type = { in: ['ATTENDANCE_MARKED', 'LEAVE_REQUESTED', 'OVERTIME_LOGGED'] };
       } else if (typeFilter === 'MAINTENANCE') {
@@ -300,10 +364,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       }
 
       const personnelActivities = await prisma.personnelActivity.findMany({
-        where: personnelActivityWhere,
+        where: applyCursor(personnelActivityWhere, cursor),
         orderBy: { createdAt: 'desc' },
-        take: PAGE_LIMIT,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        take: pageLimit * 2,
         include: {
           personnel: { select: { name: true, category: true, userId: true } },
         },
@@ -319,6 +382,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
           description: pa.description,
           actorName: pa.personnel.name,
           actorRole: 'WORKFORCE',
+          actorId: pa.personnel.userId,
           unitNumber: null,
           targetId: pa.referenceId,
           metadata: { personnelId: pa.personnelId, category: pa.personnel.category },
@@ -345,10 +409,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
       if (announcementWhere) {
         const announcements = await prisma.announcement.findMany({
-          where: announcementWhere,
+          where: applyCursor(announcementWhere, cursor),
           orderBy: { createdAt: 'desc' },
-          take: PAGE_LIMIT,
-          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          take: pageLimit * 2,
           include: { author: { select: { firstName: true, lastName: true, role: true } } },
         });
 
@@ -361,6 +424,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
             description: ann.content.slice(0, 200),
             actorName: personName(ann.author),
             actorRole: ann.author?.role || 'UNKNOWN',
+            actorId: ann.authorId,
             unitNumber: null,
             targetId: ann.id,
             metadata: { category: ann.category, priority: ann.priority, status: ann.status },
@@ -377,7 +441,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       let ticketWhere: any = {};
       if (userScope.scope === 'RESIDENT') {
         ticketWhere = { residentId: userId, deletedAt: null };
-      } else if (userScope.communityIds.length > 0) {
+      } else if ((userScope.scope === 'MANAGER' || userScope.scope === 'LEADERSHIP') && userScope.communityIds.length > 0) {
         ticketWhere = { communityId: { in: userScope.communityIds }, deletedAt: null };
       } else {
         ticketWhere = null;
@@ -385,10 +449,9 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
 
       if (ticketWhere) {
         const tickets = await prisma.ticket.findMany({
-          where: ticketWhere,
+          where: applyCursor(ticketWhere, cursor),
           orderBy: { createdAt: 'desc' },
-          take: PAGE_LIMIT,
-          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          take: pageLimit * 2,
           include: {
             resident: { select: { firstName: true, lastName: true, unitNumber: true, role: true } },
             unit: { select: { unitNumber: true } },
@@ -405,6 +468,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
             description: `${ticket.category} - ${ticket.title}`,
             actorName: personName(ticket.resident),
             actorRole: ticket.resident?.role || 'RESIDENT',
+            actorId: ticket.residentId,
             unitNumber: unitNum,
             targetId: ticket.id,
             metadata: { category: ticket.category, priority: ticket.priority, status: ticket.status },
@@ -418,15 +482,16 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     // 6. Attendance — managers/leadership see community-wide
     // ----------------------------------------------------------
     if ((userScope.scope === 'MANAGER' || userScope.scope === 'LEADERSHIP') && (!typeFilter || typeFilter === 'ATTENDANCE')) {
-      const attendanceWhere = typeFilter === 'ATTENDANCE' ? {} : {};
+      const attendanceWhere: any = {
+        personnel: { communityId: { in: userScope.communityIds } },
+      };
 
       const attendances = await prisma.attendance.findMany({
-        where: attendanceWhere,
+        where: applyCursor(attendanceWhere, cursor),
         orderBy: { createdAt: 'desc' },
-        take: PAGE_LIMIT,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        take: pageLimit * 2,
         include: {
-          personnel: { select: { name: true, category: true } },
+          personnel: { select: { name: true, category: true, userId: true } },
         },
       });
 
@@ -439,6 +504,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
           description: `${att.personnel.name} marked as ${att.status}`,
           actorName: att.personnel.name,
           actorRole: 'WORKFORCE',
+          actorId: att.personnel.userId,
           unitNumber: null,
           targetId: att.id,
           metadata: { status: att.status, category: att.personnel.category, checkIn: att.checkIn, checkOut: att.checkOut },
@@ -459,7 +525,10 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     });
 
     // Sort descending by createdAt
-    uniqueActivities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    uniqueActivities.sort((a, b) => {
+      const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+      return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
+    });
 
     // Filter by type if specified
     const filtered = typeFilter
@@ -467,12 +536,16 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       : uniqueActivities;
 
     // Cursor-based pagination: take one extra to determine hasMore
-    const paginated = filtered.slice(0, PAGE_LIMIT + 1);
-    const hasMore = paginated.length > PAGE_LIMIT;
-    const activitiesToReturn = hasMore ? paginated.slice(0, PAGE_LIMIT) : paginated;
+    const paginated = filtered.slice(0, pageLimit + 1);
+    const hasMore = paginated.length > pageLimit;
+    const activitiesToReturn = hasMore ? paginated.slice(0, pageLimit) : paginated;
 
-    // The cursor is the id of the last item
-    const nextCursor = hasMore ? activitiesToReturn[activitiesToReturn.length - 1]?.id || null : null;
+    // Cursor encodes the last item's timestamp and id so it remains valid
+    // across the different tables merged into this feed.
+    const lastActivity = activitiesToReturn[activitiesToReturn.length - 1];
+    const nextCursor = hasMore && lastActivity
+      ? encodeCursor(lastActivity)
+      : null;
 
     // Sanitize: remove phone numbers, OTPs
     const sanitized = activitiesToReturn.map((a) => ({
@@ -483,6 +556,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
       description: a.description,
       actorName: a.actorName,
       actorRole: a.actorRole,
+      actorId: a.actorId,
       unitNumber: a.unitNumber,
       targetId: a.targetId,
       metadata: a.metadata,
