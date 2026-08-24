@@ -24,14 +24,15 @@ export function NavigationHistoryTracker() {
   return null;
 }
 
+/**
+ * Navigate back. Uses the native stack first. Only falls back to a
+ * hard route when the stack is empty (e.g. deep-linked directly to
+ * a subscreen).
+ */
 export function smartBack(router: AppRouter, fallback: string) {
-  const current = routeHistory[routeHistory.length - 1];
-  const previous = [...routeHistory].reverse().find((path) => path !== current && !isAuthRoute(path));
-
-  if (previous) {
-    routeHistory.pop();
-    router.replace(previous as never);
-  } else {
+  try {
+    router.back();
+  } catch {
     router.replace(fallback as never);
   }
 }
