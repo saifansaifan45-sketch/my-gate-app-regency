@@ -212,7 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [hasApprovedMembership]);
 
   const hasManagerAccess = useCallback((): boolean => {
-    return hasApprovedMembership('MANAGER') || hasApprovedMembership('LEADERSHIP');
+    return hasApprovedMembership('MANAGER');
   }, [hasApprovedMembership]);
 
   const hasWorkforceAccess = useCallback((): boolean => {

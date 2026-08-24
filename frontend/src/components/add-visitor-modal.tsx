@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Modal, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, Modal, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from './ui/Text';
@@ -44,6 +44,7 @@ export function AddVisitorModal({
 }) {
   const { user } = useSession();
   const { showToast } = useToast();
+  const { height: screenHeight } = useWindowDimensions();
   
   const [visitorType, setVisitorType] = useState<VisitorType>(initialType);
   
@@ -142,7 +143,7 @@ export function AddVisitorModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ maxHeight: Dimensions.get('window').height * 0.9 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ maxHeight: screenHeight * 0.9 }}>
           <View style={styles.sheet}>
             <View style={styles.grabber} />
             <View style={styles.sheetHeader}>

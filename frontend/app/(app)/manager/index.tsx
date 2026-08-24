@@ -18,18 +18,18 @@ import { useQuery } from '@tanstack/react-query';
 export default function ManagerDashboardScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  const { hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess } = useSession();
+  const { hasManagerAccess, hasResidentAccess, hasOwnerAccess } = useSession();
 
-  // Security Guard: Only users with approved MANAGER or LEADERSHIP can enter
+  // Security Guard: Only users with approved MANAGER can enter
   React.useEffect(() => {
-    if (!hasManagerAccess() && !hasLeadershipAccess()) {
+    if (!hasManagerAccess()) {
       if (hasResidentAccess() || hasOwnerAccess()) {
         router.replace('/(app)/home');
       } else {
         router.replace('/(auth)/onboarding/relationship');
       }
     }
-  }, [hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, router]);
+  }, [hasManagerAccess, hasResidentAccess, hasOwnerAccess, router]);
 
   const { data: dashboardData, isLoading: dashLoading } = useQuery<DashboardData>({
     queryKey: ['manager-dashboard'],
@@ -131,37 +131,37 @@ export default function ManagerDashboardScreen() {
             </View>
           ) : (
             <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
+              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tickets')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
                   <Feather name="alert-circle" size={18} color="#D97706" />
                 </View>
                 <Text style={[styles.metricValue, { color: '#D97706' }]}>{stats?.pendingTickets || 0}</Text>
                 <Text style={styles.metricLabel}>Open Tickets</Text>
-              </View>
+              </PremiumPressable>
 
-              <View style={styles.metricCard}>
+              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
                   <Feather name="clock" size={18} color="#2563EB" />
                 </View>
                 <Text style={styles.metricValue}>{stats?.assignedTasks || 0}</Text>
                 <Text style={styles.metricLabel}>Assigned Tasks</Text>
-              </View>
+              </PremiumPressable>
 
-              <View style={styles.metricCard}>
+              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#F3E8FF' }]}>
                   <Feather name="activity" size={18} color="#7C3AED" />
                 </View>
                 <Text style={styles.metricValue}>{stats?.inProgressTasks || 0}</Text>
                 <Text style={styles.metricLabel}>In Progress</Text>
-              </View>
+              </PremiumPressable>
 
-              <View style={styles.metricCard}>
+              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
                   <Feather name="check-circle" size={18} color="#059669" />
                 </View>
                 <Text style={styles.metricValue}>{stats?.completedTasks || 0}</Text>
                 <Text style={styles.metricLabel}>Completed Tasks</Text>
-              </View>
+              </PremiumPressable>
             </View>
           )}
         </ScreenEntrance>

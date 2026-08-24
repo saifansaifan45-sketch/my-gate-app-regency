@@ -2,7 +2,7 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState, useRef } from 'react';
-import { Platform, View, StyleSheet, ScrollView, Animated, Easing, Dimensions, Alert } from 'react-native';
+import { Platform, View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -14,13 +14,13 @@ import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategor
 import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const TAB_PADDING = 20;
 const TAB_GAP = 8;
-const TAB_WIDTH = (SCREEN_WIDTH - TAB_PADDING * 2 - TAB_GAP) / 2;
 
 export default function CommunityScreen() {
   const { bottomClearance } = useScreenInsets(true);
+  const { width: screenWidth } = useWindowDimensions();
+  const TAB_WIDTH = (screenWidth - TAB_PADDING * 2 - TAB_GAP) / 2;
   const { hasManagerAccess } = useSession();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'announcements' | 'polls'>('announcements');
@@ -138,7 +138,7 @@ export default function CommunityScreen() {
       <View style={styles.tabsWrapper}>
         <View style={styles.tabs}>
           <PremiumPressable
-            style={styles.tab}
+            style={[styles.tab, { width: TAB_WIDTH }]}
             onPress={() => switchTab('announcements')}
           >
             <Text style={[styles.tabText, activeTab === 'announcements' && styles.tabTextActive]}>
@@ -146,7 +146,7 @@ export default function CommunityScreen() {
             </Text>
           </PremiumPressable>
           <PremiumPressable
-            style={styles.tab}
+            style={[styles.tab, { width: TAB_WIDTH }]}
             onPress={() => switchTab('polls')}
           >
             <Text style={[styles.tabText, activeTab === 'polls' && styles.tabTextActive]}>
@@ -218,7 +218,6 @@ const styles = StyleSheet.create({
     gap: TAB_GAP,
   },
   tab: {
-    width: TAB_WIDTH,
     alignItems: 'center',
     paddingVertical: 14,
   },

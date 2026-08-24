@@ -3,7 +3,7 @@ import { Platform, View,
   StyleSheet,
   Animated,
   Easing,
-  Dimensions, } from 'react-native';
+  useWindowDimensions, } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,14 +20,13 @@ interface WelcomeHomeAnimationProps {
   onComplete: () => void;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 export function WelcomeHomeAnimation({
   communityName,
   unitNumber,
   firstName,
   onComplete,
 }: WelcomeHomeAnimationProps) {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
   const match = unitNumber.toUpperCase().trim().match(/^([0-9]+)([A-Z])$/);

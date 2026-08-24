@@ -2,7 +2,7 @@ import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
 import { Feather } from '@expo/vector-icons';
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Modal, Pressable, Switch, Dimensions, Keyboard, Platform, ScrollView, Text as RNText } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Switch, useWindowDimensions, Keyboard, Platform, ScrollView, Text as RNText } from 'react-native';
 import { Text } from './ui/Text';
 import { theme } from '../theme';
 import { useScreenInsets } from '../hooks/useScreenInsets';
@@ -28,8 +28,8 @@ const MAX_SHEET_HEIGHT_RATIO = 0.75;
 
 export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: QuickActionsEditorModalProps) {
   const { bottomClearance } = useScreenInsets(false);
-  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-  const maxHeight = SCREEN_HEIGHT * MAX_SHEET_HEIGHT_RATIO;
+  const { height: screenHeight } = useWindowDimensions();
+  const maxHeight = screenHeight * MAX_SHEET_HEIGHT_RATIO;
   const [localActions, setLocalActions] = useState<QuickActionItem[]>(actions);
   const [saveLoading, setSaveLoading] = useState(false);
 
