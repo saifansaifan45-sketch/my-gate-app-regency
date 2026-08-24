@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
@@ -23,7 +23,7 @@ const GRID_GAP = 10;
 const COLS = 3;
 
 export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPress }) => {
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth } = useWindowDimensions();
   const containerPadding = homeLayout.pagePadding * 2;
   const availableWidth = screenWidth - containerPadding;
   const itemWidth = (availableWidth - GRID_GAP * (COLS - 1)) / COLS;

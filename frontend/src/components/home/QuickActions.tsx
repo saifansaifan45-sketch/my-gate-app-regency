@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
@@ -26,7 +26,7 @@ const ITEMS_PER_ROW = 4;
 const GRID_GAP = 12;
 
 export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress }) => {
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth } = useWindowDimensions();
   const containerPadding = homeLayout.pagePadding * 2;
   const availableWidth = screenWidth - containerPadding;
   const itemWidth = (availableWidth - GRID_GAP * (ITEMS_PER_ROW - 1)) / ITEMS_PER_ROW;

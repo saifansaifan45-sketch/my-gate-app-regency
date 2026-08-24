@@ -6,3 +6,4 @@ export * from './GateStatusCard';
 export * from './QuickActions';
 export * from './MyRequests';
 export * from './CommunityUpdates';
+export * from './ResidencyApprovalCard';
