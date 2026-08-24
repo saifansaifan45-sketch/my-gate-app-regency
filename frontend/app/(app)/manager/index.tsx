@@ -39,6 +39,8 @@ export default function ManagerDashboardScreen() {
   const { data: dashboardData, isLoading: dashLoading } = useQuery<DashboardData>({
     queryKey: ['manager-dashboard'],
     queryFn: () => managerApi.getDashboard(),
+    enabled: hasManagerAccess(),
+    staleTime: 30_000,
   });
 
   const { data: pendingWorkforce = [], isLoading: pendingLoading } = useQuery<PendingWorkforceItem[]>({
@@ -47,6 +49,8 @@ export default function ManagerDashboardScreen() {
       const res = await managerApi.getPendingWorkforce();
       return res.pendingWorkforce || [];
     },
+    enabled: hasManagerAccess(),
+    staleTime: 30_000,
   });
 
   const loading = dashLoading || pendingLoading;

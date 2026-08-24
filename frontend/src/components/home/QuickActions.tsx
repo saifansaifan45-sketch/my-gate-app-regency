@@ -19,11 +19,11 @@ interface QuickActionsProps {
   onEditPress: () => void;
 }
 
-const CHIP_SIZE = 72;
-const CHIP_RADIUS = 22;
-const ICON_SIZE = 34;
+const CHIP_SIZE = 60;
+const CHIP_RADIUS = 18;
+const ICON_SIZE = 28;
 const ITEMS_PER_ROW = 4;
-const GRID_GAP = 12;
+const GRID_GAP = 8;
 
 export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   sectionTitle: homeLayout.sectionTitle,
   editBtn: {
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   actionIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    gap: 6,
+    paddingVertical: 4,
   },
   iconBox: {
     width: CHIP_SIZE,

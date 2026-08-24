@@ -85,7 +85,7 @@ export default function SecurityGateOperations() {
   const { data: gateData, isLoading } = useQuery<GateVisitorsResponse>({
     queryKey: ['security-gate', debouncedUnitFilter],
     queryFn: () => visitorsApi.getGateVisitors({ unitLabel: debouncedUnitFilter }),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
     placeholderData: (previous) => previous,
   });
 

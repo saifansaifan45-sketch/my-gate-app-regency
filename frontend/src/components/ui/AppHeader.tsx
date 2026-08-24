@@ -51,7 +51,7 @@ export function AppHeader({
   const shouldShowBack = showBack ?? (!isHome && !isTabRoot);
 
   return (
-    <View style={[styles.headerWrapper, { paddingTop: Math.max(insets.top, 14) }]}>
+    <View style={[styles.headerWrapper, { paddingTop: Math.max(insets.top + 6, 20) }]}>
       <View style={styles.headerContent}>
         {/* Home Variant: Centered Typographic Logo */}
         {isHome ? (

@@ -1,6 +1,6 @@
-import { SERVICE_CATALOG } from '../../src/registry/services';
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { QUICK_ACTION_VISUALS, SERVICE_CATALOG } from '../../src/registry/services';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { Animated, View, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -61,8 +61,8 @@ const createQuickActions = (role?: string): QuickActionItem[] =>
       id: service.id,
       icon: service.icon as QuickActionItem['icon'],
       label: service.label,
-      bgColor: service.isEmergency ? '#FEE2E2' : '#E8F5E9',
-      iconColor: service.isEmergency ? '#DC2626' : '#166534',
+      bgColor: service.isEmergency ? QUICK_ACTION_VISUALS.emergency.background : QUICK_ACTION_VISUALS.standard.background,
+      iconColor: service.isEmergency ? QUICK_ACTION_VISUALS.emergency.icon : QUICK_ACTION_VISUALS.standard.icon,
       visible: DEFAULT_VISIBLE_QUICK_ACTIONS.includes(service.id),
     }));
 
@@ -74,7 +74,7 @@ export default function HomeScreen() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const handleProtectedAction = (action: () => void) => {
+  const handleProtectedAction = useCallback((action: () => void) => {
     if (!canPerformResidentAction) {
       showToast({
         title: 'Residence Link Required',
@@ -84,7 +84,7 @@ export default function HomeScreen() {
       return;
     }
     action();
-  };
+  }, [canPerformResidentAction, reasonMessage, showToast]);
   const {
     user,
      hasLeadershipAccess,
@@ -125,6 +125,12 @@ export default function HomeScreen() {
   // The hero follows the device's local time and refreshes on each minute boundary.
   const [currentPeriod, setCurrentPeriod] = useState(getTimePeriod());
   const heroSurfaceColor = getHeroSurfaceColor(currentPeriod);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroTranslateY = scrollY.interpolate({
+    inputRange: [0, 180],
+    outputRange: [0, -18],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -219,18 +225,21 @@ export default function HomeScreen() {
 
   const announcements = announcementsData?.announcements || [];
 
-  const activeTickets = (homeData?.tickets || []).filter(
-    (ticket) => !ticket.deletedAt && ACTIVE_TICKET_STATUSES.has(ticket.status)
-  );
-  const gateVisitor: VisitorApproval | null = homeData?.pendingGateVisitor && homeData.pendingGateVisitor.id !== dismissedGateVisitorId
-    ? {
-        id: homeData.pendingGateVisitor.id,
-        name: homeData.pendingGateVisitor.name,
-        type: homeData.pendingGateVisitor.visitorType === 'DELIVERY' ? 'Delivery Agent' : 'Guest Visit',
-        time: new Date(homeData.pendingGateVisitor.validFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        otp: homeData.pendingGateVisitor.otp || 'N/A',
-      }
-    : null;
+  const activeTickets = useMemo(() => 
+    (homeData?.tickets || []).filter(
+      (ticket) => !ticket.deletedAt && ACTIVE_TICKET_STATUSES.has(ticket.status)
+    ), [homeData?.tickets]);
+
+  const gateVisitor: VisitorApproval | null = useMemo(() => 
+    homeData?.pendingGateVisitor && homeData.pendingGateVisitor.id !== dismissedGateVisitorId
+      ? {
+          id: homeData.pendingGateVisitor.id,
+          name: homeData.pendingGateVisitor.name,
+          type: homeData.pendingGateVisitor.visitorType === 'DELIVERY' ? 'Delivery Agent' : 'Guest Visit',
+          time: new Date(homeData.pendingGateVisitor.validFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          otp: homeData.pendingGateVisitor.otp || 'N/A',
+        }
+      : null, [homeData?.pendingGateVisitor, dismissedGateVisitorId]);
 
   const onRefresh = async () => {
     await Promise.all([refetch(), refetchAnnouncements(), refetchResidencyRequests()]);
@@ -304,7 +313,7 @@ export default function HomeScreen() {
   };
 
   // Metrics Data matching visual reference
-  const metricsCards: GlanceCardItem[] = [
+  const metricsCards: GlanceCardItem[] = useMemo(() => [
     {
       key: 'visitors',
       label: 'Visitors',
@@ -337,10 +346,10 @@ export default function HomeScreen() {
       countColor: '#2563EB',
       onPress: () => router.push('/services/maintenance'),
     },
-  ];
+  ], [homeData?.visitorCount, homeData?.deliveryCount, homeData?.requestsError, activeTickets, router]);
 
   // Quick Action Buttons mapping
-  const activeQuickActions: ActionItemConfig[] = quickActionsList
+  const activeQuickActions: ActionItemConfig[] = useMemo(() => quickActionsList
     .filter((a) => a.visible)
     .map((action) => ({
       id: action.id,
@@ -381,16 +390,21 @@ export default function HomeScreen() {
           if (service) router.push(service.route);
         }
       },
-    }));
+    })), [quickActionsList, handleProtectedAction, router]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
         alwaysBounceVertical={false}
         overScrollMode="never"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isHomeFetching && !isHomeLoading}
@@ -400,7 +414,7 @@ export default function HomeScreen() {
         }
       >
         {/* Dynamic Hero Header Section */}
-        <View style={[styles.heroWrapper, { backgroundColor: heroSurfaceColor }]}>
+        <Animated.View style={[styles.heroWrapper, { backgroundColor: heroSurfaceColor, transform: [{ translateY: heroTranslateY }] }]}>
           <TimeBasedBackground currentPeriod={currentPeriod} />
 
           <ScreenEntrance delay={50}>
@@ -419,14 +433,14 @@ export default function HomeScreen() {
               onPress={() => router.push('/my-home')}
             />
           </ScreenEntrance>
-        </View>
+        </Animated.View>
 
         {/* Body Sections */}
         <ScreenEntrance delay={125} distance={28} style={[styles.bodyWrapper, { paddingBottom: bottomClearance + 20 }]}>
           <ResidenceGuardBanner />
 
           {/* At a glance */}
-          <ScreenEntrance animation="none">
+          <ScreenEntrance animation="rise" delay={125} distance={10}>
             <GlanceMetrics
               cards={metricsCards}
               onViewAllPress={() => router.push('/visitors')}
@@ -434,7 +448,7 @@ export default function HomeScreen() {
           </ScreenEntrance>
 
           {/* Gate Status Card */}
-          <ScreenEntrance animation="none">
+          <ScreenEntrance animation="rise" delay={155} distance={10}>
             <GateStatusCard
               pendingVisitor={gateVisitor}
               onApprove={handleGateApprove}
@@ -445,7 +459,7 @@ export default function HomeScreen() {
           </ScreenEntrance>
 
           {ownsAUnit && (
-            <ScreenEntrance animation="none">
+            <ScreenEntrance animation="rise" delay={180} distance={10}>
               <ResidencyApprovalCard
                 requests={residencyRequests}
                 actionInProgress={residencyActionInProgress}
@@ -457,7 +471,7 @@ export default function HomeScreen() {
           )}
 
           {/* Quick Actions */}
-          <ScreenEntrance animation="none">
+          <ScreenEntrance animation="rise" delay={195} distance={10}>
             <QuickActions
               actions={activeQuickActions}
               onEditPress={() => setIsQuickActionsVisible(true)}
@@ -465,7 +479,7 @@ export default function HomeScreen() {
           </ScreenEntrance>
 
           {/* My Requests */}
-          <ScreenEntrance animation="none">
+          <ScreenEntrance animation="rise" delay={215} distance={10}>
             <MyRequests
               requests={activeTickets}
               loading={isHomeLoading}
@@ -475,7 +489,7 @@ export default function HomeScreen() {
           </ScreenEntrance>
 
           {/* Community Updates / Announcements */}
-          <ScreenEntrance animation="none">
+          <ScreenEntrance animation="rise" delay={235} distance={10}>
             <CommunityUpdates
               announcements={announcements}
               loading={isAnnouncementsLoading}
@@ -487,7 +501,7 @@ export default function HomeScreen() {
 
           {/* Leadership Governance */}
           {isLeadership && (
-            <ScreenEntrance animation="none">
+            <ScreenEntrance animation="rise" delay={240} distance={10}>
               <View style={styles.leadershipSection}>
                 <Text style={styles.leadershipSectionTitle}>Leadership</Text>
                 <PremiumPressable
@@ -508,7 +522,7 @@ export default function HomeScreen() {
             </ScreenEntrance>
           )}
         </ScreenEntrance>
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Quick Actions Editor Modal */}
       <QuickActionsEditorModal
@@ -559,21 +573,21 @@ const styles = StyleSheet.create({
   },
   heroWrapper: {
     position: 'relative',
-    minHeight: 250,
+    minHeight: 220,
     overflow: 'hidden',
     backgroundColor: theme.colors.background,
   },
   bodyWrapper: {
-    marginTop: -30,
-    paddingTop: 34,
+    marginTop: -24,
+    paddingTop: 16,
     backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.11,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 6,
   },
   leadershipSection: {
     paddingHorizontal: homeLayout.pagePadding,
@@ -586,22 +600,22 @@ const styles = StyleSheet.create({
   leadershipCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(20, 61, 42, 0.06)',
     shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowRadius: 10,
     elevation: 2,
   },
   leadershipIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: '#143D2A',
     alignItems: 'center',
     justifyContent: 'center',
@@ -611,13 +625,13 @@ const styles = StyleSheet.create({
   },
   leadershipCardTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   leadershipCardDesc: {
     fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 12.5,
+    fontSize: 12,
     color: theme.colors.textSecondary,
   },
 });

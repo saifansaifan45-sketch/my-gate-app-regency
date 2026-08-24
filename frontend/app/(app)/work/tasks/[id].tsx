@@ -9,23 +9,25 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../../src/api/client';
 import { Ionicons } from '@expo/vector-icons';
 import { homeDashboardQueryKey } from '../../../../src/api/home-dashboard';
+import { useSession } from '../../../../src/store/auth';
 
 export default function WorkTaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasWorkforceAccess } = useSession();
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // We fetch dashboard since we don't have a single task endpoint for workforce currently,
-  // or we can just filter from the dashboard tasks array.
   const { data, isLoading } = useQuery({
     queryKey: ['workforce-dashboard'],
     queryFn: async () => {
       const res = await api.get('/work/dashboard');
       return res.data;
     },
+    enabled: hasWorkforceAccess(),
+    staleTime: 30_000,
   });
 
   const task = data?.assignedTasks?.find((t: any) => t.id === id);
@@ -65,7 +67,7 @@ export default function WorkTaskDetailScreen() {
   const isCompleted = task.status === 'COMPLETED';
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 10) }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 20) }]}>
       <View style={styles.header}>
         <Pressable onPress={() => smartBack(router, '/work/tasks')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#111827" />

@@ -375,7 +375,6 @@ const styles = StyleSheet.create({
   heroContainer: {
     height: 180,
     borderRadius: cardSystem.radius,
-    overflow: 'hidden',
     marginBottom: cardSystem.sectionSpacing,
     position: 'relative',
     justifyContent: 'flex-end',

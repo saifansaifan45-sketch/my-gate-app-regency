@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Modal, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from './ui/Text';
 import { TextInput as RNTextInput } from 'react-native';
 import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
+import { BottomSheet } from './ui/BottomSheet';
 import { theme } from '../theme';
 import { api } from '../api/client';
 import { useToast } from '../store/toast';
@@ -29,7 +30,6 @@ export function UnannouncedArrivalModal({
   const [name, setName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   
-  // Unit Selection
   const [activeUnit, setActiveUnit] = useState('');
   const { data: units = [] } = useQuery({
     queryKey: ['communityUnits'],
@@ -50,7 +50,6 @@ export function UnannouncedArrivalModal({
     if (!matchedUnit) return false;
     if (isExternal && !activeProvider.trim()) return false;
     if (!isExternal && !name.trim()) return false;
-    // if (type === 'SERVICE' && !purpose.trim()) return false; // Allowed optional for Watchman unannounced
     return true;
   };
 
@@ -78,129 +77,119 @@ export function UnannouncedArrivalModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close new arrival form"
-        />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardAvoiding}>
-          <View style={styles.sheet}>
-            <View style={styles.grabber} />
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Unannounced Arrival</Text>
-              <PremiumPressable style={styles.closeBtn} onPress={onClose}>
-                <Feather name="x" size={20} color={theme.colors.textSecondary} />
-              </PremiumPressable>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardAvoiding}>
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Unannounced Arrival</Text>
+            <PremiumPressable style={styles.closeBtn} onPress={onClose}>
+              <Feather name="x" size={20} color={theme.colors.textSecondary} />
+            </PremiumPressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+
+            <Text style={styles.fieldLabel}>Target Unit *</Text>
+            <RNTextInput
+              style={styles.input}
+              placeholder="Lookup Unit (e.g. 7B, 9A)"
+              value={activeUnit}
+              onChangeText={setActiveUnit}
+              autoCapitalize="characters"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+            {activeUnit && !matchedUnit && (
+              <Text style={styles.errorText}>Unit not found.</Text>
+            )}
+
+            <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Type of Arrival</Text>
+            <View style={styles.typeRow}>
+              {['GUEST', 'CAB', 'DELIVERY', 'SERVICE'].map((type) => (
+                <PremiumPressable
+                  key={type}
+                  style={[styles.typePill, visitorType === type && styles.typePillSelected]}
+                  onPress={() => setVisitorType(type)}
+                >
+                  <Text style={[styles.typePillText, visitorType === type && styles.typePillTextSelected]}>
+                    {type.charAt(0) + type.slice(1).toLowerCase()}
+                  </Text>
+                </PremiumPressable>
+              ))}
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-              
-              <Text style={styles.fieldLabel}>Target Unit *</Text>
+            {isExternal && (
+              <>
+                <Text style={styles.fieldLabel}>Provider *</Text>
+                <View style={styles.chipsRow}>
+                  {COMMON_PROVIDERS.map((p) => (
+                    <PremiumPressable
+                      key={p}
+                      style={[styles.chip, providerPreset === p && styles.chipSelected]}
+                      onPress={() => setProviderPreset(p)}
+                    >
+                      <Text style={[styles.chipText, providerPreset === p && styles.chipTextSelected]}>{p}</Text>
+                    </PremiumPressable>
+                  ))}
+                </View>
+                {providerPreset === 'Custom' && (
+                  <RNTextInput
+                    style={[styles.input, { marginTop: 8 }]}
+                    placeholder="Enter provider name *"
+                    value={customProvider}
+                    onChangeText={setCustomProvider}
+                    placeholderTextColor={theme.colors.textSecondary}
+                  />
+                )}
+              </>
+            )}
+
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Optional Details</Text>
+
+            {!isExternal && (
               <RNTextInput
                 style={styles.input}
-                placeholder="Lookup Unit (e.g. 7B, 9A)"
-                value={activeUnit}
-                onChangeText={setActiveUnit}
-                autoCapitalize="characters"
+                placeholder="Visitor name *"
+                value={name}
+                onChangeText={setName}
                 placeholderTextColor={theme.colors.textSecondary}
               />
-              {activeUnit && !matchedUnit && (
-                <Text style={styles.errorText}>Unit not found.</Text>
-              )}
-
-              <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Type of Arrival</Text>
-              <View style={styles.typeRow}>
-                {['GUEST', 'CAB', 'DELIVERY', 'SERVICE'].map((type) => (
-                  <PremiumPressable
-                    key={type}
-                    style={[styles.typePill, visitorType === type && styles.typePillSelected]}
-                    onPress={() => setVisitorType(type)}
-                  >
-                    <Text style={[styles.typePillText, visitorType === type && styles.typePillTextSelected]}>
-                      {type.charAt(0) + type.slice(1).toLowerCase()}
-                    </Text>
-                  </PremiumPressable>
-                ))}
-              </View>
-
-              {isExternal && (
-                <>
-                  <Text style={styles.fieldLabel}>Provider *</Text>
-                  <View style={styles.chipsRow}>
-                    {COMMON_PROVIDERS.map((p) => (
-                      <PremiumPressable
-                        key={p}
-                        style={[styles.chip, providerPreset === p && styles.chipSelected]}
-                        onPress={() => setProviderPreset(p)}
-                      >
-                        <Text style={[styles.chipText, providerPreset === p && styles.chipTextSelected]}>{p}</Text>
-                      </PremiumPressable>
-                    ))}
-                  </View>
-                  {providerPreset === 'Custom' && (
-                    <RNTextInput
-                      style={[styles.input, { marginTop: 8 }]}
-                      placeholder="Enter provider name *"
-                      value={customProvider}
-                      onChangeText={setCustomProvider}
-                      placeholderTextColor={theme.colors.textSecondary}
-                    />
-                  )}
-                </>
-              )}
-
-              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Optional Details</Text>
-              
-              {!isExternal && (
-                <RNTextInput
-                  style={styles.input}
-                  placeholder="Visitor name *"
-                  value={name}
-                  onChangeText={setName}
-                  placeholderTextColor={theme.colors.textSecondary}
-                />
-              )}
-              {isExternal && (
-                <RNTextInput
-                  style={styles.input}
-                  placeholder="Driver/Agent name (optional)"
-                  value={name}
-                  onChangeText={setName}
-                  placeholderTextColor={theme.colors.textSecondary}
-                />
-              )}
-              
+            )}
+            {isExternal && (
               <RNTextInput
                 style={styles.input}
-                placeholder="Vehicle number (optional)"
-                value={vehicleNumber}
-                onChangeText={setVehicleNumber}
-                autoCapitalize="characters"
+                placeholder="Driver/Agent name (optional)"
+                value={name}
+                onChangeText={setName}
                 placeholderTextColor={theme.colors.textSecondary}
               />
+            )}
 
-              <Button
-                label="Request Resident Approval"
-                icon="bell"
-                onPress={handleCreate}
-                loading={submitting}
-                disabled={!canSubmit() || submitting}
-                style={styles.actionBtn}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+            <RNTextInput
+              style={styles.input}
+              placeholder="Vehicle number (optional)"
+              value={vehicleNumber}
+              onChangeText={setVehicleNumber}
+              autoCapitalize="characters"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+
+            <Button
+              label="Request Resident Approval"
+              icon="bell"
+              onPress={handleCreate}
+              loading={submitting}
+              disabled={!canSubmit() || submitting}
+              style={styles.actionBtn}
+            />
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17, 24, 39, 0.48)' },
-  backdrop: { ...StyleSheet.absoluteFill },
   keyboardAvoiding: { width: '100%', maxHeight: '90%' },
   sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, maxHeight: '100%', shadowColor: '#081C11', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.16, shadowRadius: 22, elevation: 16 },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 16 },

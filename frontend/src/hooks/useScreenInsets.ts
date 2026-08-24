@@ -13,7 +13,7 @@ export function useScreenInsets(isTabScreen = false) {
   const subscreenClearance = Math.max(insets.bottom, 16) + 24;
 
   return {
-    top: Math.max(insets.top, 14),
+    top: Math.max(insets.top + 6, 20),
     bottom: insets.bottom,
     bottomClearance: isTabScreen ? tabClearance : subscreenClearance,
     tabClearance,

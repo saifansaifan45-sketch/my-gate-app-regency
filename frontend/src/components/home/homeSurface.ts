@@ -23,7 +23,7 @@ export const homeLayout = {
   iconRadius: cardSystem.iconRadius,
   sectionTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 18,
+    fontSize: 16,
     color: '#111827',
     letterSpacing: -0.3,
   } as TextStyle,

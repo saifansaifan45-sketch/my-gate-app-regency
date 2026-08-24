@@ -7,10 +7,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../../src/api/client';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSession } from '../../../../src/store/auth';
 
 export default function WorkTasksScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { hasWorkforceAccess } = useSession();
 
   const { data, isLoading, isRefetching, refetch, isError } = useQuery({
     queryKey: ['workforce-dashboard'],
@@ -18,6 +20,8 @@ export default function WorkTasksScreen() {
       const res = await api.get('/work/dashboard');
       return res.data;
     },
+    enabled: hasWorkforceAccess(),
+    staleTime: 30_000,
   });
 
   if (isLoading) {
@@ -40,7 +44,7 @@ export default function WorkTasksScreen() {
   if (isSecurity) return <View style={styles.container} />;
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.kicker}>FIELD WORK QUEUE</Text>

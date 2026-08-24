@@ -84,15 +84,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#143D2A', // Deep hunter green
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: homeLayout.cardPaddingLarge,
-    paddingVertical: homeLayout.cardPaddingLarge,
+    paddingVertical: homeLayout.cardPadding,
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
     elevation: 3,
   },
   bgIllustrationContainer: {
@@ -108,13 +108,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   shieldIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   textColumn: {
     flex: 1,

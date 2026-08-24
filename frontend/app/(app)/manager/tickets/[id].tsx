@@ -471,7 +471,7 @@ export default function TicketDetailScreen() {
       )}
 
       {/* Remarks Modal */}
-      <Modal visible={remarksModalVisible} animationType="slide" transparent>
+      <Modal visible={remarksModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Manager Remarks</Text>

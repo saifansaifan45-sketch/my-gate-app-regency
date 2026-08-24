@@ -12,6 +12,17 @@ export type ServiceEntry = {
   requiresAuth?: boolean;
 };
 
+export const QUICK_ACTION_VISUALS = {
+  standard: {
+    background: '#F0EBE3',
+    icon: '#8B6F47',
+  },
+  emergency: {
+    background: '#FEE2E2',
+    icon: '#DC2626',
+  },
+} as const;
+
 export const SERVICE_CATALOG: ServiceEntry[] = [
   { id: 'sos', label: 'SOS Alert', description: 'Emergency response', icon: 'alert-circle', route: '/home', category: 'Safety', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], isEmergency: true, requiresAuth: true },
   { id: 'add-visitor', label: 'Add Visitor', description: 'Pre-approve entry', icon: 'user-plus', route: '/visitors', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },

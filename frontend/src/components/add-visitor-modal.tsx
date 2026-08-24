@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Modal, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { View, Modal, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from './ui/Text';
@@ -8,9 +8,9 @@ import { Pressable } from 'react-native';
 import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
 import { theme } from '../theme';
-import { useSession } from '../store/auth';
 import { visitorsApi, VisitorType, CreateVisitorPayload } from '../api/visitors';
 import { useToast } from '../store/toast';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COMMON_PROVIDERS = [
   'Uber', 'Rapido', 'Ola', 'Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Porter', 'Custom'
@@ -40,9 +40,10 @@ export function AddVisitorModal({
   title?: string;
   onSuccess?: () => void;
 }) {
-  const { user } = useSession();
   const { showToast } = useToast();
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
+  const dialogHeight = Math.min(640, screenHeight - insets.top - insets.bottom - 32);
   
   const [visitorType, setVisitorType] = useState<VisitorType>(initialType);
   
@@ -76,7 +77,7 @@ export function AddVisitorModal({
       setOrderReference('');
       setGeneratedPass(null);
     }
-  }, [visible, initialType]);
+  }, [visible, initialType, initialVisitorType, initialPurpose]);
 
   const isExternal = visitorType === 'CAB' || visitorType === 'DELIVERY';
   const requiresOtp = visitorType === 'GUEST';
@@ -139,16 +140,33 @@ export function AddVisitorModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View
+        style={[
+          styles.overlay,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            paddingBottom: Math.max(insets.bottom + 16, 32),
+          },
+        ]}
+      >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ maxHeight: screenHeight * 0.9 }}>
-          <View style={styles.sheet}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.keyboardView, { height: dialogHeight }]}
+      >
+        <View style={styles.sheet}>
             <View style={styles.grabber} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{generatedPass ? 'Entry Pass Ready' : 'Approve Entries'}</Text>
+              <Text style={styles.sheetTitle}>{generatedPass ? 'Entry Pass Ready' : title || 'Approve Entries'}</Text>
               <PremiumPressable style={styles.closeBtn} onPress={onClose}>
-                <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                <Feather name="x" size={18} color={theme.colors.textSecondary} />
               </PremiumPressable>
             </View>
 
@@ -176,7 +194,7 @@ export function AddVisitorModal({
                 <Button label="Done" onPress={onClose} style={styles.actionBtn} />
               </View>
             ) : (
-              <View style={{ flex: 1 }}>
+              <View style={styles.formBody}>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
                 <Text style={styles.fieldLabel}>Type of Arrival</Text>
                 <View style={styles.typeRow}>
@@ -301,46 +319,48 @@ export function AddVisitorModal({
               />
               </View>
             )}
-          </View>
-        </KeyboardAvoidingView>
+        </View>
+      </KeyboardAvoidingView>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
-  sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, maxHeight: '90%' },
-  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 16 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: -0.4, color: theme.colors.textPrimary },
-  closeBtn: { width: 44, height: 44, borderRadius: 20, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' },
-  fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textPrimary, marginBottom: 8 },
-  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F3F4F6', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 98 },
+  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 16 },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  keyboardView: { width: '100%', maxWidth: 520 },
+  sheet: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
+  grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 12 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
+  closeBtn: { width: 38, height: 38, borderRadius: 18, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' },
+  fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textPrimary, marginBottom: 6 },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  typePill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 98 },
   typePillSelected: { backgroundColor: theme.colors.primary },
-  typePillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textPrimary },
+  typePillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textPrimary },
   typePillTextSelected: { color: '#FFFFFF' },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  chip: { backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 },
+  chip: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   chipSelected: { backgroundColor: '#F3F8F5', borderColor: theme.colors.primary },
-  chipText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: '#4B5563' },
+  chipText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: '#4B5563' },
   chipTextSelected: { color: theme.colors.primary, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  input: { height: 50, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 16, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary, backgroundColor: '#FFFFFF', marginBottom: 12 },
-  infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F3F8F5', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 8, marginBottom: 20, gap: 12 },
-  infoIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  input: { height: 46, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13.5, color: theme.colors.textPrimary, backgroundColor: '#FFFFFF', marginBottom: 10 },
+  infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F3F8F5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 6, marginBottom: 16, gap: 10 },
+  infoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
   infoText: { flex: 1 },
-  infoTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: theme.colors.primary, marginBottom: 2 },
-  infoDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary },
-  successContent: { alignItems: 'center', paddingVertical: 12 },
-  successIcon: { width: 56, height: 56, borderRadius: 26, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
-  passTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: theme.colors.textPrimary, marginBottom: 4, textAlign: 'center' },
-  passDetail: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: theme.colors.textSecondary, marginBottom: 20, textAlign: 'center' },
-  otpBox: { width: '100%', backgroundColor: '#F9FAFB', borderRadius: 16, borderWidth: 1.5, borderColor: '#E5E7EB', paddingVertical: 18, alignItems: 'center', marginBottom: 12 },
-  otpLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, letterSpacing: 1, color: theme.colors.textSecondary, marginBottom: 6 },
-  otpCode: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 34, letterSpacing: 6, color: theme.colors.primary },
-  otpWarning: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 24, paddingHorizontal: 12 },
-  actionBtn: { width: '100%', marginBottom: 10 },
+  infoTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.primary, marginBottom: 1 },
+  infoDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11.5, lineHeight: 15, color: theme.colors.textSecondary },
+  successContent: { alignItems: 'center', paddingVertical: 10 },
+  successIcon: { width: 50, height: 50, borderRadius: 24, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  passTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: theme.colors.textPrimary, marginBottom: 3, textAlign: 'center' },
+  passDetail: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: theme.colors.textSecondary, marginBottom: 16, textAlign: 'center' },
+  otpBox: { width: '100%', backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1.5, borderColor: '#E5E7EB', paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  otpLabel: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10.5, letterSpacing: 1, color: theme.colors.textSecondary, marginBottom: 4 },
+  otpCode: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 30, letterSpacing: 5, color: theme.colors.primary },
+  otpWarning: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+  actionBtn: { width: '100%', marginBottom: 8 },
+  formBody: { flex: 1 },
   required: { color: '#DC2626' },
 });

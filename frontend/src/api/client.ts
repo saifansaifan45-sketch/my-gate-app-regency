@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { storage } from './storage';
 import { Platform } from 'react-native';
 
@@ -19,6 +19,26 @@ const getBaseUrl = () => {
 };
 
 const BASE_URL = getBaseUrl();
+
+/**
+ * Create an AbortController tied to a component lifecycle.
+ * Returns { signal, cancel } — call cancel() in useEffect cleanup.
+ */
+export function createCancelToken() {
+  const controller = new AbortController();
+  return {
+    signal: controller.signal,
+    cancel: () => controller.abort(),
+  };
+}
+
+/**
+ * Wrap an axios config with an AbortController signal.
+ * Usage: api.get('/path', withCancel(signal))
+ */
+export function withCancel(signal?: AbortSignal | null, config?: AxiosRequestConfig): AxiosRequestConfig {
+  return { ...config, signal: config?.signal ?? signal ?? undefined };
+}
 
 let inMemoryAccessToken: string | null = null;
 let onAuthFailureCallback: (() => void) | null = null;

@@ -14,7 +14,7 @@ interface EmergencySOSAlertModalProps {
 
 export function EmergencySOSAlertModal({ visible, title, message, onAcknowledge }: EmergencySOSAlertModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onAcknowledge} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onAcknowledge} statusBarTranslucent>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onAcknowledge} />
         <View style={styles.sheet}>

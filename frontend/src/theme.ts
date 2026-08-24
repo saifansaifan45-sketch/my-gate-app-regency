@@ -4,10 +4,14 @@ export const theme = {
   colors: {
     primary: '#143D2A', // Deep Hunter Green
     primaryPressed: '#0F3021',
-    background: '#F9F7F2', // Warm Off-White / Cream
-    surface: '#FFFFFF',
-    surfaceMuted: '#F1F0EA',
-    surfacePressed: '#E8E7DF',
+    background: '#F6F4ED', // Warm stone backdrop for visual separation between surfaces
+    surface: '#FFFEFB',
+    surfaceMuted: '#EEEAE0',
+    surfacePressed: '#E6E2D7',
+    surfaceGreen: '#EDF6EF',
+    surfaceAmber: '#FFF5E5',
+    surfaceBlue: '#EEF4FB',
+    surfaceTerracotta: '#FAEEE9',
     textPrimary: '#111827', // Crisp Dark Charcoal
     textSecondary: '#6B7280', // Slate Gray
     accent: '#D27D67', // Muted Terracotta

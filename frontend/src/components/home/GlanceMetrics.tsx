@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
 import { homeLayout, homeSurface } from './homeSurface';
+import { theme } from '../../theme';
 
 export interface GlanceCardItem {
   key: string;
@@ -19,8 +20,13 @@ interface GlanceMetricsProps {
   onViewAllPress: () => void;
 }
 
-const GRID_GAP = 10;
+const GRID_GAP = 8;
 const COLS = 3;
+const metricSurfaces: Record<GlanceCardItem['key'], string> = {
+  visitors: theme.colors.surfaceGreen,
+  deliveries: theme.colors.surfaceAmber,
+  maintenance: theme.colors.surfaceBlue,
+};
 
 export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPress }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -47,7 +53,7 @@ export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPr
         {cards.slice(0, COLS).map((card) => (
           <PremiumPressable
             key={card.key}
-            style={[homeSurface, styles.card, { width: itemWidth }]}
+            style={[homeSurface, styles.card, { width: itemWidth, backgroundColor: metricSurfaces[card.key] || theme.colors.surface }]}
             onPress={card.onPress}
             scaleTo={0.96}
             accessibilityRole="button"
@@ -92,8 +98,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   card: {
-    padding: 14,
-    minHeight: 100,
+    padding: 12,
+    minHeight: 90,
     justifyContent: 'space-between',
   },
   label: {

@@ -1,11 +1,10 @@
-import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
 import { Feather } from '@expo/vector-icons';
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Modal, Pressable, Switch, useWindowDimensions, Keyboard, Platform, ScrollView, Text as RNText } from 'react-native';
+import { View, Modal, StyleSheet, Pressable, Switch, useWindowDimensions, Keyboard, ScrollView } from 'react-native';
 import { Text } from './ui/Text';
 import { theme } from '../theme';
-import { useScreenInsets } from '../hooks/useScreenInsets';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 export interface QuickActionItem {
@@ -27,9 +26,12 @@ interface QuickActionsEditorModalProps {
 const MAX_SHEET_HEIGHT_RATIO = 0.75;
 
 export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: QuickActionsEditorModalProps) {
-  const { bottomClearance } = useScreenInsets(false);
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const maxHeight = screenHeight * MAX_SHEET_HEIGHT_RATIO;
+  const dialogHeight = Math.min(
+    screenHeight * MAX_SHEET_HEIGHT_RATIO,
+    screenHeight - insets.top - insets.bottom - 32
+  );
   const [localActions, setLocalActions] = useState<QuickActionItem[]>(actions);
   const [saveLoading, setSaveLoading] = useState(false);
 
@@ -65,24 +67,22 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
     const [item] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, item);
     setLocalActions(updated);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const moveUp = (index: number) => moveItem(index, index - 1);
-  const moveDown = (index: number) => moveItem(index, index + 1);
-
-  if (!visible) return null;
-
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType={Platform.OS === 'ios' ? 'none' : 'slide'}
-      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}><View /></Pressable>
-      <View style={[styles.sheet, { maxHeight }]}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View
+        style={[
+          styles.overlay,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            paddingBottom: Math.max(insets.bottom + 16, 32),
+          },
+        ]}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.sheet, { height: dialogHeight }]}>
         <View style={styles.handleRow}>
           <View style={styles.handle} />
         </View>
@@ -105,6 +105,26 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
                 <Text style={styles.rowLabel}>{action.label}</Text>
               </View>
               <View style={styles.rowRight}>
+                <View style={styles.reorderControls}>
+                  <Pressable
+                    style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
+                    onPress={() => moveItem(index, index - 1)}
+                    disabled={index === 0}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Move ${action.label} up`}
+                  >
+                    <Feather name="chevron-up" size={16} color={theme.colors.textSecondary} />
+                  </Pressable>
+                  <Pressable
+                    style={[styles.reorderButton, index === localActions.length - 1 && styles.reorderButtonDisabled]}
+                    onPress={() => moveItem(index, index + 1)}
+                    disabled={index === localActions.length - 1}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Move ${action.label} down`}
+                  >
+                    <Feather name="chevron-down" size={16} color={theme.colors.textSecondary} />
+                  </Pressable>
+                </View>
                 <Switch
                   value={action.visible}
                   onValueChange={() => toggleAction(action.id)}
@@ -118,7 +138,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
           ))}
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: 20 + bottomClearance }]}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.buttonRow}>
             <Button
               label="Cancel"
@@ -140,24 +160,33 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
           </View>
         </View>
       </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
   },
   sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
+    maxWidth: 520,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 22,
     overflow: 'hidden',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    elevation: 12,
   },
   handleRow: {
     alignItems: 'center',
@@ -171,36 +200,36 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.12)',
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   title: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 20,
+    fontSize: 18,
     color: theme.colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   subtitle: {
     fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 13,
+    fontSize: 12.5,
     color: theme.colors.textSecondary,
   },
   list: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
   },
@@ -209,51 +238,67 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dragHandle: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
   iconContainer: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   rowLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textPrimary,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 8,
+  },
+  reorderControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  reorderButton: {
+    width: 28,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  reorderButtonDisabled: {
+    opacity: 0.35,
   },
   arrows: {
     flexDirection: 'row',
     gap: 10,
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.08)',
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   cancelBtn: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   saveBtn: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 12,
   },
 });

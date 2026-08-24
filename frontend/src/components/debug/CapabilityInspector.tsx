@@ -45,7 +45,7 @@ export function CapabilityInspector() {
       <Modal
         visible={isOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setIsOpen(false)}
       >
         <View style={styles.modalOverlay}>
@@ -143,7 +143,7 @@ export function CapabilityInspector() {
 const styles = StyleSheet.create({
   floatingBadge: {
     position: 'absolute',
-    bottom: 80,
+    top: 50,
     right: 14,
     backgroundColor: '#143D2A',
     flexDirection: 'row',

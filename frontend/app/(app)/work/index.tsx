@@ -17,7 +17,7 @@ import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal'
 export default function WorkforceDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { logout } = useSession();
+  const { logout, hasWorkforceAccess } = useSession();
   const { showToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = React.useState(false);
@@ -45,6 +45,8 @@ export default function WorkforceDashboard() {
       const res = await api.get('/work/dashboard');
       return res.data;
     },
+    enabled: hasWorkforceAccess(),
+    staleTime: 30_000,
   });
 
   if (isLoading && !data) {
@@ -126,7 +128,7 @@ export default function WorkforceDashboard() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.hero, { paddingTop: Math.max(insets.top, 20) }]}>
+      <View style={[styles.hero, { paddingTop: Math.max(insets.top + 6, 26) }]}>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
             <Text style={styles.heroKicker}>REGENCY SALMA · SECURITY</Text>

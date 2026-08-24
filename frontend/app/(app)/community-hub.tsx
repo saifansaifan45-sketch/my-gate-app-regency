@@ -14,14 +14,6 @@ import { smartBack } from '../../src/navigation/history';
 export default function CommunityHubScreen() {
   const router = useRouter();
 
-  const { isLoading: meLoading } = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await api.get('/auth/me');
-      return res.data;
-    }
-  });
-
   const { data: hubData, isLoading: hubLoading } = useQuery({
     queryKey: ['communityHub'],
     queryFn: async () => {
@@ -30,7 +22,7 @@ export default function CommunityHubScreen() {
     }
   });
 
-  const isLoading = meLoading || hubLoading;
+  const isLoading = hubLoading;
   
   if (isLoading) {
     return (

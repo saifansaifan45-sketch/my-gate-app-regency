@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Button } from './ui/Button';
 import { Text } from './ui/Text';
+import { CenterModal } from './ui/CenterModal';
 import { emergencyApi } from '../api/emergency';
 import { theme } from '../theme';
 import { useToast } from '../store/toast';
@@ -41,39 +42,34 @@ export function EmergencySOSModal({ visible, onClose }: EmergencySOSModalProps) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose} statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
-          <View style={styles.sheet}>
-            <View style={styles.icon}><Feather name="alert-triangle" size={24} color="#FFFFFF" /></View>
-            <Text style={styles.title}>Emergency SOS</Text>
-            <Text style={styles.description}>This alerts your household, community manager, and leadership contacts.</Text>
-            <TextInput
-              style={styles.input}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Describe the emergency"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              maxLength={500}
-              editable={!sending}
-              autoFocus
-            />
-            <View style={styles.actions}>
-              <Button label="Cancel" variant="secondary" onPress={handleClose} disabled={sending} style={styles.button} />
-              <Button label={sending ? 'Sending SOS…' : 'Send SOS'} variant="danger" onPress={handleSend} loading={sending} style={styles.button} />
-            </View>
+    <CenterModal visible={visible} onClose={handleClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+        <View style={styles.sheet}>
+          <View style={styles.icon}><Feather name="alert-triangle" size={24} color="#FFFFFF" /></View>
+          <Text style={styles.title}>Emergency SOS</Text>
+          <Text style={styles.description}>This alerts your household, community manager, and leadership contacts.</Text>
+          <TextInput
+            style={styles.input}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Describe the emergency"
+            placeholderTextColor="#9CA3AF"
+            multiline
+            maxLength={500}
+            editable={!sending}
+            autoFocus
+          />
+          <View style={styles.actions}>
+            <Button label="Cancel" variant="secondary" onPress={handleClose} disabled={sending} style={styles.button} />
+            <Button label={sending ? 'Sending SOS…' : 'Send SOS'} variant="danger" onPress={handleSend} loading={sending} style={styles.button} />
           </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+        </View>
+      </KeyboardAvoidingView>
+    </CenterModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(17, 24, 39, 0.42)' },
-  backdrop: { ...StyleSheet.absoluteFill },
   keyboardView: { width: '100%', alignItems: 'center' },
   sheet: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 24, maxWidth: 400, width: '100%', shadowColor: '#111827', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 8 },
   icon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.error, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },

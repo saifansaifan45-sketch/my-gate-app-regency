@@ -8,10 +8,12 @@ import { api } from '../../../../src/api/client';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../../src/navigation/history';
 import { Ionicons } from '@expo/vector-icons';
+import { useSession } from '../../../../src/store/auth';
 
 export default function WorkTaskHistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { hasWorkforceAccess } = useSession();
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['workforce-task-history'],
@@ -19,6 +21,8 @@ export default function WorkTaskHistoryScreen() {
       const res = await api.get('/work/tasks/history');
       return res.data;
     },
+    enabled: hasWorkforceAccess(),
+    staleTime: 30_000,
   });
 
   const history = data?.history || [];
@@ -33,7 +37,7 @@ export default function WorkTaskHistoryScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work')} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color="#111827" />

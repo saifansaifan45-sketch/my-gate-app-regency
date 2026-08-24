@@ -233,7 +233,7 @@ export default function PersonnelListScreen() {
       </ScrollView>
 
       {/* Add Personnel Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Maintenance Personnel</Text>

@@ -33,10 +33,10 @@ export const PropertySelector: React.FC<PropertySelectorProps> = ({ unitNumber, 
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     alignItems: 'flex-start',
-    // The raised dashboard sheet overlaps the hero by 30px; this leaves an intentional 18px breathing gap below the selector.
-    marginBottom: 48,
+    // The raised dashboard sheet overlaps the hero; this leaves a compact breathing gap below the selector.
+    marginBottom: 36,
   },
   pillContainer: {
     flexDirection: 'row',

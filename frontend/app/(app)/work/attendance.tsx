@@ -7,7 +7,7 @@ export default function WorkAttendanceScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <Text style={styles.title}>Attendance History</Text>
       <Text style={styles.subtitle}>Coming soon...</Text>
     </View>

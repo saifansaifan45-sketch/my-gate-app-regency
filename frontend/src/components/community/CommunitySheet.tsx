@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
+import { BottomSheet } from '../ui/BottomSheet';
 import { theme } from '../../theme';
 
 interface CommunitySheetProps {
@@ -15,46 +16,31 @@ interface CommunitySheetProps {
 
 export function CommunitySheet({ visible, title, subtitle, onClose, children }: CommunitySheetProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.sheet}>
-            <View style={styles.grabber} />
+    <BottomSheet visible={visible} onClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
 
-            <View style={styles.sheetHeader}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.sheetTitle}>{title}</Text>
-                {subtitle ? <Text style={styles.sheetSubtitle}>{subtitle}</Text> : null}
-              </View>
-              <PremiumPressable style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Feather name="x" size={22} color={theme.colors.textPrimary} />
-              </PremiumPressable>
+          <View style={styles.sheetHeader}>
+            <View style={styles.titleWrap}>
+              <Text style={styles.sheetTitle}>{title}</Text>
+              {subtitle ? <Text style={styles.sheetSubtitle}>{subtitle}</Text> : null}
             </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {children}
-            </ScrollView>
+            <PremiumPressable style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Feather name="x" size={22} color={theme.colors.textPrimary} />
+            </PremiumPressable>
           </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(17, 24, 39, 0.45)',
-  },
   sheet: {
     backgroundColor: theme.colors.surface,
     borderTopLeftRadius: 28,

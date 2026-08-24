@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../src/navigation/history';
@@ -14,72 +14,95 @@ import { theme } from '../../src/theme';
 import { notificationsApi, NotificationItem } from '../../src/api/notifications';
 import { useSession } from '../../src/store/auth';
 import { cardSystem } from '../../src/components/ui/cardSystem';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { hasManagerAccess, hasLeadershipAccess } = useSession();
   const { bottomClearance } = useScreenInsets(false);
+  const queryClient = useQueryClient();
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'UNREAD'>('ALL');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await notificationsApi.getNotifications();
-      setNotifications(res.notifications);
-      setUnreadCount(res.unreadCount);
-    } catch (err) {
-      console.warn('Failed to load notifications:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const { data, isLoading } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: notificationsApi.getNotifications,
+    staleTime: 15_000,
+  });
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  const notifications = data?.notifications || [];
+  const unreadCount = data?.unreadCount || 0;
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications();
-  };
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => notificationsApi.markRead(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      const previous = queryClient.getQueryData(['notifications']);
+      queryClient.setQueryData(['notifications'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          notifications: old.notifications.map((n: NotificationItem) =>
+            n.id === id ? { ...n, readStatus: true } : n
+          ),
+          unreadCount: Math.max(0, old.unreadCount - 1),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['notifications'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      const previous = queryClient.getQueryData(['notifications']);
+      queryClient.setQueryData(['notifications'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          notifications: old.notifications.map((n: NotificationItem) => ({ ...n, readStatus: true })),
+          unreadCount: 0,
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['notifications'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
 
   const handleMarkRead = async (id: string, metadata?: any) => {
-    try {
-      await notificationsApi.markRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, readStatus: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+    markReadMutation.mutate(id);
 
-      if (metadata?.ticketId) {
-        if (hasManagerAccess() || hasLeadershipAccess()) {
-          router.push(`/manager/tickets/${metadata.ticketId}` as any);
-        } else {
-          router.push('/services/maintenance');
-        }
+    if (metadata?.ticketId) {
+      if (hasManagerAccess() || hasLeadershipAccess()) {
+        router.push(`/manager/tickets/${metadata.ticketId}` as any);
+      } else {
+        router.push('/services/maintenance');
       }
-    } catch (err) {
-      console.warn('Failed to mark notification as read:', err);
     }
   };
 
-  const handleMarkAllRead = async () => {
-    try {
-      await notificationsApi.markAllRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, readStatus: true })));
-      setUnreadCount(0);
-    } catch (err) {
-      console.warn('Failed to mark all as read:', err);
-    }
+  const handleMarkAllRead = () => {
+    markAllReadMutation.mutate();
   };
 
   const displayedList =
-    activeFilter === 'UNREAD' ? notifications.filter((n) => !n.readStatus) : notifications;
+    activeFilter === 'UNREAD' ? notifications.filter((n: NotificationItem) => !n.readStatus) : notifications;
 
   const getNotifIcon = (type: string) => {
     if (type === 'EMERGENCY_SOS') return { name: 'alert-triangle', color: '#DC2626', bg: '#FEE2E2' };
@@ -105,7 +128,6 @@ export default function NotificationsScreen() {
         }
       />
 
-      {/* Filter Tabs */}
       <View style={styles.tabsBar}>
         <PremiumPressable
           style={[styles.tab, activeFilter === 'ALL' && styles.tabActive]}
@@ -129,16 +151,22 @@ export default function NotificationsScreen() {
       <ScrollView
         contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 40 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['notifications'] })}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
-        {loading ? (
+        {isLoading ? (
           <View style={{ gap: 12 }}>
             <Skeleton height={80} borderRadius={18} />
             <Skeleton height={80} borderRadius={18} />
             <Skeleton height={80} borderRadius={18} />
           </View>
         ) : displayedList.length > 0 ? (
-          displayedList.map((notif, index) => {
+          displayedList.map((notif: NotificationItem, index: number) => {
             const iconMeta = getNotifIcon(notif.type);
             const isUnread = !notif.readStatus;
 

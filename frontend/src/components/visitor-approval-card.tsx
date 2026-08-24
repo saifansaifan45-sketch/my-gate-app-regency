@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   card: {
     ...homeSurface,
     padding: homeLayout.cardPadding,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   cardApproved: {
     backgroundColor: '#F0FDF4',
@@ -193,13 +193,13 @@ const styles = StyleSheet.create({
   },
   avatar: {
     position: 'relative',
-    width: 52,
-    height: 52,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 22,
     backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
     borderWidth: 1,
     borderColor: 'rgba(20, 61, 42, 0.08)',
   },
@@ -232,10 +232,10 @@ const styles = StyleSheet.create({
   },
   name: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: -0.2,
     color: theme.colors.textPrimary,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   meta: {
     fontFamily: 'PlusJakartaSans_400Regular',
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.06)',
-    marginVertical: 14,
+    marginVertical: 12,
   },
   actions: {
     flexDirection: 'row',

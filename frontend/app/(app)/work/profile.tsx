@@ -23,7 +23,7 @@ export default function WorkProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { logout, user } = useSession();
+  const { logout, user, hasWorkforceAccess } = useSession();
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
@@ -34,6 +34,8 @@ export default function WorkProfileScreen() {
       const res = await api.get('/work/dashboard');
       return res.data;
     },
+    enabled: hasWorkforceAccess(),
+    staleTime: 30_000,
   });
 
   const handleSetAvailability = async (status: Availability) => {
@@ -71,7 +73,7 @@ export default function WorkProfileScreen() {
     iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}

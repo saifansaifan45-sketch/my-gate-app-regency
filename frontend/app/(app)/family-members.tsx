@@ -186,7 +186,7 @@ export default function FamilyMembersScreen() {
         ))}
       </ScrollView>
 
-      <Modal visible={formVisible} transparent animationType="slide" onRequestClose={() => setFormVisible(false)}>
+      <Modal visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)}>
         <View style={styles.overlay}><View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.sheetTitle}>Add a {activeTab === 'members' ? 'family member' : activeTab.slice(0, -1)}</Text>

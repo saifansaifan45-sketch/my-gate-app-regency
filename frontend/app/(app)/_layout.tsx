@@ -5,7 +5,6 @@ import { theme } from '../../src/theme';
 import { View, StyleSheet, Animated, Pressable, Platform, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../../src/components/ui/Text';
-import { CapabilityInspector } from '../../src/components/debug/CapabilityInspector';
 import { WelcomeHomeAnimation } from '../../src/components/welcome-home-animation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef } from 'react';
@@ -477,7 +476,7 @@ export default function AppLayout() {
   const { data: notifData, refetch } = useQuery({
     queryKey: ['notifications', 'sos-polling'],
     queryFn: notificationsApi.getNotifications,
-    refetchInterval: 10000,
+    refetchInterval: 15000,
     enabled: isAuthenticated,
   });
 
@@ -613,7 +612,6 @@ export default function AppLayout() {
         message={unreadSOS?.message || 'An emergency SOS was triggered.'}
         onAcknowledge={handleAcknowledgeSOS}
       />
-      <CapabilityInspector />
     </View>
   );
 }
