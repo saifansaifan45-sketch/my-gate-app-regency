@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform, Pressable, Animated, Dimensions } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { theme } from '../../../src/theme';
-import { visitorsApi, VisitorItem } from '../../../src/api/visitors';
+import { visitorsApi, VisitorItem, GateVisitorsResponse } from '../../../src/api/visitors';
 import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
 import { Button } from '../../../src/components/ui/Button';
 import { Text } from '../../../src/components/ui/Text';
 import { UnannouncedArrivalModal } from '../../../src/components/unannounced-arrival-modal';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
+import { useRouter } from 'expo-router';
+import { smartBack } from '../../../src/navigation/history';
+import { useToast } from '../../../src/store/toast';
 
 type Tab = 'pending' | 'approved' | 'checkedIn';
+
+const TABS: { id: Tab; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { id: 'pending', label: 'Pending', icon: 'clock' },
+  { id: 'approved', label: 'Approved', icon: 'check-circle' },
+  { id: 'checkedIn', label: 'At Gate', icon: 'log-in' },
+];
 
 const VISITOR_TYPE_META: Record<string, { icon: keyof typeof Feather.glyphMap; color: string; bg: string }> = {
   GUEST: { icon: 'user', color: '#143D2A', bg: '#E8F5E9' },
@@ -20,45 +29,91 @@ const VISITOR_TYPE_META: Record<string, { icon: keyof typeof Feather.glyphMap; c
   OTHER: { icon: 'user', color: '#6B7280', bg: '#F3F4F6' },
 };
 
+const TAB_HINTS: Record<Tab, string> = {
+  pending: 'Waiting for the resident to approve this arrival.',
+  approved: 'Verify expected guests by OTP. Confirm approved cabs, deliveries, and services to record entry.',
+  checkedIn: 'Visitors currently inside the community.',
+};
+
+const TAB_PADDING = 20;
+const TAB_GAP = 6;
+
+function AnimatedCard({ children, index, isVisible }: { children: React.ReactNode; index: number; isVisible: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    if (isVisible) {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 280, delay: index * 50, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 280, delay: index * 50, useNativeDriver: true }),
+      ]).start();
+    } else {
+      opacity.setValue(0);
+      translateY.setValue(16);
+    }
+  }, [isVisible, index]);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function SecurityGateOperations() {
   const { bottomClearance } = useScreenInsets(false);
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('pending');
   const [unitFilter, setUnitFilter] = useState('');
   const [debouncedUnitFilter, setDebouncedUnitFilter] = useState('');
+  const [listKey, setListKey] = useState(0);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedUnitFilter(unitFilter);
-    }, 400);
+    const timer = setTimeout(() => setDebouncedUnitFilter(unitFilter), 400);
     return () => clearTimeout(timer);
   }, [unitFilter]);
+
   const [isUnannouncedVisible, setIsUnannouncedVisible] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
+  const [otpValues, setOtpValues] = useState<Record<string, string>>({});
   const [handoffModalVisitor, setHandoffModalVisitor] = useState<VisitorItem | null>(null);
   const [handoffType, setHandoffType] = useState<'RESIDENT' | 'GATE' | 'LOCKER'>('RESIDENT');
   const [handoffName, setHandoffName] = useState('');
 
-  const { data: gateData, isLoading } = useQuery({
+  const { data: gateData, isLoading } = useQuery<GateVisitorsResponse>({
     queryKey: ['security-gate', debouncedUnitFilter],
     queryFn: () => visitorsApi.getGateVisitors({ unitLabel: debouncedUnitFilter }),
     refetchInterval: 5000,
+    placeholderData: (previous) => previous,
   });
 
   const checkInMutation = useMutation({
     mutationFn: ({ id, otp }: { id: string; otp?: string }) => visitorsApi.checkInVisitor(id, otp),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['security-gate'] });
-      setOtpValue('');
+      setOtpValues((current) => {
+        const next = { ...current };
+        delete next[variables.id];
+        return next;
+      });
+      showToast({ title: 'Visitor checked in', message: 'The visitor is now marked as at the gate.', type: 'success' });
     },
     onError: (err: any) => {
-      Alert.alert('Check-in failed', err?.response?.data?.error?.message || 'Could not check in visitor.');
+      Alert.alert(
+        'Check-in failed',
+        err?.response?.data?.error?.message || err?.response?.data?.message || 'Could not check in visitor.'
+      );
     },
   });
 
   const checkOutMutation = useMutation({
     mutationFn: (id: string) => visitorsApi.checkOutVisitor(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['security-gate'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['security-gate'] });
+      showToast({ title: 'Visitor checked out', message: 'Gate activity has been updated.', type: 'success' });
+    },
     onError: (err: any) => {
       Alert.alert('Check-out failed', err?.response?.data?.error?.message || 'Could not check out visitor.');
     },
@@ -72,42 +127,33 @@ export default function SecurityGateOperations() {
       setHandoffModalVisitor(null);
       setHandoffName('');
       setHandoffType('RESIDENT');
+      showToast({ title: 'Handoff recorded', message: 'The delivery handoff is now in gate history.', type: 'success' });
     },
     onError: (err: any) => {
       Alert.alert('Handoff failed', err?.response?.data?.error?.message || 'Could not record handoff.');
     },
   });
 
-  const allVisitors = gateData?.visitors || [];
   const pending = gateData?.pending || [];
   const approved = gateData?.approved || [];
   const checkedIn = gateData?.checkedIn || [];
 
-  const filteredPending = unitFilter
-    ? pending.filter((v) => v.unit?.unitNumber?.toLowerCase().includes(unitFilter.toLowerCase()))
-    : pending;
-  const filteredApproved = unitFilter
-    ? approved.filter((v) => v.unit?.unitNumber?.toLowerCase().includes(unitFilter.toLowerCase()))
-    : approved;
-  const filteredCheckedIn = unitFilter
-    ? checkedIn.filter((v) => v.unit?.unitNumber?.toLowerCase().includes(unitFilter.toLowerCase()))
-    : checkedIn;
-
   const handleVerifyOtp = (visitor: VisitorItem) => {
-    if (!otpValue || otpValue.length < 4) {
-      Alert.alert('Invalid OTP', 'Please enter the OTP shared by the visitor.');
+    const otp = otpValues[visitor.id] || '';
+    if (!/^\d{6}$/.test(otp)) {
+      Alert.alert('Invalid OTP', 'Enter the six-digit OTP shared by the visitor.');
       return;
     }
-    checkInMutation.mutate({ id: visitor.id, otp: otpValue });
+    checkInMutation.mutate({ id: visitor.id, otp });
   };
 
   const handleDirectCheckIn = (visitor: VisitorItem) => {
     Alert.alert(
-      'Check in visitor?',
-      `${visitor.provider || visitor.name} will be checked in. The resident will be notified.`,
+      'Confirm entry?',
+      `${visitor.provider || visitor.name} is approved. This records their entry and notifies the resident.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Check in', onPress: () => checkInMutation.mutate({ id: visitor.id }) },
+        { text: 'Confirm entry', onPress: () => checkInMutation.mutate({ id: visitor.id }) },
       ]
     );
   };
@@ -136,20 +182,30 @@ export default function SecurityGateOperations() {
     });
   };
 
-  const renderVisitorCard = (visitor: VisitorItem, context: 'pending' | 'approved' | 'checkedIn') => {
+  const switchTab = (tab: Tab) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setListKey((k) => k + 1);
+  };
+
+  const currentList = activeTab === 'pending' ? pending : activeTab === 'approved' ? approved : checkedIn;
+  const counts: Record<Tab, number> = { pending: pending.length, approved: approved.length, checkedIn: checkedIn.length };
+
+  const renderVisitorCard = (visitor: VisitorItem, context: Tab, index: number) => {
     const meta = VISITOR_TYPE_META[visitor.visitorType] || VISITOR_TYPE_META.OTHER;
     const typeLabel = visitor.visitorType === 'GUEST' ? 'Guest' : visitor.visitorType === 'CAB' ? 'Cab' : visitor.visitorType === 'DELIVERY' ? 'Delivery' : visitor.visitorType === 'SERVICE' ? 'Service' : 'Other';
     const name = visitor.provider || visitor.name;
     const unitLabel = visitor.unit?.unitNumber || '—';
 
     return (
-      <View key={visitor.id} style={styles.card}>
-        <View style={styles.cardRow}>
-          <View style={[styles.iconBox, { backgroundColor: meta.bg }]}>
-            <Feather name={meta.icon} size={18} color={meta.color} />
-          </View>
-          <View style={styles.cardInfo}>
-            <View style={styles.cardTitleRow}>
+      <AnimatedCard key={visitor.id} index={index} isVisible={true}>
+        <View style={styles.card}>
+          {/* Card header: icon + name + badge */}
+          <View style={styles.cardHeader}>
+            <View style={[styles.iconBox, { backgroundColor: meta.bg }]}>
+              <Feather name={meta.icon} size={18} color={meta.color} />
+            </View>
+            <View style={styles.cardHeaderInfo}>
               <Text style={styles.cardTitle} numberOfLines={1}>{name}</Text>
               {visitor.isPreApproved && context !== 'pending' ? (
                 <View style={styles.preApprovedBadge}>
@@ -157,122 +213,122 @@ export default function SecurityGateOperations() {
                 </View>
               ) : null}
             </View>
-            <View style={styles.cardMeta}>
+          </View>
+
+          {/* Meta chips */}
+          <View style={styles.cardMeta}>
+            <View style={styles.metaChip}>
+              <Feather name="home" size={11} color={theme.colors.textSecondary} />
+              <Text style={styles.metaText}>Unit {unitLabel}</Text>
+            </View>
+            <View style={[styles.metaChip, { backgroundColor: meta.bg }]}>
+              <Feather name={meta.icon} size={11} color={meta.color} />
+              <Text style={[styles.metaText, { color: meta.color }]}>{typeLabel}</Text>
+            </View>
+            {visitor.vehicleNumber ? (
               <View style={styles.metaChip}>
-                <Feather name="home" size={11} color={theme.colors.textSecondary} />
-                <Text style={styles.metaText}>Unit {unitLabel}</Text>
+                <Feather name="credit-card" size={11} color={theme.colors.textSecondary} />
+                <Text style={styles.metaText}>{visitor.vehicleNumber}</Text>
               </View>
-              <View style={[styles.metaChip, { backgroundColor: meta.bg }]}>
-                <Feather name={meta.icon} size={11} color={meta.color} />
-                <Text style={[styles.metaText, { color: meta.color }]}>{typeLabel}</Text>
+            ) : null}
+          </View>
+
+          {/* Context-specific actions */}
+          {context === 'pending' && (
+            <View style={styles.cardAction}>
+              <View style={styles.pendingBadge}>
+                <Feather name="clock" size={12} color="#D97706" />
+                <Text style={styles.pendingText}>Waiting for resident</Text>
               </View>
-              {visitor.vehicleNumber ? (
-                <View style={styles.metaChip}>
-                  <Feather name="credit-card" size={11} color={theme.colors.textSecondary} />
-                  <Text style={styles.metaText}>{visitor.vehicleNumber}</Text>
-                </View>
-              ) : null}
             </View>
-          </View>
-        </View>
+          )}
 
-        {/* Context-specific actions */}
-        {context === 'pending' && (
-          <View style={styles.cardAction}>
-            <View style={styles.pendingBadge}>
-              <Feather name="clock" size={12} color="#D97706" />
-              <Text style={styles.pendingText}>Waiting for resident</Text>
-            </View>
-          </View>
-        )}
-
-        {context === 'approved' && (
-          <View style={styles.cardAction}>
-            {visitor.isPreApproved ? (
-              <View style={styles.otpRow}>
-                <TextInput
-                  style={styles.otpInput}
-                  placeholder="Enter OTP"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={otpValue}
-                  onChangeText={setOtpValue}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  secureTextEntry
-                />
-                <PremiumPressable
-                  style={[styles.verifyBtn, checkInMutation.isPending && styles.btnDisabled]}
-                  onPress={() => handleVerifyOtp(visitor)}
-                  disabled={checkInMutation.isPending}
-                >
-                  {checkInMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Feather name="check" size={16} color="#FFFFFF" />
-                  )}
-                  <Text style={styles.verifyBtnText}>Verify</Text>
-                </PremiumPressable>
-              </View>
-            ) : (
-              <Button
-                label="Check in"
-                variant="primary"
-                size="sm"
-                icon="check"
-                onPress={() => handleDirectCheckIn(visitor)}
-                disabled={checkInMutation.isPending}
-                style={styles.checkInBtn}
-              />
-            )}
-          </View>
-        )}
-
-        {context === 'checkedIn' && (
-          <View style={styles.cardAction}>
-            <View style={styles.checkedInRow}>
-              {visitor.checkInTime ? (
-                <Text style={styles.checkedInTime}>
-                  Since {new Date(visitor.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              ) : null}
-              <View style={styles.actionBtns}>
-                {visitor.visitorType === 'DELIVERY' && !visitor.handoffRecipientType ? (
+          {context === 'approved' && (
+            <View style={styles.cardAction}>
+              {visitor.requiresOtp ? (
+                <View style={styles.otpRow}>
+                  <TextInput
+                    style={styles.otpInput}
+                    placeholder="Enter OTP"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={otpValues[visitor.id] || ''}
+                    onChangeText={(value) => setOtpValues((current) => ({
+                      ...current,
+                      [visitor.id]: value.replace(/\D/g, ''),
+                    }))}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    secureTextEntry
+                  />
                   <PremiumPressable
-                    style={styles.handoffBtn}
-                    onPress={() => setHandoffModalVisitor(visitor)}
+                    style={[styles.verifyBtn, checkInMutation.isPending && styles.btnDisabled]}
+                    onPress={() => handleVerifyOtp(visitor)}
+                    disabled={checkInMutation.isPending}
                   >
-                    <Feather name="package" size={14} color="#FFFFFF" />
-                    <Text style={styles.handoffBtnText}>Handoff</Text>
+                    {checkInMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Feather name="check" size={16} color="#FFFFFF" />
+                    )}
+                    <Text style={styles.verifyBtnText}>Verify</Text>
                   </PremiumPressable>
+                </View>
+              ) : (
+                <Button
+                  label="Confirm entry"
+                  variant="primary"
+                  size="sm"
+                  icon="check"
+                  onPress={() => handleDirectCheckIn(visitor)}
+                  disabled={checkInMutation.isPending}
+                  style={styles.checkInBtn}
+                />
+              )}
+            </View>
+          )}
+
+          {context === 'checkedIn' && (
+            <View style={styles.cardAction}>
+              <View style={styles.checkedInRow}>
+                {visitor.checkInTime ? (
+                  <Text style={styles.checkedInTime}>
+                    Since {new Date(visitor.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
                 ) : null}
-                <PremiumPressable
-                  style={[styles.checkOutBtn, checkOutMutation.isPending && styles.btnDisabled]}
-                  onPress={() => handleCheckOut(visitor)}
-                  disabled={checkOutMutation.isPending}
-                >
-                  <Feather name="log-out" size={14} color="#DC2626" />
-                  <Text style={styles.checkOutBtnText}>Check out</Text>
-                </PremiumPressable>
+                <View style={styles.actionBtns}>
+                  {visitor.visitorType === 'DELIVERY' && !visitor.handoffRecipientType ? (
+                    <PremiumPressable
+                      style={styles.handoffBtn}
+                      onPress={() => setHandoffModalVisitor(visitor)}
+                    >
+                      <Feather name="package" size={14} color="#FFFFFF" />
+                      <Text style={styles.handoffBtnText}>Handoff</Text>
+                    </PremiumPressable>
+                  ) : null}
+                  <PremiumPressable
+                    style={[styles.checkOutBtn, checkOutMutation.isPending && styles.btnDisabled]}
+                    onPress={() => handleCheckOut(visitor)}
+                    disabled={checkOutMutation.isPending}
+                  >
+                    <Feather name="log-out" size={14} color="#DC2626" />
+                    <Text style={styles.checkOutBtnText}>Check out</Text>
+                  </PremiumPressable>
+                </View>
               </View>
             </View>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
+      </AnimatedCard>
     );
   };
-
-  const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'pending', label: 'Pending', count: filteredPending.length },
-    { id: 'approved', label: 'Approved', count: filteredApproved.length },
-    { id: 'checkedIn', label: 'At Gate', count: filteredCheckedIn.length },
-  ];
-
-  const currentList = activeTab === 'pending' ? filteredPending : activeTab === 'approved' ? filteredApproved : filteredCheckedIn;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work')} hitSlop={8}>
+          <Feather name="chevron-left" size={22} color="#111827" />
+        </Pressable>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Gate Operations</Text>
           <Text style={styles.headerSubtitle}>
@@ -328,24 +384,30 @@ export default function SecurityGateOperations() {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {tabs.map((tab) => (
+        {TABS.map((tab) => (
           <PremiumPressable
             key={tab.id}
             style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-            onPress={() => setActiveTab(tab.id)}
+            onPress={() => switchTab(tab.id)}
           >
             <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
               {tab.label}
             </Text>
-            {tab.count > 0 ? (
+            {counts[tab.id] > 0 ? (
               <View style={[styles.tabBadge, activeTab === tab.id && styles.tabBadgeActive]}>
                 <Text style={[styles.tabBadgeText, activeTab === tab.id && styles.tabBadgeTextActive]}>
-                  {tab.count}
+                  {counts[tab.id]}
                 </Text>
               </View>
             ) : null}
           </PremiumPressable>
         ))}
+      </View>
+
+      {/* Flow hint */}
+      <View style={styles.flowHint}>
+        <Feather name={TABS.find((t) => t.id === activeTab)!.icon} size={14} color={theme.colors.primary} />
+        <Text style={styles.flowHintText}>{TAB_HINTS[activeTab]}</Text>
       </View>
 
       {/* Visitor list */}
@@ -354,24 +416,28 @@ export default function SecurityGateOperations() {
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomClearance + 20 }]}
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
-        ) : currentList.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Feather name="shield" size={48} color={theme.colors.border} />
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'pending' ? 'No pending visitors' : activeTab === 'approved' ? 'No approved visitors' : 'No visitors inside'}
-            </Text>
-            <Text style={styles.emptyDesc}>
-              {activeTab === 'pending' ? 'Visitors waiting for resident approval will appear here.' : activeTab === 'approved' ? 'Pre-approved visitors ready for check-in will appear here.' : 'Visitors currently inside the property will appear here.'}
-            </Text>
-          </View>
-        ) : (
-          currentList.map((visitor) => renderVisitorCard(visitor, activeTab))
-        )}
-      </ScrollView>
+          {isLoading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+          ) : currentList.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIconWrap}>
+                <Feather name="shield" size={32} color={theme.colors.border} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'pending' ? 'No pending visitors' : activeTab === 'approved' ? 'No approved visitors' : 'No visitors inside'}
+              </Text>
+              <Text style={styles.emptyDesc}>
+                {activeTab === 'pending' ? 'Visitors waiting for resident approval will appear here.' : activeTab === 'approved' ? 'Pre-approved visitors ready for check-in will appear here.' : 'Visitors currently inside the property will appear here.'}
+              </Text>
+            </View>
+          ) : (
+            <View key={listKey} style={{ gap: 10 }}>
+              {currentList.map((visitor, i) => renderVisitorCard(visitor, activeTab, i))}
+            </View>
+          )}
+        </ScrollView>
 
       {/* Unannounced Arrival Modal */}
       <UnannouncedArrivalModal
@@ -386,6 +452,7 @@ export default function SecurityGateOperations() {
       {/* Handoff Modal */}
       <Modal visible={Boolean(handoffModalVisitor)} transparent animationType="fade" onRequestClose={() => setHandoffModalVisitor(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+          <Pressable style={styles.overlayBackdrop} onPress={() => setHandoffModalVisitor(null)} />
           <View style={styles.handoffSheet}>
             <View style={styles.handoffHandle} />
             <Text style={styles.handoffTitle}>Record delivery handoff</Text>
@@ -452,7 +519,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.border, gap: 12 },
+  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
   headerLeft: { flex: 1 },
   headerTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: theme.colors.textPrimary },
   headerSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, color: theme.colors.textSecondary, marginTop: 2 },
@@ -461,17 +529,17 @@ const styles = StyleSheet.create({
 
   // Summary
   summaryRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
-  summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   summaryText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11.5 },
 
   // Filter
-  filterBar: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  filterBar: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, height: 44 },
   searchInput: { flex: 1, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary },
 
   // Tabs
-  tabRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 },
-  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.surface },
+  tabRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10, backgroundColor: theme.colors.surface },
   tabActive: { backgroundColor: theme.colors.primary },
   tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textSecondary },
   tabTextActive: { color: '#FFFFFF' },
@@ -480,29 +548,33 @@ const styles = StyleSheet.create({
   tabBadgeText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: theme.colors.textSecondary },
   tabBadgeTextActive: { color: '#FFFFFF' },
 
+  // Flow hint
+  flowHint: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginBottom: 4, marginTop: 4, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: '#EAF4EC' },
+  flowHintText: { flex: 1, color: '#42634C', fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, lineHeight: 17 },
+
   // List
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 20, paddingTop: 8, gap: 10 },
+  listContent: { paddingHorizontal: 20, paddingTop: 8 },
   loadingWrap: { paddingVertical: 60, alignItems: 'center' },
-  emptyWrap: { paddingVertical: 60, alignItems: 'center', gap: 8 },
+  emptyWrap: { paddingVertical: 60, alignItems: 'center', gap: 10 },
+  emptyIconWrap: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: theme.colors.textPrimary },
-  emptyDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', maxWidth: 280 },
+  emptyDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', maxWidth: 260, lineHeight: 18 },
 
   // Card
-  card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: theme.colors.border, gap: 10 },
-  cardRow: { flexDirection: 'row', gap: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  cardInfo: { flex: 1, gap: 6 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.colors.border, gap: 12 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cardHeaderInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, flex: 1 },
   preApprovedBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   preApprovedText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 10, color: '#059669', letterSpacing: 0.3 },
   cardMeta: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  metaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  metaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   metaText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: theme.colors.textSecondary },
 
   // Card actions
-  cardAction: { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 },
+  cardAction: { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 12 },
   pendingBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pendingText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: '#D97706' },
   otpRow: { flexDirection: 'row', gap: 8 },
@@ -521,7 +593,8 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
 
   // Handoff modal
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' },
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  overlayBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17,24,39,0.42)' },
   handoffSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
   handoffHandle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 16 },
   handoffTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 2 },

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Modal, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, Modal, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from './ui/Text';
 import { TextInput as RNTextInput } from 'react-native';
@@ -27,8 +27,6 @@ export function UnannouncedArrivalModal({
   const [providerPreset, setProviderPreset] = useState('');
   const [customProvider, setCustomProvider] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [purpose, setPurpose] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   
   // Unit Selection
@@ -63,8 +61,6 @@ export function UnannouncedArrivalModal({
     try {
       await api.post('/visitors/unannounced', {
         name: isExternal ? name || activeProvider : name,
-        phone: phone || undefined,
-        purpose: purpose || undefined,
         vehicleNumber: vehicleNumber || undefined,
         visitorType,
         provider: isExternal ? activeProvider : undefined,
@@ -82,10 +78,15 @@ export function UnannouncedArrivalModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.overlay}>
-        <PremiumPressable style={styles.backdrop} onPress={onClose}><View /></PremiumPressable>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ maxHeight: Dimensions.get('window').height * 0.9 }}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close new arrival form"
+        />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardAvoiding}>
           <View style={styles.sheet}>
             <View style={styles.grabber} />
             <View style={styles.sheetHeader}>
@@ -198,9 +199,10 @@ export function UnannouncedArrivalModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
-  sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, maxHeight: '90%' },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17, 24, 39, 0.48)' },
+  backdrop: { ...StyleSheet.absoluteFill },
+  keyboardAvoiding: { width: '100%', maxHeight: '90%' },
+  sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, maxHeight: '100%', shadowColor: '#081C11', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.16, shadowRadius: 22, elevation: 16 },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: -0.4, color: theme.colors.textPrimary },

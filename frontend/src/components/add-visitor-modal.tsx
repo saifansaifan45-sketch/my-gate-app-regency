@@ -78,12 +78,12 @@ export function AddVisitorModal({
       setPurpose('');
       setVehicleNumber('');
       setOrderReference('');
-      setIsPreApproved(true);
       setGeneratedPass(null);
     }
   }, [visible, initialType]);
 
   const isExternal = visitorType === 'CAB' || visitorType === 'DELIVERY';
+  const requiresOtp = visitorType === 'GUEST';
   
   const activeProvider = providerPreset === 'Custom' ? customProvider : providerPreset;
   
@@ -272,9 +272,11 @@ export function AddVisitorModal({
 
                 <View style={styles.toggleCard}>
                   <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleTitle}>Pre-Approve Entry Pass</Text>
+                    <Text style={styles.toggleTitle}>{requiresOtp ? 'Pre-Approve guest pass' : 'Pre-Approve gate entry'}</Text>
                     <Text style={styles.toggleDesc}>
-                      Generates a secure OTP so the visitor can enter without gate verification calls.
+                      {requiresOtp
+                        ? 'Generates a secure OTP for the watchman to verify at the gate.'
+                        : 'The watchman will confirm their approved arrival and record entry. No OTP is needed.'}
                     </Text>
                   </View>
                   <Switch
@@ -286,7 +288,7 @@ export function AddVisitorModal({
                 </View>
 
                 <Button
-                  label={isPreApproved ? "Generate Entry Pass" : "Request Gate Auth"}
+                  label={isPreApproved ? (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry') : 'Request gate approval'}
                   icon="shield"
                   onPress={handleCreate}
                   loading={submitting}

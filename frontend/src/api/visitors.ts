@@ -12,6 +12,8 @@ export interface VisitorItem {
   visitorType: VisitorType;
   status: VisitorStatus;
   otp?: string | null;
+  /** Indicates that this pass needs manual OTP verification; never contains the OTP itself. */
+  requiresOtp?: boolean;
   isPreApproved: boolean;
   createdById: string;
   unitId?: string | null;
@@ -60,6 +62,24 @@ export interface CreateVisitorPayload {
   orderReference?: string;
   packageCount?: number;
 }
+
+const ACTIVE_VISITOR_STATUSES: VisitorStatus[] = ['PENDING', 'APPROVED', 'CHECKED_IN'];
+
+/** Keep dashboard metrics and the visitor list aligned on what is active today. */
+export const isActiveVisitor = (visitor: VisitorItem) =>
+  ACTIVE_VISITOR_STATUSES.includes(visitor.status);
+
+export const isVisitorToday = (visitor: VisitorItem, now = new Date()) => {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1;
+  const validFrom = new Date(visitor.validFrom || visitor.createdAt).getTime();
+  const validUntil = visitor.validUntil ? new Date(visitor.validUntil).getTime() : endOfToday;
+
+  return validFrom <= endOfToday && validUntil >= startOfToday;
+};
+
+export const isGuestVisitor = (visitor: VisitorItem) =>
+  visitor.visitorType === 'GUEST' || visitor.visitorType === 'SERVICE' || visitor.visitorType === 'OTHER';
 
 export interface GateSummary {
   totalToday: number;

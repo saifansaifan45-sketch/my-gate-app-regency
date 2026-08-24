@@ -2,12 +2,14 @@ import request from 'supertest';
 import app from '../src/index';
 import { prisma } from '../src/prisma';
 import { generateTokens } from '../src/utils/jwt';
-import { Role, VisitorStatus } from '@prisma/client';
+import { Department, MembershipStatus, PersonnelCategory, Role, VisitorStatus } from '@prisma/client';
 
 describe('Visitor Management Integration Tests', () => {
   let residentToken: string;
   let managerToken: string;
+  let securityToken: string;
   let residentId: string;
+  let securityId: string;
   let createdVisitorId: string;
   let preApprovedVisitorId: string;
   let generatedOtp: string;
@@ -64,12 +66,33 @@ describe('Visitor Management Integration Tests', () => {
       create: { userId: manager.id, communityId: community.id, role: Role.MANAGER, status: 'APPROVED' },
     });
     managerToken = generateTokens(manager.id).accessToken;
+
+    const security = await prisma.user.upsert({
+      where: { email: 'visitor_security@regencysalma.com' },
+      update: { role: Role.WORKFORCE },
+      create: { email: 'visitor_security@regencysalma.com', passwordHash: 'dummyhash', firstName: 'Gate', lastName: 'Security', role: Role.WORKFORCE },
+    });
+    securityId = security.id;
+    await prisma.membership.upsert({
+      where: { userId_communityId_role: { userId: security.id, communityId: community.id, role: Role.WORKFORCE } },
+      update: { status: MembershipStatus.APPROVED, requestedCategory: 'SECURITY', requestedDepartment: 'SECURITY' },
+      create: { userId: security.id, communityId: community.id, role: Role.WORKFORCE, status: MembershipStatus.APPROVED, requestedCategory: 'SECURITY', requestedDepartment: 'SECURITY' },
+    });
+    await prisma.personnel.upsert({
+      where: { userId: security.id },
+      update: { category: PersonnelCategory.SECURITY, department: Department.SECURITY },
+      create: { userId: security.id, name: 'Gate Security', phone: '+91 90000 00001', category: PersonnelCategory.SECURITY, department: Department.SECURITY, communityId: community.id },
+    });
+    securityToken = generateTokens(security.id).accessToken;
   });
 
   afterAll(async () => {
     await prisma.visitor.deleteMany({
       where: { createdById: residentId },
     });
+    await prisma.personnel.deleteMany({ where: { userId: securityId } });
+    await prisma.membership.deleteMany({ where: { userId: securityId, role: Role.WORKFORCE } });
+    await prisma.user.deleteMany({ where: { id: securityId } });
   });
 
   describe('Visitor Domain Workflows', () => {
@@ -94,25 +117,21 @@ describe('Visitor Management Integration Tests', () => {
       createdVisitorId = res.body.visitor.id;
     });
 
-    it('2. Should allow resident to create a pre-approved pass with instant approval and fields', async () => {
+    it('2. Should allow resident to create a pre-approved guest pass with a one-time OTP', async () => {
       const res = await request(app)
         .post('/visitors')
         .set('Authorization', `Bearer ${residentToken}`)
         .send({
-          name: 'Amazon Delivery Agent',
-          purpose: 'Package Delivery',
-          visitorType: 'DELIVERY',
+          name: 'Maya Guest',
+          purpose: 'Guest Visit',
+          visitorType: 'GUEST',
           vehicleNumber: 'MH 02 CD 5678',
           isPreApproved: true,
-          provider: 'Amazon',
-          packageCount: 2
         });
 
       expect(res.status).toBe(201);
       expect(res.body.visitor.status).toBe(VisitorStatus.APPROVED);
       expect(res.body.visitor.isPreApproved).toBe(true);
-      expect(res.body.visitor.provider).toBe('Amazon');
-      expect(res.body.visitor.packageCount).toBe(2);
       expect(res.body.visitor.otp).toBeDefined(); // OTP should be sent once in plaintext
 
       preApprovedVisitorId = res.body.visitor.id;
@@ -142,7 +161,7 @@ describe('Visitor Management Integration Tests', () => {
     it('5. Gate should check in an approved visitor with OTP', async () => {
       const res = await request(app)
         .post(`/visitors/${preApprovedVisitorId}/check-in`)
-        .set('Authorization', `Bearer ${managerToken}`)
+        .set('Authorization', `Bearer ${securityToken}`)
         .send({ otp: generatedOtp });
 
       expect(res.status).toBe(200);
@@ -152,7 +171,7 @@ describe('Visitor Management Integration Tests', () => {
     it('6. Gate cannot check in with wrong OTP', async () => {
       const res = await request(app)
         .post(`/visitors/${createdVisitorId}/check-in`)
-        .set('Authorization', `Bearer ${managerToken}`)
+        .set('Authorization', `Bearer ${securityToken}`)
         .send({ otp: '000000' });
 
       expect(res.status).toBe(400);
@@ -161,7 +180,7 @@ describe('Visitor Management Integration Tests', () => {
     it('7. Gate checks out a visitor', async () => {
       const res = await request(app)
         .post(`/visitors/${preApprovedVisitorId}/check-out`)
-        .set('Authorization', `Bearer ${managerToken}`);
+        .set('Authorization', `Bearer ${securityToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.visitor.status).toBe(VisitorStatus.CHECKED_OUT);
@@ -176,15 +195,15 @@ describe('Visitor Management Integration Tests', () => {
           name: 'Delivery Agent', purpose: 'Package Delivery', visitorType: 'DELIVERY', isPreApproved: true
         });
       const deliveryId = createRes.body.visitor.id;
-      const deliveryOtp = createRes.body.visitor.otp;
+      expect(createRes.body.visitor.otp).toBeUndefined();
 
       // Check it in
-      await request(app).post(`/visitors/${deliveryId}/check-in`).set('Authorization', `Bearer ${managerToken}`).send({ otp: deliveryOtp });
+      await request(app).post(`/visitors/${deliveryId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
 
       // Handoff
       const res = await request(app)
         .post(`/visitors/${deliveryId}/handoff`)
-        .set('Authorization', `Bearer ${managerToken}`)
+        .set('Authorization', `Bearer ${securityToken}`)
         .send({ recipientType: 'GATE' });
 
       expect(res.status).toBe(200);
@@ -289,10 +308,10 @@ describe('Visitor Management Integration Tests', () => {
         name: 'Safe Delivery', purpose: 'Package Delivery', visitorType: 'DELIVERY', isPreApproved: true
       });
       const delId = createRes.body.visitor.id;
-      const otp = createRes.body.visitor.otp;
+      expect(createRes.body.visitor.otp).toBeUndefined();
 
-      await request(app).post(`/visitors/${delId}/check-in`).set('Authorization', `Bearer ${managerToken}`).send({ otp });
-      await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${managerToken}`).send({ recipientType: 'LOCKER' });
+      await request(app).post(`/visitors/${delId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
+      await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${securityToken}`).send({ recipientType: 'LOCKER' });
 
       const auditRes = await request(app).get(`/visitors/${delId}/audit`).set('Authorization', `Bearer ${managerToken}`);
       
@@ -308,13 +327,13 @@ describe('Visitor Management Integration Tests', () => {
       // createdVisitorId is from the primary community
       // otherManagerToken is from the secondary community
       const checkInRes = await request(app).post(`/visitors/${createdVisitorId}/check-in`).set('Authorization', `Bearer ${otherManagerToken}`).send({ otp: '000000' });
-      expect(checkInRes.status).toBe(404);
+      expect(checkInRes.status).toBe(403);
 
       const checkOutRes = await request(app).post(`/visitors/${createdVisitorId}/check-out`).set('Authorization', `Bearer ${otherManagerToken}`);
-      expect(checkOutRes.status).toBe(404);
+      expect(checkOutRes.status).toBe(403);
 
       const handoffRes = await request(app).post(`/visitors/${createdVisitorId}/handoff`).set('Authorization', `Bearer ${otherManagerToken}`).send({ recipientType: 'GATE' });
-      expect(handoffRes.status).toBe(404);
+      expect(handoffRes.status).toBe(403);
     });
 
     it('16. Duplicate handoff attempts are rejected to preserve immutability', async () => {
@@ -323,15 +342,15 @@ describe('Visitor Management Integration Tests', () => {
         name: 'Fast Delivery', purpose: 'Package Delivery', visitorType: 'DELIVERY', isPreApproved: true
       });
       const delId = createRes.body.visitor.id;
-      const otp = createRes.body.visitor.otp;
+      expect(createRes.body.visitor.otp).toBeUndefined();
 
-      await request(app).post(`/visitors/${delId}/check-in`).set('Authorization', `Bearer ${managerToken}`).send({ otp });
+      await request(app).post(`/visitors/${delId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
       
-      const firstHandoffRes = await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${managerToken}`).send({ recipientType: 'LOCKER' });
+      const firstHandoffRes = await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${securityToken}`).send({ recipientType: 'LOCKER' });
       expect(firstHandoffRes.status).toBe(200);
 
       // Attempt second handoff
-      const secondHandoffRes = await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${managerToken}`).send({ recipientType: 'RESIDENT' });
+      const secondHandoffRes = await request(app).post(`/visitors/${delId}/handoff`).set('Authorization', `Bearer ${securityToken}`).send({ recipientType: 'RESIDENT' });
       expect(secondHandoffRes.status).toBe(400);
       expect(secondHandoffRes.body.error.message).toBe('Handoff already completed');
     });

@@ -3,18 +3,10 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { requireAuth, requireVerifiedResidence, requireWorkforceOrManager, requireSecurityOrLeadership, AuthRequest } from '../middleware/auth';
 import rateLimit from 'express-rate-limit';
-import { VisitorStatus, VisitorType, Role, ResidencyStatus, OwnershipStatus } from '@prisma/client';
+import { VisitorStatus, VisitorType, ResidencyStatus, OwnershipStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const router = Router();
-
-async function verifyCommunityMembership(userId: string, communityId: string | null): Promise<boolean> {
-  if (!communityId) return false;
-  const mem = await prisma.membership.findFirst({
-    where: { userId, communityId, status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP', 'WORKFORCE'] } }
-  });
-  return !!mem;
-}
 
 async function verifySecurityMembership(userId: string, communityId: string | null): Promise<boolean> {
   if (!communityId) return false;
@@ -47,6 +39,11 @@ const createVisitorSchema = z.object({
 
 function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+/** A passcode is reserved for expected guests. Gate-confirmed service arrivals do not need one. */
+function visitorRequiresOtp(visitor: { visitorType: VisitorType; otp: string | null }) {
+  return visitor.visitorType === VisitorType.GUEST && Boolean(visitor.otp);
 }
 
 async function getResidentActiveUnit(userId: string) {
@@ -169,11 +166,10 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
     }
 
     const initialStatus = body.isPreApproved ? VisitorStatus.APPROVED : VisitorStatus.PENDING;
-    const finalName = body.name?.trim() || body.provider?.trim() || 'External Service';
     let plaintextOtp: string | undefined;
     let hashedOtp: string | null = null;
 
-    if (body.isPreApproved) {
+    if (body.isPreApproved && body.visitorType === VisitorType.GUEST) {
       plaintextOtp = generateOtp();
       hashedOtp = await bcrypt.hash(plaintextOtp, 10);
     }
@@ -266,7 +262,7 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     
     const sanitized = visitors.map(v => {
       const { otp: _otp, ...rest } = v;
-      return rest;
+      return { ...rest, requiresOtp: visitorRequiresOtp(v) };
     });
 
     res.json({ visitors: sanitized });
@@ -302,7 +298,10 @@ router.get('/history', requireWorkforceOrManager, async (req: AuthRequest, res: 
       },
     });
     
-    const sanitized = visitors.map(v => { const { otp: _otp, ...rest } = v; return rest; });
+    const sanitized = visitors.map(v => {
+      const { otp: _otp, ...rest } = v;
+      return { ...rest, requiresOtp: visitorRequiresOtp(v) };
+    });
     res.json({ visitors: sanitized });
   } catch (error) {
     console.error(error);
@@ -352,7 +351,8 @@ router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: R
     
     const sanitized = visitors.map(v => {
       const { otp: _otp, ...rest } = v;
-      return rest;
+      // The hash never leaves the server. The gate only needs to know whether to request a code.
+      return { ...rest, requiresOtp: visitorRequiresOtp(v) };
     });
 
     const pending = sanitized.filter((v) => v.status === VisitorStatus.PENDING);
@@ -448,7 +448,7 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
     let plaintextOtp: string | null = null;
     let hashedOtp: string | null = null;
     
-    if (!isUnannounced) {
+    if (!isUnannounced && visitor.visitorType === VisitorType.GUEST) {
       plaintextOtp = generateOtp();
       hashedOtp = await bcrypt.hash(plaintextOtp, 10);
     }
@@ -463,7 +463,7 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
       }
 
       const v = (await tx.visitor.findUnique({
-        where: { id: req.params.id },
+        where: { id: visitorId },
         include: { unit: true }
       }))!;
 
@@ -538,14 +538,16 @@ router.post('/:id/reject', requireVerifiedResidence, async (req: AuthRequest, re
         data: { status: 'REJECTED' }
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
-      const v = (await tx.visitor.findUnique({ where: { id: req.params.id } }))!;
+      const v = (await tx.visitor.findUnique({ where: { id: visitorId } }))!;
       await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REJECTED', metadata: { visitorId: v.id, reason } } });
       return v;
     });
     res.json({ success: true, visitor: updated });
   } catch (error: any) {
     if (error.message === 'CONCURRENCY_ERROR') {
-       const current = await prisma.visitor.findUnique({ where: { id: req.params.id } });
+       const current = typeof req.params.id === 'string'
+         ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
+         : null;
        if (current?.status === 'APPROVED') return res.json({ success: true, visitor: current });
        return res.status(409).json({ error: { message: `Conflict: visitor is ${current?.status}` } });
     }
@@ -573,7 +575,7 @@ router.post('/:id/revoke', requireVerifiedResidence, async (req: AuthRequest, re
         data: { status: 'REVOKED' }
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
-      const v = (await tx.visitor.findUnique({ where: { id: req.params.id } }))!;
+      const v = (await tx.visitor.findUnique({ where: { id: visitorId } }))!;
       await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REVOKED', metadata: { visitorId: v.id } } });
       return v;
     });
@@ -619,7 +621,7 @@ router.post('/:id/suggest-handoff', requireVerifiedResidence, async (req: AuthRe
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
 
-      const v = (await tx.visitor.findUnique({ where: { id: req.params.id } }))!;
+      const v = (await tx.visitor.findUnique({ where: { id: visitorId } }))!;
 
       await tx.auditLog.create({
         data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'DELIVERY_HANDOFF', metadata: { visitorId: v.id, recipientType: body.recipientType } }
@@ -696,8 +698,11 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
     if (visitor.status !== VisitorStatus.APPROVED) return res.status(400).json({ error: { message: 'Visitor is not approved for entry' } });
     if (visitor.validUntil && new Date() > new Date(visitor.validUntil)) return res.status(400).json({ error: { message: 'Pass expired' } });
 
-    if (visitor.otp) {
+    if (visitorRequiresOtp(visitor) && visitor.otp) {
       if (!otp) return res.status(400).json({ error: { message: 'OTP is required' } });
+      if (!/^\d{6}$/.test(otp)) {
+        return res.status(400).json({ error: { message: 'Enter the six-digit OTP for this pass' } });
+      }
       const isValid = await bcrypt.compare(otp, visitor.otp);
       if (!isValid) return res.status(400).json({ error: { message: 'Invalid OTP' } });
     }
@@ -709,7 +714,7 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
 
-      const v = (await tx.visitor.findUnique({ where: { id: req.params.id }, include: { unit: true } }))!;
+      const v = (await tx.visitor.findUnique({ where: { id: visitorId }, include: { unit: true } }))!;
       
       await tx.auditLog.create({
         data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_CHECK_IN', metadata: { visitorId: v.id } }
@@ -753,7 +758,9 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
     res.json({ success: true, visitor: visitorData });
   } catch (error) {
     if (error instanceof Error && error.message === 'CONCURRENCY_ERROR') {
-       const current = await prisma.visitor.findUnique({ where: { id: req.params.id } });
+       const current = typeof req.params.id === 'string'
+         ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
+         : null;
        return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
     }
     console.error(error);
@@ -785,7 +792,7 @@ router.post('/:id/check-out', requireSecurityOrLeadership, async (req: AuthReque
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
       
-      const v = (await tx.visitor.findUnique({ where: { id: req.params.id } }))!;
+      const v = (await tx.visitor.findUnique({ where: { id: visitorId } }))!;
       
       if (v.visitorType === 'DELIVERY' && !v.handoffTimestamp) {
         await tx.auditLog.create({
@@ -802,7 +809,9 @@ router.post('/:id/check-out', requireSecurityOrLeadership, async (req: AuthReque
     res.json({ success: true, visitor: visitorData });
   } catch (error) {
     if (error instanceof Error && error.message === 'CONCURRENCY_ERROR') {
-       const current = await prisma.visitor.findUnique({ where: { id: req.params.id } });
+       const current = typeof req.params.id === 'string'
+         ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
+         : null;
        return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
     }
     console.error(error);
@@ -830,13 +839,15 @@ router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest
     if (!visitor || !(await verifySecurityMembership(userId, visitor.communityId))) {
       return res.status(404).json({ error: { message: 'Visitor not found' } });
     }
-    if (visitor.handoffTimestamp) return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(visitor) });
+    if (visitor.handoffTimestamp) {
+      return res.status(400).json({ error: { message: 'Handoff already completed' } });
+    }
     if (visitor.visitorType !== VisitorType.DELIVERY) return res.status(400).json({ error: { message: 'Only deliveries can be handed off' } });
     if (visitor.status !== VisitorStatus.CHECKED_IN) return res.status(400).json({ error: { message: 'Delivery must be checked in first' } });
 
     const updated = await prisma.$transaction(async (tx) => {
       const v = await tx.visitor.update({
-        where: { id: req.params.id },
+        where: { id: visitorId },
         data: {
           handoffRecipientType: body.recipientType,
           handoffRecipientName: body.recipientName ? body.recipientName : null,
@@ -889,7 +900,9 @@ router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest
     res.json({ success: true, visitor: visitorData });
   } catch (error) {
     if (error instanceof Error && error.message === 'CONCURRENCY_ERROR') {
-       const current = await prisma.visitor.findUnique({ where: { id: req.params.id } });
+       const current = typeof req.params.id === 'string'
+         ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
+         : null;
        return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
     }
     console.error(error);
@@ -986,4 +999,3 @@ router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthReques
 });
 
 export default router;
-

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ import { theme } from '../../../src/theme';
 import { smartBack } from '../../../src/navigation/history';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
-import { visitorsApi, VisitorItem } from '../../../src/api/visitors';
+import { isActiveVisitor, isGuestVisitor, visitorsApi, VisitorItem } from '../../../src/api/visitors';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function VisitorsScreen() {
@@ -22,7 +22,7 @@ export default function VisitorsScreen() {
   const { bottomClearance } = useScreenInsets();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [category, setCategory] = useState<'VISITORS' | 'CABS' | 'DELIVERIES'>('VISITORS');
+  const [category, setCategory] = useState<'VISITORS' | 'SERVICE' | 'CABS' | 'DELIVERIES'>('VISITORS');
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['my-visitors'],
@@ -37,12 +37,13 @@ export default function VisitorsScreen() {
     const categoryFiltered = visitors.filter(v => {
       if (category === 'CABS') return v.visitorType === 'CAB';
       if (category === 'DELIVERIES') return v.visitorType === 'DELIVERY';
-      return v.visitorType === 'GUEST' || v.visitorType === 'SERVICE' || v.visitorType === 'OTHER';
+      if (category === 'SERVICE') return v.visitorType === 'SERVICE';
+      return isGuestVisitor(v);
     });
-    const upcoming = categoryFiltered.filter(v => ['PENDING', 'APPROVED', 'CHECKED_IN'].includes(v.status));
+    const upcoming = categoryFiltered.filter(isActiveVisitor);
     const history = categoryFiltered.filter(v => ['CHECKED_OUT', 'REJECTED', 'REVOKED', 'EXPIRED'].includes(v.status));
     return { upcomingVisitors: upcoming, historyVisitors: history };
-  }, [visitors]);
+  }, [visitors, category]);
 
   const displayedVisitors = activeTab === 'upcoming' ? upcomingVisitors : historyVisitors;
 
@@ -122,6 +123,9 @@ export default function VisitorsScreen() {
         <PremiumPressable style={[styles.categoryTab, category === 'VISITORS' && styles.categoryTabActive]} onPress={() => setCategory('VISITORS')}>
           <Text style={[styles.categoryTabText, category === 'VISITORS' && styles.categoryTabTextActive]}>Guests</Text>
         </PremiumPressable>
+        <PremiumPressable style={[styles.categoryTab, category === 'SERVICE' && styles.categoryTabActive]} onPress={() => setCategory('SERVICE')}>
+          <Text style={[styles.categoryTabText, category === 'SERVICE' && styles.categoryTabTextActive]}>Service</Text>
+        </PremiumPressable>
         <PremiumPressable style={[styles.categoryTab, category === 'CABS' && styles.categoryTabActive]} onPress={() => setCategory('CABS')}>
           <Text style={[styles.categoryTabText, category === 'CABS' && styles.categoryTabTextActive]}>Cabs</Text>
         </PremiumPressable>
@@ -169,8 +173,8 @@ export default function VisitorsScreen() {
             title={activeTab === 'upcoming' ? 'No expected records' : 'No history'}
             description={
               activeTab === 'upcoming'
-                ? category === 'DELIVERIES' ? 'Register an expected delivery to ensure smooth gate handoff.' : category === 'CABS' ? 'Register an expected cab for quick gate entry.' : 'Create a pre-approved entry pass to grant someone fast access at the gate.'
-                : category === 'DELIVERIES' ? 'No past deliveries found for your unit.' : category === 'CABS' ? 'No past cabs found for your unit.' : 'No past visitor records found for your unit.'
+                ? category === 'DELIVERIES' ? 'Register an expected delivery to ensure smooth gate handoff.' : category === 'CABS' ? 'Register an expected cab for quick gate entry.' : category === 'SERVICE' ? 'Register house help or another service worker for gate access.' : 'Create a pre-approved entry pass to grant someone fast access at the gate.'
+                : category === 'DELIVERIES' ? 'No past deliveries found for your unit.' : category === 'CABS' ? 'No past cabs found for your unit.' : category === 'SERVICE' ? 'No past service-worker passes found for your unit.' : 'No past visitor records found for your unit.'
             }
           />
         )}
@@ -183,6 +187,7 @@ export default function VisitorsScreen() {
       <AddVisitorModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
+        initialVisitorType={category === 'SERVICE' ? 'SERVICE' : undefined}
         onSuccess={() => refetch()}
       />
     </View>

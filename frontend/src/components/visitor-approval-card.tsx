@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from './ui/Text';
 import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 import { theme } from '../theme';
 import { homeLayout, homeSurface } from './home/homeSurface';
 
@@ -27,15 +28,37 @@ interface VisitorApprovalCardProps {
 
 export function VisitorApprovalCard({ visitor, onApprove, onReject, onDelete, onPress }: VisitorApprovalCardProps) {
   const [status, setStatus] = useState<CardStatus>('pending');
+  const [showApproveConfirm, setShowApproveConfirm] = useState(false);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
 
   const handleApprove = () => {
-    setStatus('approved');
-    onApprove?.(visitor.id);
+    setShowApproveConfirm(true);
+    setConfirmAction('approve');
   };
 
   const handleReject = () => {
-    setStatus('rejected');
-    onReject?.(visitor.id);
+    setShowRejectConfirm(true);
+    setConfirmAction('reject');
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmAction === 'approve') {
+      setStatus('approved');
+      onApprove?.(visitor.id);
+    } else if (confirmAction === 'reject') {
+      setStatus('rejected');
+      onReject?.(visitor.id);
+    }
+    setShowApproveConfirm(false);
+    setShowRejectConfirm(false);
+    setConfirmAction(null);
+  };
+
+  const handleCancelConfirm = () => {
+    setShowApproveConfirm(false);
+    setShowRejectConfirm(false);
+    setConfirmAction(null);
   };
 
   const handleUndo = () => {
@@ -99,29 +122,54 @@ export function VisitorApprovalCard({ visitor, onApprove, onReject, onDelete, on
   }
 
   return (
-    <View style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{visitor.name.charAt(0)}</Text>
-          <View style={styles.liveDot} />
+    <>
+      <View style={styles.card}>
+        <View style={styles.topRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{visitor.name.charAt(0)}</Text>
+            <View style={styles.liveDot} />
+          </View>
+          <View style={styles.info}>
+            <Text style={styles.name}>{visitor.name}</Text>
+            <Text style={styles.meta}>{visitor.type} · {visitor.time}</Text>
+          </View>
+          <View style={styles.atGatePill}>
+            <View style={styles.pulseDot} />
+            <Text style={styles.atGateText}>At gate</Text>
+          </View>
         </View>
-        <View style={styles.info}>
-          <Text style={styles.name}>{visitor.name}</Text>
-          <Text style={styles.meta}>{visitor.type} · {visitor.time}</Text>
-        </View>
-        <View style={styles.atGatePill}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.atGateText}>At gate</Text>
+
+        <View style={styles.divider} />
+
+        <View style={styles.actions}>
+          <Button label="Reject" variant="dangerOutline" icon="x" onPress={handleReject} size="md" style={styles.actionButton} />
+          <Button label="Approve" variant="primary" icon="check" onPress={handleApprove} size="md" style={styles.actionButton} />
         </View>
       </View>
 
-      <View style={styles.divider} />
-
-      <View style={styles.actions}>
-        <Button label="Reject" variant="dangerOutline" icon="x" onPress={handleReject} size="md" style={styles.actionButton} />
-        <Button label="Approve" variant="primary" icon="check" onPress={handleApprove} size="md" style={styles.actionButton} />
-      </View>
-    </View>
+      <ConfirmationModal
+        visible={showApproveConfirm}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title="Approve Visitor"
+        message={`Are you sure you want to approve ${visitor.name}'s entry? This will grant them access to the community.`}
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+        variant="default"
+        confirmIcon="check"
+      />
+      <ConfirmationModal
+        visible={showRejectConfirm}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title="Reject Visitor"
+        message={`Are you sure you want to reject ${visitor.name}'s entry request? This action cannot be undone.`}
+        confirmLabel="Reject"
+        cancelLabel="Cancel"
+        variant="danger"
+        confirmIcon="x"
+      />
+    </>
   );
 }
 
