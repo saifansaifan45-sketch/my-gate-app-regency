@@ -69,7 +69,10 @@ export default function FamilyMembersScreen() {
       return householdApi.addPet(form as Omit<HouseholdPetRecord, 'id'>);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['household-records'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['household-records'] }),
+        queryClient.invalidateQueries({ queryKey: ['unit-residencies'] }),
+      ]);
       setFormVisible(false);
       showToast({ title: 'Household record added', message: 'Security can now identify this entry for your home.', type: 'success' });
     },
@@ -84,6 +87,7 @@ export default function FamilyMembersScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['household-records'] });
+      queryClient.invalidateQueries({ queryKey: ['unit-residencies'] });
       setDeleteTarget(null);
     },
     onError: () => {

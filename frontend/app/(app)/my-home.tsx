@@ -48,13 +48,13 @@ export default function MyHomeScreen() {
     queryKey: ['unit-residencies', unitId],
     queryFn: () => propertiesApi.getUnitResidencies(unitId!),
     enabled: !!unitId,
-    staleTime: 30_000,
+    refetchOnMount: 'always',
   });
 
   const { data: householdData, isLoading: householdLoading, isRefetching: householdRefetching, refetch: refetchHousehold } = useQuery({
     queryKey: ['household-records'],
     queryFn: householdApi.getRecords,
-    staleTime: 30_000,
+    refetchOnMount: 'always',
   });
 
   const isRefreshing = residenciesRefetching || householdRefetching;
