@@ -218,8 +218,8 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasApprovedMembership } = useSession();
 
-  const isLeadershipMode = hasLeadershipAccess() && !hasResidentAccess() && !hasOwnerAccess();
-  const isManagerMode = hasManagerAccess() && !isLeadershipMode && !hasResidentAccess() && !hasOwnerAccess();
+  const isLeadershipMode = false; // Leadership always gets full resident access
+  const isManagerMode = hasManagerAccess() && !hasResidentAccess() && !hasOwnerAccess();
   const isWorkforceMode = hasApprovedMembership('WORKFORCE') && !hasManagerAccess() && !hasLeadershipAccess() && !hasResidentAccess() && !hasOwnerAccess();
   const { data: workforceData } = useQuery({
     queryKey: ['workforce-dashboard'],

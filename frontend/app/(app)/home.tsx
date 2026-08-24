@@ -5,11 +5,14 @@ import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { QuickActionsEditorModal, QuickActionItem } from '../../src/components/quick-actions-editor-modal';
 import { AddVisitorModal } from '../../src/components/add-visitor-modal';
 import { EmergencySOSModal } from '../../src/components/emergency-sos-modal';
 import { VisitorApproval } from '../../src/components/visitor-approval-card';
+import { Text } from '../../src/components/ui/Text';
 import { useSession } from '../../src/store/auth';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { useToast } from '../../src/store/toast';
@@ -21,6 +24,7 @@ import { propertiesApi } from '../../src/api/properties';
 import { TicketItem } from '../../src/api/manager';
 import { getHomeDashboard, homeDashboardQueryKey } from '../../src/api/home-dashboard';
 import { theme } from '../../src/theme';
+import { homeLayout } from '../../src/components/home/homeSurface';
 
 // Modular Home Components
 import {
@@ -477,8 +481,32 @@ export default function HomeScreen() {
               loading={isAnnouncementsLoading}
               onViewAllPress={() => router.push('/announcements')}
               onAnnouncementPress={(ann) => router.push(`/announcement/${ann.id}`)}
+              onCreateNotice={isLeadership ? () => router.push('/leadership/create-announcement') : undefined}
             />
           </ScreenEntrance>
+
+          {/* Leadership Governance */}
+          {isLeadership && (
+            <ScreenEntrance animation="none">
+              <View style={styles.leadershipSection}>
+                <Text style={styles.leadershipSectionTitle}>Leadership</Text>
+                <PremiumPressable
+                  style={styles.leadershipCard}
+                  onPress={() => router.push('/leadership')}
+                  scaleTo={0.97}
+                >
+                  <View style={styles.leadershipIconBox}>
+                    <Feather name="shield" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.leadershipInfo}>
+                    <Text style={styles.leadershipCardTitle}>Governance Dashboard</Text>
+                    <Text style={styles.leadershipCardDesc}>Approvals, staff management & community oversight</Text>
+                  </View>
+                  <Feather name="chevron-right" size={20} color="#6B7280" />
+                </PremiumPressable>
+              </View>
+            </ScreenEntrance>
+          )}
         </ScreenEntrance>
       </ScrollView>
 
@@ -547,5 +575,50 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.11,
     shadowRadius: 16,
     elevation: 8,
+  },
+  leadershipSection: {
+    paddingHorizontal: homeLayout.pagePadding,
+    marginBottom: homeLayout.sectionSpacing,
+  },
+  leadershipSectionTitle: {
+    ...homeLayout.sectionTitle,
+    marginBottom: homeLayout.headingSpacing,
+  },
+  leadershipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  leadershipIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#143D2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leadershipInfo: {
+    flex: 1,
+  },
+  leadershipCardTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+    marginBottom: 2,
+  },
+  leadershipCardDesc: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12.5,
+    color: theme.colors.textSecondary,
   },
 });

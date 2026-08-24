@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
@@ -19,6 +19,11 @@ export default function ManagerDashboardScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const { hasManagerAccess, hasResidentAccess, hasOwnerAccess } = useSession();
+  const { width: screenWidth } = useWindowDimensions();
+
+  const GRID_GAP = 12;
+  const METRIC_COLS = 2;
+  const metricItemWidth = (screenWidth - cardSystem.pagePadding * 2 - GRID_GAP * (METRIC_COLS - 1)) / METRIC_COLS;
 
   // Security Guard: Only users with approved MANAGER can enter
   React.useEffect(() => {
@@ -124,14 +129,14 @@ export default function ManagerDashboardScreen() {
           <Text style={styles.sectionTitle}>Operations Metrics</Text>
           {loading && !data ? (
             <View style={styles.metricsGrid}>
-              <Skeleton width="48%" height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={90} style={{ borderRadius: 14 }} />
+              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
             </View>
           ) : (
             <View style={styles.metricsGrid}>
-              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tickets')} scaleTo={0.96}>
+              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push({ pathname: '/manager/tickets', params: { status: 'OPEN' } })} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
                   <Feather name="alert-circle" size={18} color="#D97706" />
                 </View>
@@ -139,7 +144,7 @@ export default function ManagerDashboardScreen() {
                 <Text style={styles.metricLabel}>Open Tickets</Text>
               </PremiumPressable>
 
-              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
                   <Feather name="clock" size={18} color="#2563EB" />
                 </View>
@@ -147,7 +152,7 @@ export default function ManagerDashboardScreen() {
                 <Text style={styles.metricLabel}>Assigned Tasks</Text>
               </PremiumPressable>
 
-              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#F3E8FF' }]}>
                   <Feather name="activity" size={18} color="#7C3AED" />
                 </View>
@@ -155,7 +160,7 @@ export default function ManagerDashboardScreen() {
                 <Text style={styles.metricLabel}>In Progress</Text>
               </PremiumPressable>
 
-              <PremiumPressable style={styles.metricCard} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
                 <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
                   <Feather name="check-circle" size={18} color="#059669" />
                 </View>
@@ -469,7 +474,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   metricCard: {
-    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,

@@ -12,6 +12,7 @@ import { Text } from '../../src/components/ui/Text';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
 import { cardSystem } from '../../src/components/ui/cardSystem';
+import { useSession } from '../../src/store/auth';
 
 type NoticeSpace = { type: 'LEADERSHIP_OPERATIONS' | 'OWNER_COMMUNITY' | 'RESIDENT_COMMUNITY'; label: string; description: string; icon: React.ComponentProps<typeof Feather>['name']; tint: string; color: string };
 
@@ -28,6 +29,8 @@ function spaceMeta(space: CommunitySpaceItem) {
 export default function AnnouncementsScreen() {
   const { bottomClearance } = useScreenInsets(false);
   const router = useRouter();
+  const { hasLeadershipAccess } = useSession();
+  const isLeadership = hasLeadershipAccess();
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const spacesQuery = useQuery({ queryKey: ['announcement-spaces'], queryFn: communityApi.getSpaces });
   const availableSpaces = useMemo(() => (spacesQuery.data?.spaces || []).filter((space) => Boolean(spaceMeta(space))), [spacesQuery.data]);
@@ -47,7 +50,12 @@ export default function AnnouncementsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader variant="subscreen" title="Notice board" />
+      <AppHeader variant="subscreen" title="Notice board" rightAction={isLeadership ? (
+        <PremiumPressable style={styles.createBtn} onPress={() => router.push('/leadership/create-announcement')} scaleTo={0.94}>
+          <Feather name="plus" size={18} color="#FFFFFF" />
+          <Text style={styles.createBtnText}>Create</Text>
+        </PremiumPressable>
+      ) : undefined} />
       {spacesQuery.isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
       {!spacesQuery.isLoading && availableSpaces.length === 0 ? <EmptyState icon="lock" title="No notice spaces available" description="Your account does not currently have access to a notice space." /> : null}
       {activeSpace && activeMeta ? (
@@ -78,4 +86,6 @@ const styles = StyleSheet.create({
   tabScroll: { flexGrow: 0 }, tabRow: { paddingHorizontal: cardSystem.pagePadding, gap: 8 }, tab: { minHeight: 40, paddingHorizontal: 13, borderRadius: 14, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.textPrimary }, tabTextSelected: { color: '#FFFFFF' },
   spaceContext: { marginBottom: 14, padding: 13, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 9 }, spaceContextText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, lineHeight: 18 },
   scrollContent: { paddingTop: 14, paddingHorizontal: cardSystem.pagePadding, gap: 12 }, card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, alignItems: 'flex-start', alignSelf: 'stretch', ...theme.shadows.card }, cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, alignSelf: 'stretch' }, categoryPill: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 5 }, category: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10, letterSpacing: 0.4 }, date: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary }, title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 22, color: theme.colors.textPrimary, marginBottom: 6, textAlign: 'left' }, body: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 21, color: theme.colors.textSecondary, textAlign: 'left' },
+  createBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  createBtnText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: '#FFFFFF' },
 });

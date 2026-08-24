@@ -12,6 +12,7 @@ interface CommunityUpdatesProps {
   loading?: boolean;
   onViewAllPress: () => void;
   onAnnouncementPress?: (announcement: CommunityAnnouncement) => void;
+  onCreateNotice?: () => void;
 }
 
 function relativeTime(iso: string) {
@@ -28,6 +29,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   loading = false,
   onViewAllPress,
   onAnnouncementPress,
+  onCreateNotice,
 }) => {
   const publishedList = announcements.slice(0, 1);
 
@@ -38,15 +40,28 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
           <Text style={styles.sectionTitle}>Community updates</Text>
           {announcements.some((a) => !a.isRead) && <View style={styles.unreadBadgeDot} />}
         </View>
-        <PremiumPressable
-          style={styles.viewAllBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          onPress={onViewAllPress}
-          scaleTo={0.94}
-        >
-          <Text style={styles.viewAllText}>View all</Text>
-          <Feather name="chevron-right" size={15} color="#166534" />
-        </PremiumPressable>
+        <View style={styles.headerActions}>
+          {onCreateNotice && (
+            <PremiumPressable
+              style={styles.createBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              onPress={onCreateNotice}
+              scaleTo={0.94}
+            >
+              <Feather name="plus" size={14} color="#FFFFFF" />
+              <Text style={styles.createBtnText}>Create</Text>
+            </PremiumPressable>
+          )}
+          <PremiumPressable
+            style={styles.viewAllBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            onPress={onViewAllPress}
+            scaleTo={0.94}
+          >
+            <Text style={styles.viewAllText}>View all</Text>
+            <Feather name="chevron-right" size={15} color="#166534" />
+          </PremiumPressable>
+        </View>
       </View>
 
       {loading ? (
@@ -120,6 +135,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   sectionTitle: homeLayout.sectionTitle,
   unreadBadgeDot: {
     width: 7,
@@ -136,6 +156,20 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 14,
     color: '#166534',
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  createBtnText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
   },
   cardStack: {
     gap: 10,
