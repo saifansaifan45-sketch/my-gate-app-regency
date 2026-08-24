@@ -238,6 +238,7 @@ const styles = StyleSheet.create({
   feed: { padding: 20, gap: 16 },
   loading: { fontFamily: 'PlusJakartaSans_500Medium', color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 36 },
   updateCard: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
@@ -250,6 +251,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   updateTop: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -311,7 +311,7 @@ export default function HomeScreen() {
       count: homeData?.visitorCount === null || homeData?.visitorCount === undefined ? 'N/A' : String(homeData.visitorCount),
       subtitle: 'Today',
       countColor: '#166534',
-      onPress: () => router.push('/visitors'),
+      onPress: () => router.push({ pathname: '/visitors', params: { category: 'VISITORS' } }),
     },
     {
       key: 'deliveries',
@@ -319,7 +319,7 @@ export default function HomeScreen() {
       count: homeData?.deliveryCount === null || homeData?.deliveryCount === undefined ? 'N/A' : String(homeData.deliveryCount),
       subtitle: 'Today',
       countColor: '#D97706',
-      onPress: () => router.push('/visitors'),
+      onPress: () => router.push({ pathname: '/visitors', params: { category: 'DELIVERIES' } }),
     },
     {
       key: 'maintenance',

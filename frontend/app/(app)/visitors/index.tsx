@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
@@ -20,9 +20,11 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 export default function VisitorsScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets();
+  const params = useLocalSearchParams<{ category?: string }>();
+  const initialCategory = (params.category as 'VISITORS' | 'SERVICE' | 'CABS' | 'DELIVERIES') || 'VISITORS';
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [category, setCategory] = useState<'VISITORS' | 'SERVICE' | 'CABS' | 'DELIVERIES'>('VISITORS');
+  const [category, setCategory] = useState<'VISITORS' | 'SERVICE' | 'CABS' | 'DELIVERIES'>(initialCategory);
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['my-visitors'],

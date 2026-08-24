@@ -175,6 +175,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   card: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
