@@ -257,6 +257,34 @@ describe('Community Spaces, Posts, Polls & Announcements Suite', () => {
     expect(detail.body.announcement.isRead).toBe(true);
   });
 
+
+  it('10b. Resident cannot read announcement from unauthorized space', async () => {
+    // President creates an announcement in Owners space
+    const ownerAnnRes = await request
+      .post(`/community/spaces/${ownersSpaceId}/announcements`)
+      .set('Authorization', `Bearer ${presidentToken}`)
+      .send({
+        title: 'Owner Assessment Update',
+        content: 'Special assessment details.',
+        priority: 'NORMAL',
+      });
+    expect(ownerAnnRes.status).toBe(201);
+
+    // Tenant tries to read it
+    const getRes = await request
+      .get(`/community/announcements/${ownerAnnRes.body.id}`)
+      .set('Authorization', `Bearer ${tenantToken}`);
+
+    expect(getRes.status).toBe(403);
+  });
+
+  it('10c. Missing announcement returns 404', async () => {
+    const res = await request
+      .get('/community/announcements/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${tenantToken}`);
+    expect(res.status).toBe(404);
+  });
+
   it('11. Regular resident cannot create official announcements', async () => {
     const res = await request
       .post(`/community/spaces/${residentsSpaceId}/announcements`)

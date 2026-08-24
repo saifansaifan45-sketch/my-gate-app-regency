@@ -1,7 +1,8 @@
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
+import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState, useRef } from 'react';
-import { Platform, View, StyleSheet, ScrollView, Animated, Dimensions } from 'react-native';
+import { Platform, View, StyleSheet, ScrollView, Animated, Dimensions, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -115,9 +116,9 @@ export default function CommunityScreen() {
     const polls = pollsQuery.data?.polls ?? [];
     if (!polls.length) return <EmptyState icon="pie-chart" title="No active polls" description="Community polls will appear here when management opens one." />;
     return polls.map((poll) => (
-      <PollCard key={poll.id} poll={poll} onVote={async (optionId) => { await communityApi.vote(poll.id, optionId); await refreshCommunity(); }} />
+      <PollCard key={poll.id} poll={poll} isManagement={isManagement} onVote={async (optionId) => { await communityApi.vote(poll.id, optionId); await refreshCommunity(); }} onDelete={isManagement ? async () => { await communityApi.deletePoll(poll.id); await refreshCommunity(); } : undefined} />
     ));
-  }, [pollsQuery.data?.polls, pollsQuery.isLoading]);
+  }, [pollsQuery.data?.polls, pollsQuery.isLoading, isManagement]);
 
   return (
     <View style={styles.container}>
@@ -259,10 +260,13 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, lineHeight: 20, color: theme.colors.textPrimary, marginBottom: 6 },
   cardBody: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 18, color: theme.colors.textSecondary },
   readMore: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary, marginTop: 6 },
+  pollOptions: { gap: 10 },
   pollOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
   pollOptionSelected: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
   pollOptionText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textPrimary },
   pollCount: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
+  pollTopRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  deleteBtn: { padding: 6, borderRadius: 8, backgroundColor: '#FDEBEC' },
   filterRow: { gap: 8, paddingBottom: 4 },
   filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 97, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
   filterChipActive: { backgroundColor: '#EEF8F1', borderColor: theme.colors.primary },
@@ -279,15 +283,22 @@ function relativeTime(value: string) {
 }
 
 function AnnouncementCard({ announcement, onRead }: { announcement: CommunityAnnouncement; onRead: () => Promise<void> }) {
-  const [expanded, setExpanded] = useState(false);
   const colors = announcement.priority === 'URGENT' ? { bg: '#FDEBEC', text: '#B42318' } : announcement.priority === 'IMPORTANT' ? { bg: '#FEF3D6', text: '#A46100' } : { bg: '#EAF6EE', text: '#1F7A45' };
-  const open = async () => { setExpanded(true); await onRead(); };
-  return <PremiumPressable onPress={open}><Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: colors.bg }]}><Text style={[styles.badgeText, { color: colors.text }]}>{announcement.category}</Text></View><Text style={styles.time}>{announcement.isRead ? relativeTime(announcement.createdAt) : 'New · ' + relativeTime(announcement.createdAt)}</Text></View><Text style={styles.cardTitle}>{announcement.title}</Text><Text style={styles.cardBody} numberOfLines={expanded ? undefined : 3}>{announcement.content}</Text>{!expanded && announcement.content.length > 140 ? <Text style={styles.readMore}>Tap to read more</Text> : null}</Card></PremiumPressable>;
+  const router = useRouter();
+  const open = async () => {
+    if (!announcement.isRead) {
+      await onRead();
+    }
+    router.push(`/announcement/${announcement.id}`);
+  };
+  return <PremiumPressable onPress={open}><Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: colors.bg }]}><Text style={[styles.badgeText, { color: colors.text }]}>{announcement.category}</Text></View><Text style={styles.time}>{announcement.isRead ? relativeTime(announcement.createdAt) : 'New · ' + relativeTime(announcement.createdAt)}</Text></View><Text style={styles.cardTitle}>{announcement.title}</Text><Text style={styles.cardBody} numberOfLines={3}>{announcement.content}</Text>{announcement.content.length > 140 ? <Text style={styles.readMore}>Tap to read more</Text> : null}</Card></PremiumPressable>;
 }
 
-function PollCard({ poll, onVote }: { poll: CommunityPoll; onVote: (optionId: string) => Promise<void> }) {
+function PollCard({ poll, onVote, onDelete, isManagement }: { poll: CommunityPoll; onVote: (optionId: string) => Promise<void>; onDelete?: () => Promise<void>; isManagement?: boolean }) {
   const [voting, setVoting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const expired = poll.status !== 'ACTIVE' || (!!poll.expiresAt && new Date(poll.expiresAt) <= new Date());
   const vote = async (optionId: string) => { if (voting || poll.userHasVoted || expired) return; setVoting(true); try { await onVote(optionId); } finally { setVoting(false); } };
-  return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View><Text style={styles.cardTitle}>{poll.question}</Text>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</Card>;
+  const handleDelete = () => { if (deleting || !onDelete) return; Alert.alert('Delete Poll', 'Are you sure you want to delete this poll?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { setDeleting(true); try { await onDelete(); } finally { setDeleting(false); } } }]); };
+  return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><View style={styles.pollTopRight}>{isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}<Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View></View><Text style={styles.cardTitle}>{poll.question}</Text><View style={styles.pollOptions}>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</View></Card>;
 }

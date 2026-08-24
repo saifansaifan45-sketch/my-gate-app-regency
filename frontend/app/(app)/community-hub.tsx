@@ -14,7 +14,7 @@ import { smartBack } from '../../src/navigation/history';
 export default function CommunityHubScreen() {
   const router = useRouter();
 
-  const { data: me, isLoading: meLoading } = useQuery({
+  const { isLoading: meLoading } = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
       const res = await api.get('/auth/me');
@@ -98,7 +98,7 @@ export default function CommunityHubScreen() {
 
         {renderSection('Updates & Connections', [
           { label: 'Announcements & Polls', icon: 'radio', onClick: () => router.push('/community') },
-          { label: 'Community Spaces', icon: 'message-circle', onClick: () => router.push('/spaces') } // Assuming a spaces route exists or will be added
+          { label: 'Community Spaces', icon: 'message-circle', onClick: () => router.push('/community') }
         ])}
 
         <View style={styles.section}>
@@ -124,7 +124,7 @@ export default function CommunityHubScreen() {
 
         {renderSection('Support', [
           { label: 'Help Desk / Tickets', icon: 'life-buoy', onClick: () => router.push('/help-desk') },
-          { label: 'Lost & Found', icon: 'search', onClick: () => {} } // Mock
+          // Disabled: Lost & Found has no backend route or persistence yet.
         ])}
       </ScrollView>
     </View>

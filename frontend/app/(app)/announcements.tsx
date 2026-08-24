@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
@@ -26,6 +27,7 @@ function spaceMeta(space: CommunitySpaceItem) {
 
 export default function AnnouncementsScreen() {
   const { bottomClearance } = useScreenInsets(false);
+  const router = useRouter();
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const spacesQuery = useQuery({ queryKey: ['announcement-spaces'], queryFn: communityApi.getSpaces });
   const availableSpaces = useMemo(() => (spacesQuery.data?.spaces || []).filter((space) => Boolean(spaceMeta(space))), [spacesQuery.data]);
@@ -60,10 +62,11 @@ export default function AnnouncementsScreen() {
           <View style={[styles.spaceContext, { backgroundColor: activeMeta.tint }]}><Feather name={activeMeta.icon} size={17} color={activeMeta.color} /><Text style={[styles.spaceContextText, { color: activeMeta.color }]}>{activeMeta.description}</Text></View>
           {announcementsQuery.isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
           {!announcementsQuery.isLoading && announcements.length === 0 ? <EmptyState icon="bell-off" title={`No ${activeMeta.label.toLowerCase()} notices yet`} description="Published notices for this space will appear here." /> : null}
-          {announcements.map((announcement, index) => <ScreenEntrance key={announcement.id} delay={Math.min(70 + index * 55, 260)}><View style={styles.card}>
+          {announcements.map((announcement, index) => <ScreenEntrance key={announcement.id} delay={Math.min(70 + index * 55, 260)}><PremiumPressable style={styles.card} onPress={() => router.push(`/announcement/${announcement.id}`)}>
             <View style={styles.cardHeader}><View style={[styles.categoryPill, { backgroundColor: activeMeta.tint }]}><Text style={[styles.category, { color: activeMeta.color }]}>{announcement.category || 'GENERAL'}</Text></View><Text style={styles.date}>{new Date(announcement.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</Text></View>
             <Text style={styles.title}>{announcement.title}</Text><Text style={styles.body}>{announcement.content}</Text>
-          </View></ScreenEntrance>)}
+          </PremiumPressable>
+            </ScreenEntrance>)}
         </ScrollView>
       ) : null}
     </View>
