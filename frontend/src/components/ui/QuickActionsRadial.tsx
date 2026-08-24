@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVICE_CATALOG, QUICK_ACTION_VISUALS, ServiceEntry } from '../../registry/services';
 import { useSession } from '../../store/auth';
+import { theme } from '../../theme';
 import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
@@ -202,53 +203,50 @@ export function QuickActionsRadial() {
   const closeMenu = useCallback((onComplete?: () => void) => {
     if (!menuVisible.current) return;
 
-    // Phase 1: Items collapse inward with reverse stagger
-    const closePromises = radialActions.map((action, index) => {
-      return new Promise<void>((resolve) => {
-        const delay = (radialActions.length - 1 - index) * 40;
-        Animated.parallel([
-          Animated.sequence([
-            Animated.delay(delay),
-            Animated.spring(action.x, {
-              toValue: 0,
-              friction: 8,
-              tension: 160,
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(delay),
-            Animated.spring(action.y, {
-              toValue: 0,
-              friction: 8,
-              tension: 160,
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(delay),
-            Animated.spring(action.scale, {
-              toValue: 0,
-              friction: 8,
-              tension: 160,
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(delay),
-            Animated.timing(action.opacity, {
-              toValue: 0,
-              duration: 100,
-              useNativeDriver: Platform.OS !== 'web',
-            }),
-          ]),
-        ]).start(() => resolve());
-      });
+    // Collapse items inward with reverse stagger
+    radialActions.forEach((action, index) => {
+      const delay = (radialActions.length - 1 - index) * 40;
+      Animated.parallel([
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.spring(action.x, {
+            toValue: 0,
+            friction: 8,
+            tension: 160,
+            useNativeDriver: Platform.OS !== 'web',
+          }),
+        ]),
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.spring(action.y, {
+            toValue: 0,
+            friction: 8,
+            tension: 160,
+            useNativeDriver: Platform.OS !== 'web',
+          }),
+        ]),
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.spring(action.scale, {
+            toValue: 0,
+            friction: 8,
+            tension: 160,
+            useNativeDriver: Platform.OS !== 'web',
+          }),
+        ]),
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(action.opacity, {
+            toValue: 0,
+            duration: 100,
+            useNativeDriver: Platform.OS !== 'web',
+          }),
+        ]),
+      ]).start();
     });
 
-    // Phase 2: Collapse center, fade backdrop
+    // Collapse center, fade backdrop
     Animated.parallel([
-      Animated.parallel(closePromises.map((p) => Animated.timing(p as any, { toValue: 1, duration: 1, useNativeDriver: false }))),
       Animated.spring(centerScale, {
         toValue: 1,
         friction: 8,
@@ -538,6 +536,3 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 });
-
-// Need to import theme at the top of the file
-import { theme } from '../../src/theme';
