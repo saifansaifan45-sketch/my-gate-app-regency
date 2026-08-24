@@ -32,12 +32,17 @@ const POPULAR_UNITS = [
   ...Array.from({ length: 9 }, (_, i) => [`${i + 1}A`, `${i + 1}B`]).flat(),
 ];
 
-const EMPLOYEE_ROLES: { id: EmployeeRole; label: string; reviewNote: string }[] = [
-  { id: 'MANAGER', label: 'Community Manager', reviewNote: 'Your application will be reviewed by Regency Salma leadership.' },
-  { id: 'SECURITY', label: 'Security', reviewNote: 'Your application will be reviewed by the community manager.' },
-  { id: 'MAINTENANCE', label: 'Maintenance', reviewNote: 'Your application will be reviewed by the community manager.' },
-  { id: 'HOUSEKEEPING', label: 'Housekeeping', reviewNote: 'Your application will be reviewed by the community manager.' },
-  { id: 'OTHER', label: 'Other', reviewNote: 'Your application will be reviewed by the community manager.' },
+const EMPLOYEE_ROLES: { id: EmployeeRole; label: string; description: string; icon: React.ComponentProps<typeof Feather>['name'] }[] = [
+  { id: 'MANAGER', label: 'Community Manager', description: 'Community operations and staff coordination', icon: 'briefcase' },
+  { id: 'SECURITY', label: 'Security / Watchman', description: 'Gate entry, visitors, and security operations', icon: 'shield' },
+  { id: 'HOUSEKEEPING', label: 'Housekeeping / Cleaner', description: 'Common-area cleaning and upkeep', icon: 'home' },
+  { id: 'HOUSE_HELP', label: 'House Help', description: 'Resident household support', icon: 'users' },
+  { id: 'MAINTENANCE', label: 'Maintenance Technician', description: 'General repairs and facilities support', icon: 'tool' },
+  { id: 'ELECTRICIAN', label: 'Electrician', description: 'Electrical repairs and maintenance requests', icon: 'zap' },
+  { id: 'PLUMBER', label: 'Plumber', description: 'Plumbing repairs and maintenance requests', icon: 'droplet' },
+  { id: 'GARDENER', label: 'Gardener / Lawn Care', description: 'Gardens, landscaping, and outdoor upkeep', icon: 'sun' },
+  { id: 'DRIVER', label: 'Community Driver', description: 'Transport and general operations support', icon: 'truck' },
+  { id: 'OTHER', label: 'Other Community Staff', description: 'A role not listed above', icon: 'more-horizontal' },
 ];
 
 export default function RelationshipOnboardingScreen() {
@@ -56,8 +61,7 @@ export default function RelationshipOnboardingScreen() {
   const [relationshipType, setRelationshipType] = useState<'TENANT' | 'FAMILY_MEMBER'>('TENANT');
 
   // Employee Form State
-  const [employeeRole, setEmployeeRole] = useState<EmployeeRole>('MANAGER');
-  const [department, setDepartment] = useState('Township Operations');
+  const [employeeRole, setEmployeeRole] = useState<EmployeeRole>('SECURITY');
   const [experience, setExperience] = useState('');
 
   // Pending approval screen state
@@ -69,6 +73,7 @@ export default function RelationshipOnboardingScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
+  const selectedEmployeeRole = EMPLOYEE_ROLES.find((role) => role.id === employeeRole) || EMPLOYEE_ROLES[0];
 
   // 1. Submit Owner Flow
   const handleOwnerSubmit = async () => {
@@ -132,7 +137,6 @@ export default function RelationshipOnboardingScreen() {
     try {
       const res = await onboardEmployee({
         role: employeeRole,
-        department: department.trim() || undefined,
         experience: experience.trim() || undefined,
       });
 
@@ -284,7 +288,7 @@ export default function RelationshipOnboardingScreen() {
             </View>
             <View style={styles.applicantInfoRow}>
               <Text style={styles.infoLabel}>Role Requested:</Text>
-              <Text style={styles.infoValue}>{employeeRole}</Text>
+              <Text style={styles.infoValue}>{selectedEmployeeRole.label}</Text>
             </View>
             <View style={styles.applicantInfoRow}>
               <Text style={styles.infoLabel}>Reviewing Authority:</Text>
@@ -335,13 +339,13 @@ export default function RelationshipOnboardingScreen() {
                 <Text style={styles.stepBadgeText}>STEP 2 OF 2 · RELATIONSHIP</Text>
               </View>
               <Text style={styles.mainTitle}>
-                {selectedType === 'EMPLOYEE' ? 'Join Regency Salma' : 'What brings you to Regency Salma?'}
+                {selectedType === 'EMPLOYEE' ? 'Join Regency Salma' : 'How do you connect to Regency Salma?'}
               </Text>
               <Text style={styles.mainSub}>
                 {selectedType === 'OWNER'
                   ? 'Configure your property ownership details'
                   : selectedType === 'RESIDENT'
-                  ? 'Specify your residential living flat'
+                  ? 'Tell us which unit you live in'
                   : selectedType === 'EMPLOYEE'
                   ? 'Apply for a community role'
                   : 'Select your primary connection to configure your workspace.'}
@@ -379,8 +383,8 @@ export default function RelationshipOnboardingScreen() {
                     <Feather name="users" size={24} color="#2563EB" />
                   </View>
                   <View style={styles.optionContent}>
-                    <Text style={styles.optionTitle}>I live in a property</Text>
-                    <Text style={styles.optionSub}>I am a resident, tenant, or family member</Text>
+                    <Text style={styles.optionTitle}>I don't own a property</Text>
+                    <Text style={styles.optionSub}>I live here · Family / Tenant</Text>
                   </View>
                   <Feather name="chevron-right" size={20} color="#9CA3AF" />
                 </PremiumPressable>
@@ -550,9 +554,13 @@ export default function RelationshipOnboardingScreen() {
                         <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
                           {isSelected ? <View style={styles.radioDot} /> : null}
                         </View>
-                        <Text style={[styles.employeeRoleText, isSelected && styles.employeeRoleTextActive]}>
-                          {r.label}
-                        </Text>
+                        <View style={styles.employeeRoleCopy}>
+                          <View style={styles.employeeRoleTitleRow}>
+                            <Feather name={r.icon} size={15} color={isSelected ? theme.colors.primary : theme.colors.textSecondary} />
+                            <Text style={[styles.employeeRoleText, isSelected && styles.employeeRoleTextActive]}>{r.label}</Text>
+                          </View>
+                          <Text style={styles.employeeRoleDescription}>{r.description}</Text>
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -567,15 +575,6 @@ export default function RelationshipOnboardingScreen() {
                       : 'Your application will be reviewed by the community manager.'}
                   </Text>
                 </View>
-
-                <Text style={styles.fieldLabel}>Department / Trade</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Operations, Security, Facilities"
-                  value={department}
-                  onChangeText={setDepartment}
-                  placeholderTextColor={theme.colors.textSecondary}
-                />
 
                 <Text style={styles.fieldLabel}>Relevant Experience (Optional)</Text>
                 <TextInput
@@ -843,6 +842,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
     borderColor: theme.colors.primary,
   },
+  employeeRoleCopy: {
+    flex: 1,
+  },
+  employeeRoleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
   radioCircle: {
     width: 20,
     height: 20,
@@ -869,6 +876,13 @@ const styles = StyleSheet.create({
   },
   employeeRoleTextActive: {
     color: theme.colors.primary,
+  },
+  employeeRoleDescription: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11.5,
+    color: theme.colors.textSecondary,
+    marginTop: 3,
+    lineHeight: 16,
   },
   reviewNoticeBanner: {
     flexDirection: 'row',

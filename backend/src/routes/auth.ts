@@ -513,7 +513,7 @@ router.post('/onboarding/resident', requireAuth, async (req: AuthRequest, res: R
 // 5. POST /auth/onboarding/employee (Option 3: I work with the community)
 // ----------------------------------------------------
 const employeeOnboardingSchema = z.object({
-  role: z.enum(['MANAGER', 'SECURITY', 'HOUSEKEEPING', 'MAINTENANCE', 'OTHER']),
+  role: z.enum(['MANAGER', 'SECURITY', 'HOUSEKEEPING', 'HOUSE_HELP', 'MAINTENANCE', 'ELECTRICIAN', 'PLUMBER', 'GARDENER', 'DRIVER', 'OTHER']),
   department: z.string().optional(),
   experience: z.string().optional(),
   notes: z.string().optional(),
@@ -533,20 +533,27 @@ router.post('/onboarding/employee', requireAuth, async (req: AuthRequest, res: R
 
     const assignedRole = selectedRole === 'MANAGER' ? Role.MANAGER : Role.WORKFORCE;
     
-    // The selected role is authoritative. Previously the form's default
-    // department ("Township Operations") could overwrite a Security choice,
-    // causing approved watchmen to be stored/displayed as another department.
-    const normalizedDepartment = department?.trim().toUpperCase();
+    // The role chosen in onboarding is authoritative. Department is retained
+    // only for compatibility with older clients and never changes the role.
     let requestedCategory = 'OTHER';
     let requestedDepartment = 'OTHER';
 
-    if (selectedRole === 'SECURITY' || normalizedDepartment === 'SECURITY') {
+    if (selectedRole === 'SECURITY') {
       requestedCategory = 'SECURITY';
       requestedDepartment = 'SECURITY';
-    } else if (selectedRole === 'HOUSEKEEPING' || normalizedDepartment === 'HOUSEKEEPING') {
+    } else if (selectedRole === 'HOUSEKEEPING' || selectedRole === 'HOUSE_HELP') {
       requestedCategory = 'CLEANER';
       requestedDepartment = 'HOUSEKEEPING';
-    } else if (selectedRole === 'MAINTENANCE' || normalizedDepartment === 'MAINTENANCE') {
+    } else if (selectedRole === 'ELECTRICIAN') {
+      requestedCategory = 'ELECTRICIAN';
+      requestedDepartment = 'MAINTENANCE';
+    } else if (selectedRole === 'PLUMBER') {
+      requestedCategory = 'PLUMBER';
+      requestedDepartment = 'MAINTENANCE';
+    } else if (selectedRole === 'GARDENER') {
+      requestedCategory = 'GARDENER';
+      requestedDepartment = 'GARDENING';
+    } else if (selectedRole === 'MAINTENANCE') {
       requestedCategory = 'MAINTENANCE';
       requestedDepartment = 'MAINTENANCE';
     }
@@ -588,7 +595,7 @@ router.post('/onboarding/employee', requireAuth, async (req: AuthRequest, res: R
           userId: leader.id,
           type: 'EMPLOYEE_VERIFICATION_REQUEST',
           title: 'New Staff Application',
-          message: `${applicant?.firstName || 'Employee'} applied for ${selectedRole} role (${department || 'Operations'}).`,
+          message: `${applicant?.firstName || 'Employee'} applied for the ${selectedRole} role.`,
           metadata: { applicantId: userId, role: selectedRole, department, experience, notes },
         },
       });

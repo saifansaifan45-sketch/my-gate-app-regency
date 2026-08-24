@@ -5,7 +5,17 @@ export type UserRole = 'LEADERSHIP' | 'MANAGER' | 'WORKFORCE' | 'RESIDENT' | 'OW
 export type OwnershipStatus = 'ACTIVE' | 'INACTIVE' | 'TRANSFERRED';
 export type ResidencyStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'EXPIRED';
 export type ResidencyType = 'OWNER' | 'TENANT' | 'FAMILY_MEMBER';
-export type EmployeeRole = 'MANAGER' | 'SECURITY' | 'HOUSEKEEPING' | 'MAINTENANCE' | 'OTHER';
+export type EmployeeRole =
+  | 'MANAGER'
+  | 'SECURITY'
+  | 'HOUSEKEEPING'
+  | 'HOUSE_HELP'
+  | 'MAINTENANCE'
+  | 'ELECTRICIAN'
+  | 'PLUMBER'
+  | 'GARDENER'
+  | 'DRIVER'
+  | 'OTHER';
 
 export interface MembershipInfo {
   id?: string;
