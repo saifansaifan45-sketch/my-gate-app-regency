@@ -145,8 +145,8 @@ router.get('/dashboard', async (req: AuthRequest, res: Response, next: NextFunct
       return res.status(404).json({ error: { message: 'Personnel profile not found' } });
     }
 
-    // 1. Fetch assigned tasks
-    const assignedTasks = await prisma.task.findMany({
+    // Security personnel operate the gate and do not receive maintenance tasks.
+    const assignedTasks = personnel.category === 'SECURITY' ? [] : await prisma.task.findMany({
       where: {
         assignedPersonnelId: personnel.id,
         status: { in: [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS] },
@@ -235,6 +235,10 @@ router.get('/tasks/history', async (req: AuthRequest, res: Response, next: NextF
 
     if (!personnel) {
       return res.status(404).json({ error: { message: 'Personnel profile not found' } });
+    }
+
+    if (personnel.category === 'SECURITY') {
+      return res.json({ history: [] });
     }
 
     const history = await prisma.task.findMany({
@@ -341,6 +345,10 @@ router.post('/tasks/:id/complete', async (req: AuthRequest, res: Response, next:
     const { notes, remarks } = completeTaskSchema.parse(req.body);
     const finalRemarks = notes || remarks || 'Work completed by personnel';
     const personnel = await getWorkerPersonnel(userId);
+
+    if (personnel?.category === 'SECURITY') {
+      return res.status(403).json({ error: { message: 'Security personnel are limited to gate operations.' } });
+    }
 
     const task = await prisma.task.findUnique({
       where: { id: taskId },

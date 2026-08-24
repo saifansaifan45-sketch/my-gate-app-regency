@@ -1,12 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TextInput, RefreshControl, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { theme } from '../../../src/theme';
 import { api } from '../../../src/api/client';
 import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
+import { useRouter } from 'expo-router';
+import { smartBack } from '../../../src/navigation/history';
+
+interface GateActivityLogItem {
+  id: string;
+  action: string;
+  createdAt: string;
+  visitor?: { visitorName?: string; provider?: string; type: string; unitNumber?: string };
+  actor: { firstName?: string; lastName?: string; role?: string };
+}
+
+interface GateActivityResponse {
+  logs: GateActivityLogItem[];
+}
 
 export default function GateActivityLog() {
+  const router = useRouter();
   const [unitFilter, setUnitFilter] = useState('');
   const [debouncedFilter, setDebouncedFilter] = useState('');
 
@@ -15,12 +30,13 @@ export default function GateActivityLog() {
     return () => clearTimeout(timer);
   }, [unitFilter]);
 
-  const { data, isLoading, refetch, isRefetching } = useQuery({
+  const { data, isLoading, refetch, isRefetching } = useQuery<GateActivityResponse>({
     queryKey: ['gate-activity', debouncedFilter],
     queryFn: async () => {
       const res = await api.get('/visitors/gate/activity', { params: { unitLabel: debouncedFilter || undefined } });
       return res.data;
-    }
+    },
+    placeholderData: (previous) => previous,
   });
 
   const renderLog = ({ item }: { item: any }) => {
@@ -49,8 +65,13 @@ export default function GateActivityLog() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Gate Activity Log</Text>
-        <Text style={styles.headerSubtitle}>Recent check-ins, approvals & operations</Text>
+        <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work')} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#111827" />
+        </Pressable>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Gate Activity Log</Text>
+          <Text style={styles.headerSubtitle}>Recent check-ins, approvals & operations</Text>
+        </View>
       </View>
       
       <View style={styles.searchContainer}>
@@ -94,7 +115,9 @@ export default function GateActivityLog() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { padding: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+  headerText: { flex: 1 },
   headerTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: '#111827' },
   headerSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#6B7280', marginTop: 2 },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', margin: 20, marginBottom: 10, paddingHorizontal: 12, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', gap: 8 },

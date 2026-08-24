@@ -1,5 +1,4 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { Text } from '../../../src/components/ui/Text';
 import { theme } from '../../../src/theme';
@@ -12,6 +11,8 @@ import { useSession } from '../../../src/store/auth';
 import { useToast } from '../../../src/store/toast';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
 import { getPersonnelRoleLabel } from '../../../src/utils/personnel';
+import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
+import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal';
 
 export default function WorkforceDashboard() {
   const insets = useSafeAreaInsets();
@@ -19,24 +20,23 @@ export default function WorkforceDashboard() {
   const { logout } = useSession();
   const { showToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = React.useState(false);
 
-  const confirmLogout = () => {
+  const requestLogout = () => {
+    if (!isLoggingOut) setIsLogoutConfirmVisible(true);
+  };
+
+  const handleLogout = async () => {
     if (isLoggingOut) return;
-    Alert.alert('Log out?', 'You will need to sign in again to access staff operations.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          setIsLoggingOut(true);
-          try {
-            await logout();
-          } finally {
-            setIsLoggingOut(false);
-          }
-        },
-      },
-    ]);
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      showToast({ title: 'Could not log out', message: 'Please try again.', type: 'error' });
+    } finally {
+      setIsLoggingOut(false);
+      setIsLogoutConfirmVisible(false);
+    }
   };
 
   const { data, isLoading, isError, isRefetching, refetch } = useQuery({
@@ -65,22 +65,36 @@ export default function WorkforceDashboard() {
           Your workforce application is currently pending Manager approval.
         </Text>
         <Pressable
-          onPress={confirmLogout}
+          onPress={requestLogout}
           disabled={isLoggingOut}
           accessibilityRole="button"
           accessibilityLabel="Log out"
           accessibilityState={{ disabled: isLoggingOut }}
-          style={{ marginTop: 24, backgroundColor: '#F3F4F6', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          style={{ marginTop: 24, backgroundColor: '#FEF2F2', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FEE2E2' }}
         >
-          <Text style={{ fontFamily: 'PlusJakartaSans_600SemiBold', color: '#374151' }}>{isLoggingOut ? 'Logging out…' : 'Log out'}</Text>
+          <Text style={{ fontFamily: 'PlusJakartaSans_600SemiBold', color: '#EF4444' }}>{isLoggingOut ? 'Logging out…' : 'Logout'}</Text>
         </Pressable>
+        <ConfirmationModal
+          visible={isLogoutConfirmVisible}
+          onClose={() => setIsLogoutConfirmVisible(false)}
+          onConfirm={handleLogout}
+          title="Log out?"
+          message="Are you sure you want to log out?"
+          confirmLabel="Log out"
+          variant="danger"
+          confirmIcon="log-out"
+          loading={isLoggingOut}
+        />
       </View>
     );
   }
 
   const personnel = data?.personnelProfile;
   const { assignedTasks, todayAttendance } = data || {};
-  const activeTasks = assignedTasks?.filter((t: any) => t.status !== 'COMPLETED') || [];
+  const isSecurity = personnel?.category?.toUpperCase() === 'SECURITY';
+  const activeTasks = isSecurity ? [] : assignedTasks?.filter((t: any) => t.status !== 'COMPLETED') || [];
+  const urgentTasks = activeTasks.filter((task: any) => task.ticket.priority === 'HIGH');
+  const firstName = personnel?.name?.split(' ')[0] || 'Team member';
 
   const handleCheckIn = async () => {
     try {
@@ -108,47 +122,78 @@ export default function WorkforceDashboard() {
     }
   };
 
-  const isCheckedIn = todayAttendance?.checkIn && !todayAttendance?.checkOut;
+  const isCheckedIn = Boolean(todayAttendance?.checkIn && !todayAttendance?.checkOut);
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.hero, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>
-              {personnel?.name?.split(' ')[0] || 'Team Member'}
-            </Text>
-            <Text style={styles.subGreeting}>{getPersonnelRoleLabel(personnel)}</Text>
+            <Text style={styles.heroKicker}>REGENCY SALMA · SECURITY</Text>
+            <Text style={styles.greeting}>Good day, {firstName}</Text>
+            <Text style={styles.subGreeting}>{getPersonnelRoleLabel(personnel)} · {new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</Text>
           </View>
           <Pressable
             style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
-            onPress={confirmLogout}
+            onPress={requestLogout}
             disabled={isLoggingOut}
             accessibilityRole="button"
             accessibilityLabel="Log out"
             accessibilityState={{ disabled: isLoggingOut }}
             hitSlop={8}
           >
-            {isLoggingOut ? <ActivityIndicator size="small" color="#374151" /> : <Ionicons name="log-out-outline" size={20} color="#374151" />}
+            {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Ionicons name="log-out-outline" size={20} color="#EF4444" />}
           </Pressable>
         </View>
+        {!isSecurity && <View style={styles.heroStatus}>
+          <View style={styles.liveDot} />
+          <Text style={styles.heroStatusText}>{isCheckedIn ? 'On duty now' : 'Shift not started'}</Text>
+          <Text style={styles.heroStatusMeta}>{isCheckedIn ? `Since ${new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Check in to begin'}</Text>
+        </View>}
+        {!isSecurity && <View style={styles.heroMetrics}>
+          <View style={styles.heroMetric}>
+            <Text style={styles.heroMetricValue}>{activeTasks.length}</Text>
+            <Text style={styles.heroMetricLabel}>Open tasks</Text>
+          </View>
+          <View style={styles.heroMetricDivider} />
+          <View style={styles.heroMetric}>
+            <Text style={styles.heroMetricValue}>{urgentTasks.length}</Text>
+            <Text style={styles.heroMetricLabel}>Priority</Text>
+          </View>
+          <View style={styles.heroMetricDivider} />
+          <View style={styles.heroMetric}>
+            <Text style={styles.heroMetricValue}>{isCheckedIn ? 'IN' : 'OFF'}</Text>
+            <Text style={styles.heroMetricLabel}>Attendance</Text>
+          </View>
+        </View>}
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
       >
-        {/* Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attendance</Text>
-          <View style={styles.card}>
+        <ScreenEntrance delay={80}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Your shift</Text>
+                <Text style={styles.sectionHint}>Keep your attendance up to date</Text>
+              </View>
+              <View style={[styles.statusChip, isCheckedIn ? styles.statusChipActive : styles.statusChipIdle]}>
+                <Text style={[styles.statusChipText, isCheckedIn ? styles.statusChipTextActive : styles.statusChipTextIdle]}>{isCheckedIn ? 'Active' : 'Not started'}</Text>
+              </View>
+            </View>
+            <View style={styles.attendanceCard}>
             {isCheckedIn ? (
               <View style={styles.attendanceRow}>
-                <View>
+                <View style={styles.attendanceCopy}>
+                  <View style={styles.attendanceIcon}><Ionicons name="radio" size={18} color="#166534" /></View>
+                  <View>
                   <Text style={styles.attendanceStatus}>Checked In</Text>
                   <Text style={styles.attendanceTime}>
                     {new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
+                  </View>
                 </View>
                 <Pressable style={styles.buttonSecondary} onPress={handleCheckOut}>
                   <Text style={styles.buttonSecondaryText}>Check Out</Text>
@@ -156,48 +201,74 @@ export default function WorkforceDashboard() {
               </View>
             ) : (
               <View style={styles.attendanceRow}>
-                <View>
+                <View style={styles.attendanceCopy}>
+                  <View style={[styles.attendanceIcon, styles.attendanceIconIdle]}><Ionicons name="time-outline" size={18} color="#9A6700" /></View>
+                  <View>
                   <Text style={styles.attendanceStatus}>Not Checked In</Text>
                   <Text style={styles.attendanceTime}>Start your day</Text>
+                  </View>
                 </View>
                 <Pressable style={styles.buttonPrimary} onPress={handleCheckIn}>
                   <Text style={styles.buttonPrimaryText}>Check In</Text>
                 </Pressable>
               </View>
             )}
+            </View>
           </View>
-        </View>
+        </ScreenEntrance>
 
-        {/* Today's Tasks */}
+        {!isSecurity && <ScreenEntrance delay={140}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Tasks</Text>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Today’s tasks</Text>
+              <Text style={styles.sectionHint}>{activeTasks.length ? `${activeTasks.length} assignment${activeTasks.length === 1 ? '' : 's'} need your attention` : 'Nothing waiting on you'}</Text>
+            </View>
+            <Pressable onPress={() => router.push('/work/tasks')} hitSlop={8} style={styles.textButton}>
+              <Text style={styles.textButtonText}>View all</Text>
+              <Ionicons name="arrow-forward" size={15} color={theme.colors.primary} />
+            </Pressable>
+          </View>
           {activeTasks.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={{ color: '#6B7280' }}>No tasks assigned for today.</Text>
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIcon}><Ionicons name="checkmark-done" size={22} color="#166534" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyTitle}>All clear for now</Text>
+                <Text style={styles.emptyCopy}>New assignments will appear here.</Text>
+              </View>
             </View>
           ) : (
-            activeTasks.map((task: any) => (
+            activeTasks.slice(0, 3).map((task: any) => (
               <Pressable
                 key={task.id}
                 style={styles.taskCard}
                 onPress={() => router.push(`/work/tasks/${task.id}` as any)}
               >
+                <View style={[styles.taskAccent, task.ticket.priority === 'HIGH' && styles.taskAccentUrgent]} />
                 <View style={styles.taskHeader}>
-                  <Text style={styles.taskTitle} numberOfLines={1}>{task.ticket.title}</Text>
+                  <View style={styles.taskTitleRow}>
+                    <Ionicons name="construct-outline" size={18} color={theme.colors.primary} />
+                    <Text style={styles.taskTitle} numberOfLines={1}>{task.ticket.title}</Text>
+                  </View>
                   <View style={[styles.badge, { backgroundColor: task.ticket.priority === 'HIGH' ? '#FEE2E2' : '#FEF3C7' }]}>
                     <Text style={[styles.badgeText, { color: task.ticket.priority === 'HIGH' ? '#991B1B' : '#92400E' }]}>
                       {task.ticket.priority}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.taskLocation}>Unit {task.ticket.unitNumber}</Text>
-                <Text style={styles.taskStatus}>{task.status.replace('_', ' ')}</Text>
+                <View style={styles.taskMetaRow}>
+                  <Text style={styles.taskLocation}><Ionicons name="location-outline" size={13} color="#6B7280" /> Unit {task.ticket.unitNumber}</Text>
+                  <Text style={styles.taskStatus}>{task.status.replace('_', ' ')}</Text>
+                </View>
               </Pressable>
             ))
           )}
         </View>
+        </ScreenEntrance>}
 
-        {/* Gate Operations */}
+        {/* Operations */}
+        <ScreenEntrance delay={200}>
+        <View style={styles.operationsGrid}>
         <Pressable style={styles.historyCard} onPress={() => router.push('/work/visitors')}>
           <View style={styles.historyIcon}>
             <Ionicons name="shield-outline" size={20} color={theme.colors.primary} />
@@ -222,7 +293,7 @@ export default function WorkforceDashboard() {
         </Pressable>
 
         {/* Task History Link */}
-        <Pressable style={styles.historyCard} onPress={() => router.push('/work/tasks/history')}>
+        {!isSecurity && <Pressable style={styles.historyCard} onPress={() => router.push('/work/tasks/history')}>
           <View style={styles.historyIcon}>
             <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
           </View>
@@ -231,8 +302,21 @@ export default function WorkforceDashboard() {
             <Text style={styles.historyDesc}>View all tasks you have completed</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </Pressable>
+        </Pressable>}
+        </View>
+        </ScreenEntrance>
       </ScrollView>
+      <ConfirmationModal
+        visible={isLogoutConfirmVisible}
+        onClose={() => setIsLogoutConfirmVisible(false)}
+        onConfirm={handleLogout}
+        title="Logout?"
+        message="Are you sure you want to log out?"
+        confirmLabel="Logout"
+        variant="danger"
+        confirmIcon="log-out"
+        loading={isLoggingOut}
+      />
     </View>
   );
 }
@@ -240,7 +324,14 @@ export default function WorkforceDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F5F7F3',
+  },
+  hero: {
+    backgroundColor: '#143D2A',
+    paddingHorizontal: cardSystem.pagePadding,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   header: {
     paddingHorizontal: cardSystem.pagePadding,
@@ -254,38 +345,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: 22,
+    fontSize: 27,
+    lineHeight: 32,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#111827',
+    color: '#FFFFFF',
+    letterSpacing: -0.7,
+  },
+  heroKicker: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    color: '#B9D7C2',
+    marginBottom: 8,
   },
   subGreeting: {
     fontSize: 13,
     fontFamily: 'PlusJakartaSans_500Medium',
-    color: '#6B7280',
+    color: '#C6D9CC',
     marginTop: 4,
   },
+  heroStatus: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 22, paddingVertical: 8, paddingHorizontal: 11, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)' },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#A7F3D0', marginRight: 8 },
+  heroStatusText: { color: '#FFFFFF', fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12 },
+  heroStatusMeta: { color: '#B9D7C2', fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, marginLeft: 8 },
+  heroMetrics: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
+  heroMetric: { flex: 1 },
+  heroMetricValue: { color: '#FFFFFF', fontSize: 24, lineHeight: 28, fontFamily: 'PlusJakartaSans_700Bold', letterSpacing: -0.4 },
+  heroMetricLabel: { color: '#B9D7C2', fontSize: 11, fontFamily: 'PlusJakartaSans_500Medium', marginTop: 4 },
+  heroMetricDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.18)', marginHorizontal: 12 },
   logoutBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
   content: {
     paddingHorizontal: cardSystem.pagePadding,
-    paddingVertical: 20,
-    paddingBottom: 40,
+    paddingTop: 24,
+    paddingBottom: 48,
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#374151',
-    marginBottom: 12,
+    color: '#14251C',
+    letterSpacing: -0.3,
   },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
+  sectionHint: { color: '#6B7C70', fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', marginTop: 4 },
+  textButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingLeft: 8 },
+  textButtonText: { color: theme.colors.primary, fontSize: 12, fontFamily: 'PlusJakartaSans_700Bold' },
+  statusChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  statusChipActive: { backgroundColor: '#DDF6E7' },
+  statusChipIdle: { backgroundColor: '#FFF2CC' },
+  statusChipText: { fontSize: 11, fontFamily: 'PlusJakartaSans_700Bold' },
+  statusChipTextActive: { color: '#166534' },
+  statusChipTextIdle: { color: '#8A5A00' },
+  attendanceCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: '#E1E9E2', shadowColor: '#143D2A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
+  attendanceCopy: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  attendanceIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DCFCE7' },
+  attendanceIconIdle: { backgroundColor: '#FFF3CD' },
+  emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#E1E9E2' },
+  emptyIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { color: '#14251C', fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14 },
+  emptyCopy: { color: '#6B7C70', fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, marginTop: 3 },
   availabilityCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -330,11 +459,11 @@ const styles = StyleSheet.create({
   attendanceStatus: {
     fontSize: 14,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#111827',
+    color: '#14251C',
   },
   attendanceTime: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#6B7C70',
     marginTop: 2,
   },
   buttonPrimary: {
@@ -365,12 +494,24 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
+    paddingLeft: 20,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E1E9E2',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
+  taskAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#78B98B' },
+  taskAccentUrgent: { backgroundColor: '#D27D67' },
+  taskTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  taskMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -380,7 +521,7 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#111827',
+    color: '#14251C',
     flex: 1,
   },
   badge: {
@@ -395,36 +536,40 @@ const styles = StyleSheet.create({
   },
   taskLocation: {
     fontSize: 13,
-    color: '#4B5563',
+    color: '#6B7C70',
     marginBottom: 8,
   },
   taskStatus: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#6B7C70',
     fontFamily: 'PlusJakartaSans_500Medium',
   },
   historyCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E1E9E2',
     gap: 12,
+    flex: 1,
+    minHeight: 92,
   },
+  operationsGrid: { flexDirection: 'row', gap: 12, marginBottom: 14 },
   historyIcon: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E4F2E7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   historyTitle: {
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#111827',
+    color: '#14251C',
     marginBottom: 2,
   },
   historyDesc: {

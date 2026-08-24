@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { Text } from '../../../src/components/ui/Text';
 import { theme } from '../../../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSession } from '../../../src/store/auth';
 import { getPersonnelRoleLabel } from '../../../src/utils/personnel';
+import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal';
 
 type Availability = 'AVAILABLE' | 'BUSY' | 'OFF_DUTY';
 
@@ -25,6 +26,7 @@ export default function WorkProfileScreen() {
   const { logout, user } = useSession();
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['workforce-dashboard'],
@@ -48,24 +50,21 @@ export default function WorkProfileScreen() {
 
   const personnel = data?.personnelProfile;
   const todayAttendance = data?.todayAttendance;
+  const isSecurity = personnel?.category?.toUpperCase() === 'SECURITY';
 
-  const confirmLogout = () => {
+  const requestLogout = () => {
+    if (!isLoggingOut) setIsLogoutConfirmVisible(true);
+  };
+
+  const handleLogout = async () => {
     if (isLoggingOut) return;
-    Alert.alert('Log out?', 'You will need to sign in again to access staff operations.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          setIsLoggingOut(true);
-          try {
-            await logout();
-          } finally {
-            setIsLoggingOut(false);
-          }
-        },
-      },
-    ]);
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+      setIsLogoutConfirmVisible(false);
+    }
   };
 
   const formatTime = (iso?: string | null) =>
@@ -98,7 +97,7 @@ export default function WorkProfileScreen() {
             </View>
 
             {/* Duty Status */}
-            <View style={styles.section}>
+            {!isSecurity && <View style={styles.section}>
               <Text style={styles.sectionTitle}>Duty Status</Text>
               <View style={styles.card}>
                 <View style={styles.availabilityRow}>
@@ -119,7 +118,7 @@ export default function WorkProfileScreen() {
                   })}
                 </View>
               </View>
-            </View>
+            </View>}
 
             {/* Today's Attendance */}
             <View style={styles.section}>
@@ -138,7 +137,7 @@ export default function WorkProfileScreen() {
             </View>
 
             {/* Links */}
-            <View style={styles.section}>
+            {!isSecurity && <View style={styles.section}>
               <Text style={styles.sectionTitle}>Work</Text>
               <View style={styles.linksCard}>
                 <Pressable style={styles.linkRow} onPress={() => router.push('/work/tasks/history')}>
@@ -152,14 +151,14 @@ export default function WorkProfileScreen() {
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
                 </Pressable>
               </View>
-            </View>
+            </View>}
 
             {/* Account */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Account</Text>
               <Pressable
                 style={[styles.logoutButton, isLoggingOut && { opacity: 0.6 }]}
-                onPress={confirmLogout}
+                onPress={requestLogout}
                 disabled={isLoggingOut}
                 accessibilityRole="button"
                 accessibilityLabel="Log out"
@@ -172,6 +171,17 @@ export default function WorkProfileScreen() {
           </>
         )}
       </ScrollView>
+      <ConfirmationModal
+        visible={isLogoutConfirmVisible}
+        onClose={() => setIsLogoutConfirmVisible(false)}
+        onConfirm={handleLogout}
+        title="Log out?"
+        message="Are you sure you want to log out?"
+        confirmLabel="Log out"
+        variant="danger"
+        confirmIcon="log-out"
+        loading={isLoggingOut}
+      />
     </View>
   );
 }

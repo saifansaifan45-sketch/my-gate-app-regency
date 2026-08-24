@@ -9,6 +9,7 @@ import { CapabilityInspector } from '../../src/components/debug/CapabilityInspec
 import { WelcomeHomeAnimation } from '../../src/components/welcome-home-animation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef } from 'react';
+import { api } from '../../src/api/client';
 
 interface BouncyTabProps {
   activeIcon: keyof typeof Ionicons.glyphMap;
@@ -220,6 +221,13 @@ function CustomTabBar({ state, navigation }: any) {
   const isLeadershipMode = hasLeadershipAccess() && !hasResidentAccess() && !hasOwnerAccess();
   const isManagerMode = hasManagerAccess() && !isLeadershipMode && !hasResidentAccess() && !hasOwnerAccess();
   const isWorkforceMode = hasApprovedMembership('WORKFORCE') && !hasManagerAccess() && !hasLeadershipAccess() && !hasResidentAccess() && !hasOwnerAccess();
+  const { data: workforceData } = useQuery({
+    queryKey: ['workforce-dashboard'],
+    queryFn: async () => (await api.get('/work/dashboard')).data,
+    enabled: isWorkforceMode,
+    staleTime: 60_000,
+  });
+  const isSecurity = workforceData?.personnelProfile?.category?.toUpperCase() === 'SECURITY';
 
   const entranceOpacity = useRef(new Animated.Value(0)).current;
   const entranceTranslateY = useRef(new Animated.Value(18)).current;
@@ -309,13 +317,13 @@ function CustomTabBar({ state, navigation }: any) {
               isFocused={getIsFocused('work/index')}
               onPress={() => handleTabPress('work/index')}
             />
-            <BouncyTabItem
+            {!isSecurity && <BouncyTabItem
               activeIcon="construct"
               inactiveIcon="construct-outline"
               label="Tasks"
               isFocused={getIsFocused('work/tasks/index')}
               onPress={() => handleTabPress('work/tasks/index')}
-            />
+            />}
             <BouncyTabItem
               activeIcon="calendar"
               inactiveIcon="calendar-outline"
@@ -563,7 +571,7 @@ export default function AppLayout() {
         <Tabs.Screen name="quick-actions" options={{ href: null }} />
         <Tabs.Screen name="announcements" options={{ href: null }} />
         <Tabs.Screen name="my-home" options={{ href: null }} />
-        <Tabs.Screen name="calendar" options={{ href: null }} />
+        {/* Calendar disabled until event storage and API support are available. */}
         <Tabs.Screen name="activity-overview" options={{ href: null }} />
         <Tabs.Screen name="activity-log" options={{ href: null }} />
         <Tabs.Screen name="help-desk" options={{ href: null }} />

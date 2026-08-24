@@ -29,6 +29,11 @@ export default function WorkTaskDetailScreen() {
   });
 
   const task = data?.assignedTasks?.find((t: any) => t.id === id);
+  const isSecurity = data?.personnelProfile?.category?.toUpperCase() === 'SECURITY';
+
+  React.useEffect(() => {
+    if (isSecurity) router.replace('/work/visitors');
+  }, [isSecurity, router]);
 
   const handleComplete = async () => {
     if (!notes.trim()) {
@@ -49,7 +54,7 @@ export default function WorkTaskDetailScreen() {
     }
   };
 
-  if (isLoading || !task) {
+  if (isLoading || !task || isSecurity) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FAFAFA', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -71,6 +76,10 @@ export default function WorkTaskDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.infoCard}>
+          <View style={styles.detailTopline}>
+            <View style={styles.detailIcon}><Ionicons name="construct-outline" size={22} color={theme.colors.primary} /></View>
+            <View style={styles.detailStatus}><Text style={styles.detailStatusText}>{task.status.replace('_', ' ')}</Text></View>
+          </View>
           <Text style={styles.title}>{task.ticket.title}</Text>
           <Text style={styles.description}>{task.ticket.description}</Text>
           
@@ -84,10 +93,6 @@ export default function WorkTaskDetailScreen() {
             <Text style={styles.metaValue}>{task.ticket.residentName}</Text>
           </View>
 
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Status</Text>
-            <Text style={styles.metaValue}>{task.status.replace('_', ' ')}</Text>
-          </View>
         </View>
 
         {!isCompleted ? (
@@ -102,12 +107,6 @@ export default function WorkTaskDetailScreen() {
               multiline
             />
             
-            <Text style={styles.inputLabel}>Photos (Optional)</Text>
-            <Pressable style={styles.photoButton}>
-              <Ionicons name="camera-outline" size={24} color="#6B7280" />
-              <Text style={styles.photoButtonText}>Add Photos</Text>
-            </Pressable>
-
             <Pressable 
               style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
               onPress={handleComplete}
@@ -172,6 +171,10 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     marginBottom: 24,
   },
+  detailTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  detailIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#E4F2E7', alignItems: 'center', justifyContent: 'center' },
+  detailStatus: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: '#E4F2E7' },
+  detailStatusText: { color: '#166534', fontSize: 11, fontFamily: 'PlusJakartaSans_700Bold' },
   title: {
     fontSize: 20,
     fontFamily: 'PlusJakartaSans_700Bold',

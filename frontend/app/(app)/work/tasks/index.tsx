@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { Text } from '../../../../src/components/ui/Text';
 import { theme } from '../../../../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ export default function WorkTasksScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isRefetching, refetch, isError } = useQuery({
     queryKey: ['workforce-dashboard'],
     queryFn: async () => {
       const res = await api.get('/work/dashboard');
@@ -29,22 +29,49 @@ export default function WorkTasksScreen() {
   }
 
   const tasks = data?.assignedTasks || [];
+  const activeTasks = tasks.filter((task: any) => task.status !== 'COMPLETED');
+  const urgentTasks = activeTasks.filter((task: any) => task.ticket.priority === 'HIGH');
+  const isSecurity = data?.personnelProfile?.category?.toUpperCase() === 'SECURITY';
+
+  React.useEffect(() => {
+    if (isSecurity) router.replace('/work/visitors');
+  }, [isSecurity, router]);
+
+  if (isSecurity) return <View style={styles.container} />;
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Tasks</Text>
+        <View>
+          <Text style={styles.kicker}>FIELD WORK QUEUE</Text>
+          <Text style={styles.headerTitle}>My tasks</Text>
+          <Text style={styles.headerSubtitle}>{activeTasks.length ? `${activeTasks.length} open assignment${activeTasks.length === 1 ? '' : 's'}` : 'Your queue is clear'}</Text>
+        </View>
         <Pressable style={styles.historyBtn} onPress={() => router.push('/work/tasks/history')} hitSlop={8}>
-          <Ionicons name="time-outline" size={18} color={theme.colors.primary} />
+          <Ionicons name="time-outline" size={17} color={theme.colors.primary} />
           <Text style={styles.historyBtnText}>History</Text>
         </Pressable>
       </View>
+      <View style={styles.summaryStrip}>
+        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{activeTasks.length}</Text><Text style={styles.summaryLabel}>Open</Text></View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{urgentTasks.length}</Text><Text style={styles.summaryLabel}>Priority</Text></View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{tasks.length - activeTasks.length}</Text><Text style={styles.summaryLabel}>Done</Text></View>
+      </View>
       
-      <ScrollView contentContainerStyle={styles.content}>
-        {tasks.length === 0 ? (
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}>
+        {isError ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="cloud-offline-outline" size={42} color="#A15C4B" />
+            <Text style={styles.emptyText}>Tasks could not load</Text>
+            <Pressable onPress={() => refetch()} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable>
+          </View>
+        ) : tasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-done-circle-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyText}>All caught up for today!</Text>
+            <Text style={styles.emptyText}>All clear for today</Text>
+            <Text style={styles.emptySubtext}>New assignments will appear here when they are sent to you.</Text>
           </View>
         ) : (
           tasks.map((task: any) => (
@@ -53,16 +80,23 @@ export default function WorkTasksScreen() {
               style={styles.taskCard}
               onPress={() => router.push(`/work/tasks/${task.id}`)}
             >
+              <View style={[styles.priorityRail, task.ticket.priority === 'HIGH' && styles.priorityRailHigh]} />
               <View style={styles.taskHeader}>
-                <Text style={styles.taskTitle}>{task.ticket.title}</Text>
+                <View style={styles.titleLine}>
+                  <View style={styles.taskIcon}><Ionicons name="construct-outline" size={17} color={theme.colors.primary} /></View>
+                  <Text style={styles.taskTitle}>{task.ticket.title}</Text>
+                </View>
                 <View style={[styles.badge, { backgroundColor: task.ticket.priority === 'HIGH' ? '#FEE2E2' : '#FEF3C7' }]}>
                   <Text style={[styles.badgeText, { color: task.ticket.priority === 'HIGH' ? '#991B1B' : '#92400E' }]}>
                     {task.ticket.priority}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.taskLocation}>📍 {task.ticket.unitNumber}</Text>
-              <Text style={styles.taskStatus}>{task.status.replace('_', ' ')}</Text>
+              <View style={styles.taskMeta}>
+                <Text style={styles.taskLocation}><Ionicons name="location-outline" size={14} color="#6B7C70" /> Unit {task.ticket.unitNumber}</Text>
+                <Text style={[styles.taskStatus, task.status === 'COMPLETED' && styles.taskStatusDone]}>{task.status.replace('_', ' ')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#A2B0A5" style={styles.chevron} />
             </Pressable>
           ))
         )}
@@ -74,24 +108,26 @@ export default function WorkTasksScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F5F7F3',
   },
   header: {
     paddingHorizontal: 24,
-    paddingVertical: 16,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingTop: 24,
+    paddingBottom: 18,
+    backgroundColor: '#143D2A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
   },
+  kicker: { fontSize: 10, letterSpacing: 1.2, color: '#B9D7C2', fontFamily: 'PlusJakartaSans_700Bold', marginBottom: 7 },
+  headerSubtitle: { color: '#C6D9CC', fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', marginTop: 5 },
   historyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E4F2E7',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 98,
@@ -102,18 +138,29 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: 'PlusJakartaSans_700Bold',
-    color: '#111827',
+    color: '#FFFFFF',
+    letterSpacing: -0.7,
   },
+  summaryStrip: { marginHorizontal: 24, marginTop: -1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderWidth: 1, borderColor: '#E1E9E2', shadowColor: '#143D2A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  summaryItem: { alignItems: 'center', minWidth: 62 },
+  summaryValue: { color: '#143D2A', fontSize: 21, fontFamily: 'PlusJakartaSans_700Bold' },
+  summaryLabel: { color: '#6B7C70', fontSize: 11, fontFamily: 'PlusJakartaSans_500Medium', marginTop: 3 },
+  summaryDivider: { width: 1, height: 28, backgroundColor: '#E1E9E2' },
   content: {
     padding: 24,
+    paddingTop: 20,
+    paddingBottom: 48,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 60,
   },
+  emptySubtext: { color: '#6B7C70', fontSize: 13, fontFamily: 'PlusJakartaSans_400Regular', textAlign: 'center', marginTop: 8, maxWidth: 270, lineHeight: 19 },
+  retryButton: { marginTop: 16, backgroundColor: '#E4F2E7', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  retryText: { color: '#143D2A', fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13 },
   emptyText: {
     fontSize: 16,
     color: '#6B7280',
@@ -122,12 +169,22 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 16,
     padding: 16,
+    paddingLeft: 20,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E1E9E2',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
+  priorityRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#78B98B' },
+  priorityRailHigh: { backgroundColor: '#D27D67' },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -137,9 +194,11 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    color: '#111827',
+    color: '#14251C',
     flex: 1,
   },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  taskIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#E4F2E7', alignItems: 'center', justifyContent: 'center' },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -152,12 +211,14 @@ const styles = StyleSheet.create({
   },
   taskLocation: {
     fontSize: 14,
-    color: '#4B5563',
-    marginBottom: 8,
+    color: '#6B7C70',
   },
+  taskMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: '#EEF2EE' },
   taskStatus: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#6B7C70',
     fontFamily: 'PlusJakartaSans_500Medium',
   },
+  taskStatusDone: { color: '#166534' },
+  chevron: { position: 'absolute', right: 14, bottom: 16 },
 });
