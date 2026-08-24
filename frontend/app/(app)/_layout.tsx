@@ -9,6 +9,7 @@ import { WelcomeHomeAnimation } from '../../src/components/welcome-home-animatio
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../src/api/client';
+import { QuickActionsRadial } from '../../src/components/ui/QuickActionsRadial';
 
 interface BouncyTabProps {
   activeIcon: keyof typeof Ionicons.glyphMap;
@@ -134,82 +135,6 @@ function BouncyTabItem({ activeIcon, inactiveIcon, label, isFocused, onPress }: 
         </Text>
       </Animated.View>
     </Pressable>
-  );
-}
-
-function BouncyCenterButton({ onPress }: { onPress: () => void }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scale, {
-        toValue: 0.95,
-        friction: 9,
-        tension: 240,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.timing(translateY, {
-        toValue: 3,
-        duration: 70,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.parallel([
-      Animated.sequence([
-        Animated.spring(scale, {
-          toValue: 1.06,
-          friction: 9,
-          tension: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          friction: 10,
-          tension: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]),
-      Animated.spring(translateY, {
-        toValue: 0,
-        friction: 9,
-        tension: 200,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start();
-  };
-
-  return (
-    <View style={styles.centerSlot}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Quick actions"
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.centerPressable}
-      >
-        <Animated.View
-          style={[
-            styles.centerButton,
-            {
-              transform: [{ scale }, { translateY }],
-            },
-          ]}
-        >
-          <View style={styles.centerDots}>
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
-        </Animated.View>
-      </Pressable>
-      <Text style={styles.centerLabel}>Quick</Text>
-    </View>
   );
 }
 
@@ -438,7 +363,7 @@ function CustomTabBar({ state, navigation }: any) {
               onPress={() => handleTabPress('community')}
             />
 
-            <BouncyCenterButton onPress={() => navigation.navigate('quick-actions')} />
+            <QuickActionsRadial />
 
             <BouncyTabItem
               activeIcon="grid"
@@ -671,54 +596,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 3,
     letterSpacing: -0.05,
-  },
-  centerSlot: {
-    width: 64,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
-    paddingBottom: 2,
-    position: 'relative',
-  },
-  centerPressable: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: -22,
-  },
-  centerButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.82)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  centerLabel: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 10,
-    color: theme.colors.primary,
-    letterSpacing: -0.05,
-  },
-  centerDots: {
-    width: 22,
-    height: 22,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignContent: 'space-between',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
   },
 });
