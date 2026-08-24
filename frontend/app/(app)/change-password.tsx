@@ -8,6 +8,7 @@ import { Button } from '../../src/components/ui/Button';
 import { theme } from '../../src/theme';
 import { cardSystem } from '../../src/components/ui/cardSystem';
 import { api } from '../../src/api/client';
+import { smartBack } from '../../src/navigation/history';
 import { useToast } from '../../src/store/toast';
 import { useSession } from '../../src/store/auth';
 
@@ -52,7 +53,7 @@ export default function ChangePasswordScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader variant="subscreen" title="Change Password" onBackPress={() => router.back()} />
+      <AppHeader variant="subscreen" title="Change Password" onBackPress={() => smartBack(router, '/profile-settings')} />
       <ScrollView contentContainerStyle={styles.content}>
         
         {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}

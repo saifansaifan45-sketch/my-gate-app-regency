@@ -10,6 +10,7 @@ import { communityApi, CommunityAnnouncement } from '../../../src/api/community'
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
+import { smartBack } from '../../../src/navigation/history';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 
 
@@ -48,7 +49,7 @@ export default function AnnouncementDetailScreen() {
   if (!announcementId) {
     return (
       <View style={styles.container}>
-        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => router.back()} />
+        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <EmptyState icon="file-text" title="Not Found" description="The announcement ID is missing." />
       </View>
     );
@@ -57,7 +58,7 @@ export default function AnnouncementDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => router.back()} />
+        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
@@ -69,7 +70,7 @@ export default function AnnouncementDetailScreen() {
     const errorMsg = (error as any)?.response?.data?.error?.message || 'Could not load announcement';
     return (
       <View style={styles.container}>
-        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => router.back()} />
+        <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <View style={styles.centerContainer}>
           <EmptyState 
             icon="alert-circle" 
@@ -108,7 +109,7 @@ export default function AnnouncementDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader variant="subscreen" title="Announcement" onBackPress={() => router.back()} />
+      <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
       
       <ScrollView 
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}

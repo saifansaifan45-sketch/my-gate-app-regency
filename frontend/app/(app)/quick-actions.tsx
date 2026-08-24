@@ -8,6 +8,7 @@ import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { useSession } from '../../src/store/auth';
 import { SERVICE_CATALOG } from '../../src/registry/services';
 import { theme } from '../../src/theme';
+import { smartBack } from '../../src/navigation/history';
 
 export default function QuickActionsScreen() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function QuickActionsScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader variant="subscreen" title="All Quick Actions" onBackPress={() => router.back()} />
+      <AppHeader variant="subscreen" title="All Quick Actions" onBackPress={() => smartBack(router, '/home')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
           {availableServices.map(service => (
