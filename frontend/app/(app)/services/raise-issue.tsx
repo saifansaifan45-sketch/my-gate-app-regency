@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
+import { smartBack } from '../../../src/navigation/history';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
 import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
@@ -9,41 +10,75 @@ import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
-import { ISSUE_CATEGORIES, addIssue } from '../../../src/store/issues';
+import { ISSUE_CATEGORIES } from '../../../src/store/issues';
+import { ticketsApi } from '../../../src/api/tickets';
+import { useToast } from '../../../src/store/toast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { HomeDashboardData, homeDashboardQueryKey } from '../../../src/api/home-dashboard';
+import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function RaiseIssueScreen() {
   const router = useRouter();
   const { bottom, bottomClearance } = useScreenInsets(false);
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [category, setCategory] = useState(ISSUE_CATEGORIES[0].id);
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = description.trim().length > 0;
 
-  const handleSubmit = () => {
+  const createTicketMutation = useMutation({
+    mutationFn: ticketsApi.createTicket,
+    onSuccess: async (ticket) => {
+      queryClient.setQueryData<HomeDashboardData>(homeDashboardQueryKey, (current) =>
+        current ? { ...current, tickets: [ticket, ...current.tickets] } : current
+      );
+      await queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
+    },
+  });
+
+  const handleSubmit = async () => {
     if (!canSubmit) return;
+    setSubmitting(true);
     const cat = ISSUE_CATEGORIES.find((c) => c.id === category)!;
-    addIssue({
-      id: `REQ-${Math.floor(1000 + Math.random() * 9000)}`,
-      category: cat.id,
-      icon: cat.icon,
-      title: description.trim(),
-      status: 'Open',
-      time: 'Just now',
-    });
-    router.back();
+
+    try {
+      await createTicketMutation.mutateAsync({
+        category: cat.id,
+        title: description.trim().split('\n')[0].slice(0, 50),
+        description: description.trim(),
+        priority: 'MEDIUM',
+      });
+
+      showToast({
+        title: 'Ticket raised successfully',
+        message: 'Your help desk ticket has been sent to the management team.',
+        type: 'success',
+      });
+      smartBack(router, '/services');
+    } catch {
+      showToast({
+        title: 'Submission Failed',
+        message: 'Unable to raise your help desk ticket. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       <AppHeader
         variant="subscreen"
-        title="Raise an Issue"
-        onBackPress={() => router.canGoBack() ? router.back() : router.replace('/services/maintenance')}
+        title="Help Desk"
+        onBackPress={() => smartBack(router, '/services/maintenance')}
       />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 60 }]} showsVerticalScrollIndicator={false}>
         <ScreenEntrance delay={50}>
-          <Text style={styles.sectionLabel}>What needs attention?</Text>
+          <Text style={styles.sectionLabel}>What can we help with?</Text>
 
           <View style={styles.categoryGrid}>
             {ISSUE_CATEGORIES.map((cat, index) => {
@@ -70,7 +105,7 @@ export default function RaiseIssueScreen() {
         </ScreenEntrance>
 
         <ScreenEntrance delay={200}>
-          <Text style={styles.sectionLabel}>Describe the issue</Text>
+          <Text style={styles.sectionLabel}>Tell us more</Text>
           <View style={styles.inputWrap}>
             <TextInput
               style={styles.input}
@@ -87,7 +122,7 @@ export default function RaiseIssueScreen() {
       </ScrollView>
 
       <View style={[styles.bottomAction, { paddingBottom: Math.max(bottom, 16) }]}>
-        <Button label="Raise Issue" onPress={handleSubmit} disabled={!canSubmit} />
+        <Button label="Raise ticket" onPress={handleSubmit} disabled={!canSubmit} loading={submitting} />
       </View>
     </View>
   );
@@ -99,7 +134,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: cardSystem.pagePadding,
     paddingTop: 8,
   },
   sectionLabel: {
@@ -127,7 +162,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
     padding: 16,
@@ -140,7 +175,7 @@ const styles = StyleSheet.create({
   categoryIcon: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -159,7 +194,7 @@ const styles = StyleSheet.create({
   },
   inputWrap: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
     padding: 16,

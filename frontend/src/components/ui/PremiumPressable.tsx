@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Pressable, Animated, PressableProps, StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
+import { Platform, Pressable, Animated, PressableProps, StyleProp, ViewStyle, GestureResponderEvent, StyleSheet } from 'react-native';
 
 interface PremiumPressableProps extends PressableProps {
   children: React.ReactNode;
@@ -9,7 +9,7 @@ interface PremiumPressableProps extends PressableProps {
   pressTranslateY?: number;
 }
 
-export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacity = 0.8, pressTranslateY = 0, onPressIn, onPressOut, ...props }: PremiumPressableProps) {
+export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacity = 0.9, pressTranslateY = 1, onPressIn, onPressOut, ...props }: PremiumPressableProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -17,13 +17,13 @@ export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacit
     Animated.parallel([
       Animated.spring(scale, {
         toValue: scaleTo,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
         speed: 40,
         bounciness: 0,
       }),
       Animated.spring(translateY, {
         toValue: pressTranslateY,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
         speed: 40,
         bounciness: 0,
       }),
@@ -34,13 +34,13 @@ export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacit
   const handlePressOut = (e: GestureResponderEvent) => {
     Animated.spring(scale, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
       speed: 40,
       bounciness: 0,
     }).start();
     Animated.spring(translateY, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
       speed: 40,
       bounciness: 0,
     }).start();
@@ -55,8 +55,9 @@ export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacit
     >
       {({ pressed }) => (
         <Animated.View style={[
+          styles.touchTarget,
           typeof style === 'function' ? style({ pressed }) : style,
-          { transform: [{ scale }, { translateY }], opacity: pressed ? activeOpacity : 1 }
+          { transform: [{ scale }, { translateY }], opacity: pressed ? activeOpacity : 1 },
         ]}>
           {typeof children === 'function' ? (children as any)({ pressed }) : children}
         </Animated.View>
@@ -64,3 +65,12 @@ export function PremiumPressable({ children, style, scaleTo = 0.98, activeOpacit
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  touchTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

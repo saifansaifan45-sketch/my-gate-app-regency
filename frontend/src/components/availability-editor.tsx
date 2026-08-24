@@ -61,7 +61,7 @@ export function AvailabilityEditor() {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: '#F9F7F2',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 4,
     marginBottom: 16,
   },
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 6,
   },
   segmentActive: {
     backgroundColor: '#FFF',
@@ -100,12 +100,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#E8F5E9',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   dotGreen: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 2,
     backgroundColor: theme.colors.primary,
     marginRight: 10,
   },
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   editorBox: {
     backgroundColor: '#FFF3E0',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   editorLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   dateLabel: {
     fontFamily: 'PlusJakartaSans_500Medium',
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: '#FFF',
   },
   clearBtnText: {
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: theme.colors.accent,
-    borderRadius: 20,
+    borderRadius: 18,
   },
   saveBtnText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',

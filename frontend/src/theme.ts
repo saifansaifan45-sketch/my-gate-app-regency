@@ -1,8 +1,13 @@
+import { shadowBox } from './utils/shadow';
+
 export const theme = {
   colors: {
     primary: '#143D2A', // Deep Hunter Green
+    primaryPressed: '#0F3021',
     background: '#F9F7F2', // Warm Off-White / Cream
     surface: '#FFFFFF',
+    surfaceMuted: '#F1F0EA',
+    surfacePressed: '#E8E7DF',
     textPrimary: '#111827', // Crisp Dark Charcoal
     textSecondary: '#6B7280', // Slate Gray
     accent: '#D27D67', // Muted Terracotta
@@ -11,6 +16,7 @@ export const theme = {
     success: '#10B981',
     successBackground: '#D1FAE5',
     border: '#E5E7EB',
+    focus: '#2C6B4A',
   },
   spacing: {
     xs: 4,
@@ -81,19 +87,7 @@ export const theme = {
     },
   },
   shadows: {
-    card: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.04,
-      shadowRadius: 12,
-      elevation: 2,
-    },
-    floating: {
-      shadowColor: '#143D2A',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.16,
-      shadowRadius: 20,
-      elevation: 8,
-    },
+    card: shadowBox('#143D2A', 0, 5, 0.07, 14, 2),
+    floating: shadowBox('#143D2A', 0, 8, 0.16, 20, 8),
   },
 };

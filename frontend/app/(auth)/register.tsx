@@ -1,780 +1,407 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { Text } from '../../src/components/ui/Text';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
-import { RoleSelector } from '../../src/components/ui/RoleSelector';
-import { ProgressDots } from '../../src/components/ui/ProgressDots';
 import { AnimatedEntrance } from '../../src/components/ui/AnimatedEntrance';
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { theme } from '../../src/theme';
 import { useSession } from '../../src/store/auth';
-
-interface ApiError {
-  response?: {
-    data?: {
-      error?: {
-        message?: string;
-      };
-    };
-  };
-  message?: string;
-}
-
-const FLOORS = ['G', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-const ROOMS = ['A', 'B'];
-
-function floorLabel(floor: string) {
-  return floor === 'G' ? 'Ground Floor' : `Floor ${floor}`;
-}
-
-function AnimatedCheck({ visible, color }: { visible: boolean; color: string }) {
-  const scale = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(scale, {
-      toValue: visible ? 1 : 0,
-      speed: 26,
-      bounciness: 10,
-      useNativeDriver: true,
-    }).start();
-  }, [visible, scale]);
-
-  return (
-    <Animated.View style={{ opacity: scale, transform: [{ scale }] }}>
-      <Feather name="check" size={18} color={color} />
-    </Animated.View>
-  );
-}
-
-interface PickerFieldProps {
-  label: string;
-  value: string;
-  placeholder?: boolean;
-  onPress: () => void;
-}
-
-function PickerField({
-  label,
-  value,
-  placeholder,
-  onPress,
-}: PickerFieldProps) {
-  return (
-    <View style={styles.pickerField}>
-      <Text style={styles.pickerFieldLabel}>{label}</Text>
-
-      <PremiumPressable
-        onPress={onPress}
-        scaleTo={0.97}
-        activeOpacity={0.92}
-        style={styles.pickerFieldControl}
-      >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}
-          style={[
-            styles.pickerFieldValue,
-            placeholder && styles.pickerFieldValuePlaceholder,
-          ]}
-        >
-          {value}
-        </Text>
-
-        <Feather
-          name="chevron-down"
-          size={18}
-          color={theme.colors.textSecondary}
-        />
-      </PremiumPressable>
-    </View>
-  );
-}
+import { FormError } from '../../src/components/ui/FormError';
+import { parseApiError } from '../../src/utils/api-error';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { register: performRegister } = useSession();
 
-  const [role, setRole] = useState<'owner' | 'tenant'>('owner');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [floor, setFloor] = useState('');
-  const [room, setRoom] = useState('');
-  const [showFloorPicker, setShowFloorPicker] = useState(false);
-  const [showRoomPicker, setShowRoomPicker] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [apiError, setApiError] = useState('');
 
-  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isEmailValid = (v: string) => EMAIL_REGEX.test(v);
+  // Field Touched State
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const hasMinLength = password.length >= 8;
-  const hasLettersAndDigits =
-    /[A-Za-z]/.test(password) && /\d/.test(password);
-  const passwordValid = hasMinLength && hasLettersAndDigits;
+  // Field Errors State
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const emailTouchedInvalid = email.length > 0 && !isEmailValid(email);
-  const confirmMismatch =
-    confirmPassword.length > 0 && password !== confirmPassword;
+  // Validators
+  const validateField = (field: string, value: string): string => {
+    switch (field) {
+      case 'fullName': {
+        const trimmed = value.trim();
+        if (!trimmed) return 'Full name is required.';
+        if (trimmed.length < 2) return 'Full name must be at least 2 characters.';
+        if (!/^[a-zA-Z\s]+$/.test(trimmed)) return 'Full name must contain only letters and spaces.';
+        return '';
+      }
+      case 'email': {
+        const trimmed = value.trim();
+        if (!trimmed) return 'Email address is required.';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Please enter a valid email address.';
+        return '';
+      }
+      case 'phoneNumber': {
+        const trimmed = value.trim();
+        if (!trimmed) return 'Phone number is required.';
+        if (!/^[0-9]+$/.test(trimmed)) return 'Phone number must contain only numbers.';
+        if (trimmed.length < 10) return 'Phone number must be at least 10 digits.';
+        return '';
+      }
+      case 'password': {
+        if (!value) return 'Password is required.';
+        if (value.length < 8) return 'Password must be at least 8 characters.';
+        if (!/(?=.*[A-Za-z])(?=.*\d)/.test(value)) return 'Password must contain at least one letter and one number.';
+        return '';
+      }
+      case 'confirmPassword': {
+        if (!value) return 'Please confirm your password.';
+        if (value !== password) return 'Passwords do not match.';
+        return '';
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleBlur = (field: string, value: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const err = validateField(field, value);
+    setErrors((prev) => ({ ...prev, [field]: err }));
+  };
+
+  const handleChange = (field: string, value: string, setter: (v: string) => void) => {
+    setter(value);
+    if (apiError) setApiError('');
+    if (touched[field]) {
+      const err = validateField(field, value);
+      setErrors((prev) => ({ ...prev, [field]: err }));
+    }
+  };
 
   const handleRegister = async () => {
-    if (password !== confirmPassword) {
-      setErrorMsg('Passwords do not match');
-      return;
-    }
+    // Validate all fields on submit
+    const nameErr = validateField('fullName', fullName);
+    const emailErr = validateField('email', email);
+    const phoneErr = validateField('phoneNumber', phoneNumber);
+    const passErr = validateField('password', password);
+    const confirmErr = validateField('confirmPassword', confirmPassword);
 
-    setErrorMsg('');
+    const allErrors = {
+      fullName: nameErr,
+      email: emailErr,
+      phoneNumber: phoneErr,
+      password: passErr,
+      confirmPassword: confirmErr,
+    };
+
+    setTouched({
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      password: true,
+      confirmPassword: true,
+    });
+    setErrors(allErrors);
+
+    const hasErrors = Object.values(allErrors).some((e) => e.length > 0);
+    if (hasErrors) return;
+
     setLoading(true);
+    setApiError('');
 
     try {
       await performRegister({
-        email,
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phoneNumber: phoneNumber.trim(),
         password,
-        fullName,
-        floor,
-        room,
-        role,
       });
-    } catch (err: unknown) {
-      const error = err as ApiError;
-
-      setErrorMsg(
-        error.response?.data?.error?.message ||
-          error.message ||
-          'Connection error. Backend may be offline.',
-      );
+    } catch (err: any) {
+      setApiError(parseApiError(err, 'Unable to create account. Please check your details.'));
     } finally {
       setLoading(false);
     }
   };
 
-  const isFormValid = () => {
-    if (
-      !fullName ||
-      !email ||
-      !isEmailValid(email) ||
-      !password ||
-      !passwordValid ||
-      !confirmPassword ||
-      password !== confirmPassword ||
-      !floor ||
-      !room
-    ) {
-      return false;
-    }
-    return true;
-  };
-
   return (
-    <View style={styles.root}>
-      {/* FIXED BACKGROUND — positioned independently of the scrollable
-          auth content so it never contributes to scroll height. */}
-      <Image
-        source={require('../../assets/create-account-background.png')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      />
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {/* Subtle brand ambient backdrop */}
+      <View pointerEvents="none" style={styles.ambientBackdrop} />
 
-      <View style={styles.backgroundOverlay} />
-
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardContainer}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scrollContent}
-          >
-            <View style={styles.screenContent}>
-              {/* AUTH ROOT: no back button. */}
-
-              <AnimatedEntrance distance={14} duration={420}>
-                <View style={styles.header}>
-                  <Text style={styles.title}>Create your account</Text>
-                  <Text style={styles.subtitle}>Let's get you started</Text>
-                </View>
-              </AnimatedEntrance>
-
-              <AnimatedEntrance delay={70} distance={14} duration={420}>
-                <RoleSelector selected={role} onChange={setRole} />
-              </AnimatedEntrance>
-
-              <AnimatedEntrance delay={140} distance={14} duration={420}>
-                <View style={styles.unitSection}>
-                  <Text style={styles.unitHeading}>Where do you live?</Text>
-
-                  <View style={styles.unitRow}>
-                    <PickerField
-                      label=""
-                      value={floor ? floorLabel(floor) : 'Select'}
-                      placeholder={!floor}
-                      onPress={() => setShowFloorPicker(true)}
-                    />
-
-                    <PickerField
-                      label=""
-                      value={room ? `Flat ${room}` : 'Select'}
-                      placeholder={!room}
-                      onPress={() => setShowRoomPicker(true)}
-                    />
-                  </View>
-                </View>
-              </AnimatedEntrance>
-
-              <AnimatedEntrance delay={210} distance={14} duration={420}>
-                <View style={styles.form}>
-                  {errorMsg ? (
-                    <View style={styles.errorBanner}>
-                      <Feather
-                        name="alert-circle"
-                        size={17}
-                        color={theme.colors.error}
-                      />
-
-                      <Text style={styles.errorText}>{errorMsg}</Text>
-                    </View>
-                  ) : null}
-
-                  <Input
-                    label=""
-                    placeholder="Enter your full name"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    containerStyle={styles.formField}
-                  />
-
-                  <Input
-                    label=""
-                    placeholder="Enter your email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    error={emailTouchedInvalid ? 'Enter a valid email address' : undefined}
-                    containerStyle={styles.formField}
-                  />
-
-                  <Input
-                    label=""
-                    placeholder="Create a password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    containerStyle={styles.formField}
-                  />
-
-                  {password.length > 0 && (
-                    <View style={styles.passwordChecks}>
-                      <View style={styles.passwordCheckRow}>
-                        <Feather
-                          name={hasMinLength ? 'check-circle' : 'circle'}
-                          size={15}
-                          color={hasMinLength ? theme.colors.success : theme.colors.textSecondary}
-                        />
-                        <Text style={[styles.passwordCheckText, hasMinLength && styles.passwordCheckTextActive]}>
-                          At least 8 characters
-                        </Text>
-                      </View>
-                      <View style={styles.passwordCheckRow}>
-                        <Feather
-                          name={hasLettersAndDigits ? 'check-circle' : 'circle'}
-                          size={15}
-                          color={hasLettersAndDigits ? theme.colors.success : theme.colors.textSecondary}
-                        />
-                        <Text style={[styles.passwordCheckText, hasLettersAndDigits && styles.passwordCheckTextActive]}>
-                          Contains letters and numbers
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  <Input
-                    label=""
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    error={confirmMismatch ? 'Passwords do not match' : undefined}
-                    containerStyle={styles.formField}
-                  />
-
-                  <Button
-                    label="Create Account"
-                    onPress={handleRegister}
-                    loading={loading}
-                    disabled={!isFormValid() || loading}
-                    style={styles.mainButton}
-                  />
-
-                  <View style={styles.footer}>
-                    <Text style={styles.footerText}>
-                      Already have an account?{' '}
-                    </Text>
-
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      onPress={() => router.push('/(auth)/login')}
-                    >
-                      <Text style={styles.linkText}>Login</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </AnimatedEntrance>
+          {/* Brand & Progress Header */}
+          <AnimatedEntrance delay={30} distance={12}>
+            <View style={styles.brandContainer}>
+              <View style={styles.logoBadge}>
+                <Image
+                  source={require('../../assets/auth-logo.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.brandTitle}>REGENCY SALMA</Text>
+              <Text style={styles.brandSubtitle}>STEP 1 OF 2 · ACCOUNT IDENTITY</Text>
             </View>
+          </AnimatedEntrance>
 
-            <View style={styles.progress}>
-              <ProgressDots
-                count={7}
-                activeIndex={2}
-                style={styles.progressDots}
+          {/* Form Card */}
+          <AnimatedEntrance delay={80} distance={16}>
+            <View style={styles.formCard}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.headerTitle}>Create your account</Text>
+                <Text style={styles.headerSubtitle}>
+                  Set up your personal credentials to get started.
+                </Text>
+              </View>
+
+              <FormError message={apiError} />
+
+              {/* Full Name */}
+              <Input
+                label="Full Name"
+                placeholder="e.g. Rahul Sharma"
+                value={fullName}
+                onChangeText={(t) => handleChange('fullName', t, setFullName)}
+                onBlur={() => handleBlur('fullName', fullName)}
+                error={touched.fullName ? errors.fullName : ''}
+                containerStyle={styles.inputSpacing}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+
+              {/* Email Address */}
+              <Input
+                label="Email Address"
+                placeholder="name@example.com"
+                value={email}
+                onChangeText={(t) => handleChange('email', t, setEmail)}
+                onBlur={() => handleBlur('email', email)}
+                error={touched.email ? errors.email : ''}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                containerStyle={styles.inputSpacing}
+              />
+
+              {/* Phone Number */}
+              <Input
+                label="Phone Number"
+                placeholder="9876543210 (digits only)"
+                value={phoneNumber}
+                onChangeText={(t) => handleChange('phoneNumber', t, setPhoneNumber)}
+                onBlur={() => handleBlur('phoneNumber', phoneNumber)}
+                error={touched.phoneNumber ? errors.phoneNumber : ''}
+                keyboardType="phone-pad"
+                containerStyle={styles.inputSpacing}
+              />
+
+              {/* Password */}
+              <Input
+                label="Password"
+                placeholder="At least 8 characters (letters & numbers)"
+                value={password}
+                onChangeText={(t) => handleChange('password', t, setPassword)}
+                onBlur={() => handleBlur('password', password)}
+                error={touched.password ? errors.password : ''}
+                secureTextEntry
+                containerStyle={styles.inputSpacing}
+              />
+
+              {/* Confirm Password */}
+              <Input
+                label="Confirm Password"
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChangeText={(t) => handleChange('confirmPassword', t, setConfirmPassword)}
+                onBlur={() => handleBlur('confirmPassword', confirmPassword)}
+                error={touched.confirmPassword ? errors.confirmPassword : ''}
+                secureTextEntry
+                containerStyle={styles.inputSpacing}
+              />
+
+              {/* Submit CTA */}
+              <Button
+                label={loading ? 'Creating Account...' : 'Create Account'}
+                icon="arrow-right"
+                iconPosition="right"
+                onPress={handleRegister}
+                loading={loading}
+                style={styles.submitBtn}
               />
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+          </AnimatedEntrance>
 
-      {/* Floor picker */}
-      <Modal
-        visible={showFloorPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowFloorPicker(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowFloorPicker(false)}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Floor</Text>
-
-            <ScrollView
-              style={styles.modalList}
-              showsVerticalScrollIndicator={false}
-            >
-              {FLOORS.map((f) => {
-                const isSelected = floor === f;
-
-                return (
-                  <PremiumPressable
-                    key={f}
-                    scaleTo={0.97}
-                    activeOpacity={0.94}
-                    style={styles.modalOption}
-                    onPress={() => {
-                      setFloor(f);
-                      setShowFloorPicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        isSelected && styles.modalOptionTextActive,
-                      ]}
-                    >
-                      {floorLabel(f)}
-                    </Text>
-
-                    {isSelected && (
-                      <AnimatedCheck
-                        visible={isSelected}
-                        color={theme.colors.primary}
-                      />
-                    )}
-                  </PremiumPressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Room picker */}
-      <Modal
-        visible={showRoomPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowRoomPicker(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowRoomPicker(false)}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Room</Text>
-
-            <ScrollView
-              style={styles.modalList}
-              showsVerticalScrollIndicator={false}
-            >
-              {ROOMS.map((r) => {
-                const isSelected = room === r;
-
-                return (
-                  <PremiumPressable
-                    key={r}
-                    scaleTo={0.97}
-                    activeOpacity={0.94}
-                    style={styles.modalOption}
-                    onPress={() => {
-                      setRoom(r);
-                      setShowRoomPicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        isSelected && styles.modalOptionTextActive,
-                      ]}
-                    >
-                      Flat {r}
-                    </Text>
-
-                    {isSelected && (
-                      <AnimatedCheck
-                        visible={isSelected}
-                        color={theme.colors.primary}
-                      />
-                    )}
-                  </PremiumPressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-    </View>
+          {/* Footer Login Link */}
+          <AnimatedEntrance delay={130} distance={10}>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <PremiumPressable
+                onPress={() => router.push('/(auth)/login')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.footerLink}>Log in</Text>
+              </PremiumPressable>
+            </View>
+          </AnimatedEntrance>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  /*
-   * =====================================================
-   * SCREEN + FIXED BACKGROUND
-   * =====================================================
-   */
-
-  root: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-
-  backgroundImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-
-  backgroundOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(249, 247, 242, 0.88)',
-  },
-
   safeArea: {
     flex: 1,
+    backgroundColor: '#F8F6F0',
   },
-
-  keyboardContainer: {
+  ambientBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#F8F6F0',
+  },
+  keyboardView: {
     flex: 1,
   },
-
   scrollContent: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 40,
     flexGrow: 1,
     justifyContent: 'center',
   },
-
-  screenContent: {
-    width: '100%',
-    maxWidth: 460,
-    alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 24,
+  brandContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
-
-  /*
-   * =====================================================
-   * HEADER
-   * =====================================================
-   */
-
-  header: {
-    marginBottom: 18,
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+    marginBottom: 10,
   },
-
-  title: {
-    color: theme.colors.primary,
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 28,
-    lineHeight: 36,
-    letterSpacing: -0.7,
-    marginBottom: 6,
+  logoImage: {
+    width: 38,
+    height: 38,
   },
-
-  subtitle: {
-    color: theme.colors.textSecondary,
-    fontFamily: 'PlusJakartaSans_400Regular',
+  brandTitle: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 16,
-    lineHeight: 22,
+    letterSpacing: 2.2,
+    color: '#143D2A',
   },
-
-  /*
-   * =====================================================
-   * FORM
-   * =====================================================
-   */
-
-  form: {
-    width: '100%',
+  brandSubtitle: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: '#8A9A86',
+    marginTop: 4,
   },
-
-  formField: {
-    marginBottom: 12,
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 24,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    marginBottom: 20,
   },
-
+  cardHeader: {
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: theme.colors.textPrimary,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13.5,
+    color: theme.colors.textSecondary,
+    lineHeight: 19,
+  },
   errorBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: theme.colors.errorBackground,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    gap: 8,
     marginBottom: 16,
   },
-
   errorText: {
-    flex: 1,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
     color: theme.colors.error,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    lineHeight: 17,
+    flex: 1,
+    lineHeight: 18,
   },
-
-  /*
-   * =====================================================
-   * UNIT PICKERS
-   * =====================================================
-   */
-
-  unitSection: {
+  inputSpacing: {
     marginBottom: 14,
   },
-
-  unitHeading: {
-    marginBottom: 10,
-    color: theme.colors.textPrimary,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 16,
-    lineHeight: 21,
-  },
-
-  unitRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-
-  pickerField: {
-    flex: 1,
-  },
-
-  pickerFieldLabel: {
-    marginBottom: 8,
-    color: theme.colors.textPrimary,
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 16,
-  },
-
-  pickerFieldControl: {
-    height: 66,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-
-  pickerFieldValue: {
-    flex: 1,
-    color: theme.colors.textPrimary,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 18,
-  },
-
-  pickerFieldValuePlaceholder: {
-    color: theme.colors.textSecondary,
-  },
-
-  /*
-   * =====================================================
-   * PASSWORD CHECKS
-   * =====================================================
-   */
-
-  passwordChecks: {
-    marginTop: -8,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-    gap: 6,
-  },
-
-  passwordCheckRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-
-  passwordCheckText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 14,
-    lineHeight: 18,
-    color: theme.colors.textSecondary,
-  },
-
-  passwordCheckTextActive: {
-    color: theme.colors.textPrimary,
-  },
-
-  /*
-   * =====================================================
-   * BUTTON + FOOTER
-   * =====================================================
-   */
-
-  mainButton: {
-    marginTop: 2,
+  submitBtn: {
+    marginTop: 8,
     marginBottom: 16,
     height: 62,
     borderRadius: theme.radii.pill,
   },
-
-  footer: {
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 4,
   },
-
   footerText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
     color: theme.colors.textSecondary,
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 15,
-    lineHeight: 20,
   },
-
-  linkText: {
-    color: theme.colors.accent,
+  footerLink: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
-    lineHeight: 20,
-  },
-
-  /*
-   * =====================================================
-   * PROGRESS
-   * =====================================================
-   */
-
-  progress: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-
-  progressDots: {
-    paddingVertical: 2,
-  },
-
-  /*
-   * =====================================================
-   * PICKER MODALS
-   * =====================================================
-   */
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(20, 61, 42, 0.45)',
-    justifyContent: 'flex-end',
-  },
-
-  modalContent: {
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    maxHeight: '70%',
-  },
-
-  modalTitle: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 18,
-    letterSpacing: -0.3,
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-
-  modalList: {
-    marginTop: 8,
-  },
-
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-
-  modalOptionText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-  },
-
-  modalOptionTextActive: {
-    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
     color: theme.colors.primary,
   },
 });

@@ -1,0 +1,56 @@
+--- frontend/app/(app)/manager/visitors.tsx
++++ frontend/app/(app)/manager/visitors.tsx
+@@ -2,6 +2,7 @@
+ import { View, StyleSheet, ScrollView, RefreshControl, Linking, Alert } from 'react-native';
+ import { useRouter } from 'expo-router';
+ import { Feather } from '@expo/vector-icons';
++import { visitorsApi } from '../../../src/api/visitors';
+ import { Text } from '../../../src/components/ui/Text';
+ import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
+ import { AppHeader } from '../../../src/components/ui/AppHeader';
+@@ -53,6 +54,28 @@
+       Linking.openURL(`tel:${phone}`);
+     }
+   };
++
++  const handleCheckIn = async (id: string) => {
++    try {
++      await visitorsApi.checkInVisitor(id);
++      fetchData();
++    } catch (err: any) {
++      Alert.alert('Check In Failed', err.response?.data?.error?.message || err.message);
++    }
++  };
++
++  const handleCheckOut = async (id: string) => {
++    try {
++      await visitorsApi.checkOutVisitor(id);
++      fetchData();
++    } catch (err: any) {
++      Alert.alert('Check Out Failed', err.response?.data?.error?.message || err.message);
++    }
++  };
+ 
+   const renderCard = (v: any) => {
+     const meta = getStatusMeta(v.status);
+@@ -107,6 +130,22 @@
+                   <Text style={styles.callBtnText}>Call</Text>
+                 </PremiumPressable>
+               ) : null}
++              
++              {v.status === 'APPROVED' && (
++                <PremiumPressable style={[styles.callBtn, { backgroundColor: '#10B981' }]} onPress={() => handleCheckIn(v.id)} scaleTo={0.94}>
++                  <Feather name="log-in" size={15} color="#FFFFFF" />
++                  <Text style={styles.callBtnText}>Check In</Text>
++                </PremiumPressable>
++              )}
++              
++              {v.status === 'CHECKED_IN' && (
++                <PremiumPressable style={[styles.callBtn, { backgroundColor: '#F59E0B' }]} onPress={() => handleCheckOut(v.id)} scaleTo={0.94}>
++                  <Feather name="log-out" size={15} color="#FFFFFF" />
++                  <Text style={styles.callBtnText}>Check Out</Text>
++                </PremiumPressable>
++              )}
+             </View>
+           </View>
+         </View>

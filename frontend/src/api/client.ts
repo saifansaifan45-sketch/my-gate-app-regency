@@ -1,11 +1,28 @@
 import axios, { AxiosInstance } from 'axios';
 import { storage } from './storage';
+import { Platform } from 'react-native';
 
 // Base API URL
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const getBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  
+  if (__DEV__) {
+    if (Platform.OS === 'web') return 'http://localhost:3000';
+    if (Platform.OS === 'ios') return 'http://localhost:3000'; 
+    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
+    return 'http://localhost:3000';
+  }
+
+  throw new Error('EXPO_PUBLIC_API_URL must be defined in production.');
+};
+
+const BASE_URL = getBaseUrl();
 
 let inMemoryAccessToken: string | null = null;
 let onAuthFailureCallback: (() => void) | null = null;
+let onResidenceAuthFailureCallback: ((msg?: string) => void) | null = null;
 
 export const setAccessToken = (token: string | null) => {
   inMemoryAccessToken = token;
@@ -17,6 +34,10 @@ export const getAccessToken = (): string | null => {
 
 export const setOnAuthFailure = (callback: () => void) => {
   onAuthFailureCallback = callback;
+};
+
+export const setOnResidenceAuthFailure = (callback: (msg?: string) => void) => {
+  onResidenceAuthFailureCallback = callback;
 };
 
 export const api: AxiosInstance = axios.create({
@@ -37,11 +58,20 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle 401 with strict retry guard
+// Response interceptor: handle 401 and 403 residence verification errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.error?.code === 'RESIDENCE_VERIFICATION_REQUIRED'
+    ) {
+      if (onResidenceAuthFailureCallback) {
+        onResidenceAuthFailureCallback(error.response?.data?.error?.message);
+      }
+    }
 
     // Only attempt refresh on 401 and if we haven't already retried this request
     if (

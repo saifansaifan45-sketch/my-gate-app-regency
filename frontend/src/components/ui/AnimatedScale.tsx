@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, ViewStyle } from 'react-native';
+import { Platform, Animated, ViewStyle } from 'react-native';
 
 interface AnimatedScaleProps {
   children: React.ReactNode;
@@ -22,13 +22,13 @@ export function AnimatedScale({
         Animated.timing(opacity, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(scale, {
           toValue: 1,
           friction: 6,
           tension: 60,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
     ]).start();

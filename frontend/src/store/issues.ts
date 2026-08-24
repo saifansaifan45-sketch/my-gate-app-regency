@@ -17,12 +17,12 @@ export const ISSUE_CATEGORIES = [
   { id: 'Plumbing', label: 'Plumbing', icon: 'droplet' as FeatherName, color: '#1D6FC4', bg: '#E3F2FD', hint: 'Leaks, taps, pipes' },
   { id: 'Electrical', label: 'Electrical', icon: 'zap' as FeatherName, color: '#D97706', bg: '#FEF3C7', hint: 'Lights, switches, sockets' },
   { id: 'Lift', label: 'Lift', icon: 'arrow-up' as FeatherName, color: '#7E22CE', bg: '#F3E8FF', hint: 'Elevator, doors, noise' },
-  { id: 'Custom', label: 'Custom', icon: 'edit-3' as FeatherName, color: '#1B7A44', bg: '#E8F5E9', hint: 'Something else' },
+  { id: 'Maintenance', label: 'Maintenance', icon: 'tool' as FeatherName, color: '#1B7A44', bg: '#E8F5E9', hint: 'General maintenance' },
+  { id: 'Security', label: 'Security', icon: 'shield' as FeatherName, color: '#E11D48', bg: '#FFE4E6', hint: 'Access, gates, cameras' },
+  { id: 'Custom', label: 'Custom', icon: 'edit-3' as FeatherName, color: '#4B5563', bg: '#F3F4F6', hint: 'Something else' },
 ];
 
-let issues: Issue[] = [
-  { id: 'REQ-0192', category: 'Plumbing', icon: 'droplet', title: 'Leaking pipe in master bathroom', status: 'In Progress', time: 'Today, 10:30 AM' },
-];
+let issues: Issue[] = [];
 
 let cachedIssues: Issue[] | null = null;
 let cachedOpenIssues: Issue[] | null = null;
@@ -58,6 +58,11 @@ export function getOpenIssues(): Issue[] {
 
 export function addIssue(issue: Issue) {
   issues = [issue, ...issues];
+  emit();
+}
+
+export function setIssuesList(newIssues: Issue[]) {
+  issues = newIssues;
   emit();
 }
 

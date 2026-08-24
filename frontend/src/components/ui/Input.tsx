@@ -29,6 +29,7 @@ export function Input({
   containerStyle,
   inputStyle,
   secureTextEntry,
+  textContentType,
   onFocus,
   onBlur,
   ...props
@@ -64,6 +65,7 @@ export function Input({
           style={[styles.input, inputStyle]}
           placeholderTextColor={theme.colors.textSecondary}
           secureTextEntry={isSecure}
+          textContentType={textContentType ?? (isSecure ? 'none' : undefined)}
           onFocus={handleFocus}
           onBlur={handleBlur}
           {...props}
@@ -86,7 +88,7 @@ export function Input({
         )}
       </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -99,25 +101,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: theme.colors.textPrimary,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 16,
+    fontSize: 15,
   },
   inputWrapper: {
-    height: 66,
+    height: 56,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 1,
   },
   inputFocused: {
-    borderColor: theme.colors.primary,
-    backgroundColor: '#FFFFFF',
+    borderColor: theme.colors.focus,
+    backgroundColor: theme.colors.surface,
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     color: theme.colors.textPrimary,
     fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 18,
+    fontSize: 16,
   },
   inputError: {
     borderColor: theme.colors.error,

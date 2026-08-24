@@ -1,165 +1,78 @@
-import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
-import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Text } from '../../src/components/ui/Text';
-import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { useQuery } from '@tanstack/react-query';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { communityApi, CommunitySpaceItem } from '../../src/api/community';
 import { AppHeader } from '../../src/components/ui/AppHeader';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
+import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { Text } from '../../src/components/ui/Text';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
-import { useSession } from '../../src/store/auth';
+import { cardSystem } from '../../src/components/ui/cardSystem';
 
-type AnnouncementSpace = 'leadership' | 'owners' | 'residents';
+type NoticeSpace = { type: 'LEADERSHIP_OPERATIONS' | 'OWNER_COMMUNITY' | 'RESIDENT_COMMUNITY'; label: string; description: string; icon: React.ComponentProps<typeof Feather>['name']; tint: string; color: string };
+
+const SPACE_META: NoticeSpace[] = [
+  { type: 'LEADERSHIP_OPERATIONS', label: 'Leadership', description: 'President, committee and management notices', icon: 'shield', tint: '#F3E8FF', color: '#7C3AED' },
+  { type: 'OWNER_COMMUNITY', label: 'Owners', description: 'Property-owner notices and updates', icon: 'key', tint: '#FFF3D6', color: '#A16207' },
+  { type: 'RESIDENT_COMMUNITY', label: 'Residents', description: 'Updates for residents and tenants', icon: 'home', tint: '#E8F5E9', color: theme.colors.primary },
+];
+
+function spaceMeta(space: CommunitySpaceItem) {
+  return SPACE_META.find((meta) => meta.type === space.type);
+}
 
 export default function AnnouncementsScreen() {
-  const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  const { user } = useSession() || {};
+  const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
+  const spacesQuery = useQuery({ queryKey: ['announcement-spaces'], queryFn: communityApi.getSpaces });
+  const availableSpaces = useMemo(() => (spacesQuery.data?.spaces || []).filter((space) => Boolean(spaceMeta(space))), [spacesQuery.data]);
+  const activeSpace = availableSpaces.find((space) => space.id === activeSpaceId) || availableSpaces[0];
+  const activeMeta = activeSpace ? spaceMeta(activeSpace) : undefined;
 
-  // Fake the role for testing, since auth store doesn't have it explicitly right now.
-  // We'll assume TENANT or RESIDENT for this mock unless overridden.
-  const userRole = (user as any)?.role || 'RESIDENT';
+  useEffect(() => {
+    if (activeSpace && activeSpace.id !== activeSpaceId) setActiveSpaceId(activeSpace.id);
+  }, [activeSpace, activeSpaceId]);
 
-  const availableSpaces = useMemo(() => {
-    if (userRole === 'LEADERSHIP') return ['leadership', 'owners', 'residents'];
-    if (userRole === 'OWNER') return ['owners', 'residents'];
-    return ['residents'];
-  }, [userRole]);
-
-  const [activeSpace, setActiveSpace] = useState<AnnouncementSpace>(availableSpaces[0] as AnnouncementSpace);
-  const [activeCategory] = useState<string>('all');
-
-  // Hardcoded empty state for now to demonstrate empty states as requested
-  const FIXTURES: any[] = [];
-
-  const filteredFixtures = FIXTURES.filter(f => {
-    if (f.space !== activeSpace) return false;
-    if (activeCategory !== 'all' && f.category !== activeCategory) return false;
-    return true;
+  const announcementsQuery = useQuery({
+    queryKey: ['announcements', activeSpace?.id],
+    queryFn: () => communityApi.getAnnouncements(activeSpace!.id),
+    enabled: Boolean(activeSpace?.id),
   });
-
-  const getEmptyStateCopy = () => {
-    if (FIXTURES.filter(f => f.space === activeSpace).length === 0) {
-      if (activeSpace === 'leadership') {
-        return {
-          title: "No leadership announcements yet.",
-          desc: "Important updates from community leadership will appear here."
-        };
-      }
-      if (activeSpace === 'owners') {
-        return {
-          title: "No owner announcements yet.",
-          desc: "Updates for property owners will appear here."
-        };
-      }
-      return {
-        title: "No resident announcements yet.",
-        desc: "Community updates for residents will appear here."
-      };
-    }
-    return {
-      title: "No announcements match this filter.",
-      desc: "Try another category or clear the filter."
-    };
-  };
-
-  const emptyState = getEmptyStateCopy();
+  const announcements = announcementsQuery.data?.announcements || [];
 
   return (
     <View style={styles.container}>
-      <AppHeader
-        variant="subscreen"
-        title="Announcements"
-      />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.spacesWrapper} contentContainerStyle={styles.spacesContent}>
-        {availableSpaces.map((space) => (
-          <PremiumPressable
-            key={space}
-            style={[styles.spaceTab, activeSpace === space && styles.spaceTabActive]}
-            onPress={() => setActiveSpace(space as AnnouncementSpace)}
-          >
-            <Text style={[styles.spaceTabText, activeSpace === space && styles.spaceTabTextActive]}>
-              {space.charAt(0).toUpperCase() + space.slice(1)}
-            </Text>
-          </PremiumPressable>
-        ))}
-      </ScrollView>
-
-      {/* Optional: Filter categories could go here, but omitted for brevity if spaces are the primary tabs */}
-
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomClearance }]}>
-        {filteredFixtures.length > 0 ? (
-          filteredFixtures.map((ann, index) => (
-            <ScreenEntrance key={ann.id} delay={100 + index * 100}>
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.category}>{ann.category}</Text>
-                  <Text style={styles.date}>{ann.date}</Text>
-                </View>
-                <Text style={styles.title}>{ann.title}</Text>
-                <Text style={styles.desc}>{ann.desc}</Text>
-              </View>
-            </ScreenEntrance>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyCard}>
-              <Feather name="bell" size={32} color={theme.colors.textSecondary} style={styles.emptyIcon} />
-              <Text style={styles.emptyTitle}>{emptyState.title}</Text>
-              <Text style={styles.emptyDesc}>{emptyState.desc}</Text>
-            </View>
-          </View>
-        )}
-      </ScrollView>
+      <AppHeader variant="subscreen" title="Notice board" />
+      {spacesQuery.isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
+      {!spacesQuery.isLoading && availableSpaces.length === 0 ? <EmptyState icon="lock" title="No notice spaces available" description="Your account does not currently have access to a notice space." /> : null}
+      {activeSpace && activeMeta ? (
+        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomClearance + 16 }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow} style={styles.tabScroll} nestedScrollEnabled>
+            {availableSpaces.map((space) => {
+              const meta = spaceMeta(space)!;
+              const selected = space.id === activeSpace.id;
+              return <PremiumPressable key={space.id} style={[styles.tab, selected && { backgroundColor: meta.color }]} onPress={() => setActiveSpaceId(space.id)} accessibilityRole="tab" accessibilityState={{ selected }}><Feather name={meta.icon} size={15} color={selected ? '#FFFFFF' : meta.color} /><Text style={[styles.tabText, selected && styles.tabTextSelected]}>{meta.label}</Text></PremiumPressable>;
+            })}
+          </ScrollView>
+          <View style={[styles.spaceContext, { backgroundColor: activeMeta.tint }]}><Feather name={activeMeta.icon} size={17} color={activeMeta.color} /><Text style={[styles.spaceContextText, { color: activeMeta.color }]}>{activeMeta.description}</Text></View>
+          {announcementsQuery.isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
+          {!announcementsQuery.isLoading && announcements.length === 0 ? <EmptyState icon="bell-off" title={`No ${activeMeta.label.toLowerCase()} notices yet`} description="Published notices for this space will appear here." /> : null}
+          {announcements.map((announcement, index) => <ScreenEntrance key={announcement.id} delay={Math.min(70 + index * 55, 260)}><View style={styles.card}>
+            <View style={styles.cardHeader}><View style={[styles.categoryPill, { backgroundColor: activeMeta.tint }]}><Text style={[styles.category, { color: activeMeta.color }]}>{announcement.category || 'GENERAL'}</Text></View><Text style={styles.date}>{new Date(announcement.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</Text></View>
+            <Text style={styles.title}>{announcement.title}</Text><Text style={styles.body}>{announcement.content}</Text>
+          </View></ScreenEntrance>)}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  spacesWrapper: { maxHeight: 48, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  spacesContent: { paddingHorizontal: 20, alignItems: 'center' },
-  spaceTab: { paddingVertical: 14, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  spaceTabActive: { borderBottomColor: theme.colors.primary },
-  spaceTabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: theme.colors.textSecondary },
-  spaceTabTextActive: { color: theme.colors.primary },
-  list: { padding: 20, flexGrow: 1 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 48 },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 36,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
-  },
-  emptyIcon: { marginBottom: 18, opacity: 0.8 },
-  emptyTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, textAlign: 'center', marginBottom: 8 },
-  emptyDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 15, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 23 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  category: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: theme.colors.accent, textTransform: 'uppercase', letterSpacing: 0.8 },
-  date: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: theme.colors.textSecondary },
-  title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 17, letterSpacing: -0.3, color: theme.colors.textPrimary, marginBottom: 8 },
-  desc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22 },
+  container: { flex: 1, backgroundColor: theme.colors.background }, loader: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 52 },
+  tabScroll: { flexGrow: 0 }, tabRow: { paddingHorizontal: cardSystem.pagePadding, gap: 8 }, tab: { minHeight: 40, paddingHorizontal: 13, borderRadius: 14, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.textPrimary }, tabTextSelected: { color: '#FFFFFF' },
+  spaceContext: { marginBottom: 14, padding: 13, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 9 }, spaceContextText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, lineHeight: 18 },
+  scrollContent: { paddingTop: 14, paddingHorizontal: cardSystem.pagePadding, gap: 12 }, card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, ...theme.shadows.card }, cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }, categoryPill: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 5 }, category: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10, letterSpacing: 0.4 }, date: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary }, title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, lineHeight: 22, color: theme.colors.textPrimary, marginBottom: 6 }, body: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 21, color: theme.colors.textSecondary },
 });

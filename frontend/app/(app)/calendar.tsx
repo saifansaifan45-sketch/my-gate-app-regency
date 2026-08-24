@@ -2,8 +2,6 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../../src/components/ui/Text';
 import { Card } from '../../src/components/ui/Card';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
@@ -11,6 +9,7 @@ import { theme } from '../../src/theme';
 import { useCalendarEvents } from '../../src/store/calendar-events';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
+import { cardSystem } from '../../src/components/ui/cardSystem';
 
 const MAX_YEAR = 2026;
 const MAX_MONTH = 11;
@@ -24,7 +23,6 @@ const toDateStr = (year: number, month: number, day: number) => `${year}-${pad(m
 const toLocalDateStr = (date: Date) => toDateStr(date.getFullYear(), date.getMonth(), date.getDate());
 
 export default function CalendarScreen() {
-  const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const events = useCalendarEvents();
 
@@ -193,33 +191,33 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  content: { paddingHorizontal: 20, paddingTop: 16 },
-  calendarCard: { padding: 22, borderRadius: 20, marginBottom: 24 },
+  content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
+  calendarCard: { padding: 22, borderRadius: 18, marginBottom: 24 },
   monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  monthNavBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  monthNavBtn: { width: 36, height: 36, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   monthNavBtnDisabled: { opacity: 0.4 },
   monthTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
   weekDays: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
   weekDayText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary, width: 40, textAlign: 'center' },
   daysGrid: { width: '100%' },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  dayCell: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, position: 'relative' },
+  dayCell: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 18, position: 'relative' },
   dayCellEmpty: { width: 40, height: 40 },
   dayCellSelected: { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 3 },
   dayCellToday: { borderWidth: 1.5, borderColor: theme.colors.primary },
   dayText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: theme.colors.textPrimary, textAlign: 'center' },
   dayTextSelected: { color: '#FFF', fontFamily: 'PlusJakartaSans_700Bold' },
   dayTextToday: { color: theme.colors.primary, fontFamily: 'PlusJakartaSans_700Bold' },
-  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.colors.accent, position: 'absolute', bottom: 3 },
+  eventDot: { width: 5, height: 5, borderRadius: 0.5, backgroundColor: theme.colors.accent, position: 'absolute', bottom: 3 },
   eventDotSelected: { backgroundColor: '#FFFFFF' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 4, marginBottom: 14 },
   sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
-  todayTag: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: theme.colors.accent, backgroundColor: '#FBF4F0', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 100, overflow: 'hidden' },
-  emptyCard: { padding: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  todayTag: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: theme.colors.accent, backgroundColor: '#FBF4F0', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 98, overflow: 'hidden' },
+  emptyCard: { padding: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
   emptyIcon: { marginBottom: 12, opacity: 0.8 },
   emptyText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 15, color: theme.colors.textSecondary },
-  eventItemCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 18, marginBottom: 14 },
-  eventDotLarge: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.colors.accent, marginRight: 16 },
+  eventItemCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, marginBottom: 14 },
+  eventDotLarge: { width: 14, height: 14, borderRadius: 5, backgroundColor: theme.colors.accent, marginRight: 16 },
   eventInfo: { flex: 1 },
   eventTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: theme.colors.textPrimary, marginBottom: 4 },
   eventMeta: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, color: theme.colors.textSecondary },

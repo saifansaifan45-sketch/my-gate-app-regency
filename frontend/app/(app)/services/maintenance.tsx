@@ -1,30 +1,155 @@
 import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, Modal, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { smartBack } from '../../../src/navigation/history';
 import { EmptyState } from '../../../src/components/ui/EmptyState';
 import { Text } from '../../../src/components/ui/Text';
 import { Button } from '../../../src/components/ui/Button';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
-import { useIssues, removeIssue, ISSUE_CATEGORIES } from '../../../src/store/issues';
 import { theme } from '../../../src/theme';
+import { ticketsApi } from '../../../src/api/tickets';
+import { TicketItem } from '../../../src/api/manager';
+import { useToast } from '../../../src/store/toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { homeDashboardQueryKey } from '../../../src/api/home-dashboard';
+import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function MaintenanceScreen() {
   const router = useRouter();
   const { bottom, bottomClearance } = useScreenInsets(false);
-  const [activeTab, setActiveTab] = useState<'my'|'all'>('my');
-  const allIssues = useIssues();
-  const requests = activeTab === 'all' ? allIssues : allIssues.filter((i) => i.status !== 'Resolved');
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'my' | 'all'>('my');
+  const [serverTickets, setServerTickets] = useState<TicketItem[]>([]);
+  const [, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [ticketToDelete, setTicketToDelete] = useState<{ id: string; realId?: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchServerTickets = useCallback(async () => {
+    try {
+      const res = await ticketsApi.getMyTickets();
+      setServerTickets(res.tickets);
+    } catch (err) {
+      console.warn('Failed to load server tickets:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServerTickets();
+  }, [fetchServerTickets]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchServerTickets();
+  };
+
+  const getCategoryIcon = (category: string): React.ComponentProps<typeof Feather>['name'] => {
+    if (category.toLowerCase().includes('plumb')) return 'droplet';
+    if (category.toLowerCase().includes('electr')) return 'zap';
+    if (category.toLowerCase().includes('lift')) return 'arrow-up';
+    if (category.toLowerCase().includes('clean')) return 'trash-2';
+    if (category.toLowerCase().includes('secur')) return 'shield';
+    return 'tool';
+  };
+
+  const handleDeletePress = (ticket: { id: string; realId?: string; title: string }) => {
+    setTicketToDelete(ticket);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!ticketToDelete) return;
+    setDeleting(true);
+    try {
+      if (ticketToDelete.realId) {
+        await ticketsApi.deleteTicket(ticketToDelete.realId);
+        await queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
+      }
+      showToast({
+        title: 'Request Removed',
+        message: 'The maintenance ticket has been marked as deleted.',
+        type: 'info',
+      });
+      await fetchServerTickets();
+    } catch (err) {
+      console.warn('Delete ticket error:', err);
+      showToast({
+        title: 'Delete Failed',
+        message: 'Could not delete the maintenance request.',
+        type: 'error',
+      });
+    } finally {
+      setDeleting(false);
+      setTicketToDelete(null);
+    }
+  };
+
+  const handleVerifyTicket = async (realId: string, decision: 'ACCEPTED' | 'REJECTED') => {
+    try {
+      await ticketsApi.verifyTicket(realId, { decision, note: decision === 'REJECTED' ? 'Resident marked as still an issue' : '' });
+      await queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
+      showToast({
+        title: decision === 'ACCEPTED' ? 'Request Closed' : 'Issue Reopened',
+        message: decision === 'ACCEPTED' ? 'Thank you for confirming.' : 'We will investigate this further.',
+        type: decision === 'ACCEPTED' ? 'success' : 'info',
+      });
+      await fetchServerTickets();
+    } catch {
+      showToast({
+        title: 'Verification Failed',
+        message: 'Could not submit your response.',
+        type: 'error',
+      });
+    }
+  };
+
+  const activeStatuses = new Set<TicketItem['status']>([
+    'OPEN',
+    'ASSIGNED',
+    'IN_PROGRESS',
+    'COMPLETED_BY_WORKER',
+    'PENDING_RESIDENT_CONFIRMATION',
+  ]);
+  const combinedTickets = serverTickets.map((st) => ({
+      id: `REQ-${st.id.slice(0, 4).toUpperCase()}`,
+      realId: st.id,
+      category: st.category,
+      icon: getCategoryIcon(st.category),
+      title: st.title,
+      description: st.description,
+      status: st.status,
+      deletedAt: st.deletedAt,
+      deletedBy: st.deletedBy,
+      assignedStaff: st.tasks?.[0]?.assignedPersonnel?.name,
+      staffCategory: st.tasks?.[0]?.assignedPersonnel?.category,
+      time: new Date(st.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    }));
+
+  // Tab filtering:
+  // Active Requests follow the backend lifecycle exactly.
+  // All Requests: complete historical ledger including active, completed, and deleted requests
+  const requests =
+    activeTab === 'all'
+      ? combinedTickets
+      : combinedTickets.filter(
+          (i) =>
+            !i.deletedAt &&
+            activeStatuses.has(i.status)
+        );
 
   return (
     <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Maintenance"
-        onBackPress={() => router.canGoBack() ? router.back() : router.replace('/services')}
+        onBackPress={() => smartBack(router, '/services')}
       />
 
       <View style={styles.tabs}>
@@ -32,7 +157,7 @@ export default function MaintenanceScreen() {
           style={[styles.tab, activeTab === 'my' && styles.tabActive]}
           onPress={() => setActiveTab('my')}
         >
-          <Text style={[styles.tabText, activeTab === 'my' && styles.tabTextActive]}>My Requests</Text>
+          <Text style={[styles.tabText, activeTab === 'my' && styles.tabTextActive]}>Active Requests</Text>
         </PremiumPressable>
         <PremiumPressable
           style={[styles.tab, activeTab === 'all' && styles.tabActive]}
@@ -42,44 +167,138 @@ export default function MaintenanceScreen() {
         </PremiumPressable>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 60 }]}>
-        {requests.length > 0 ? ( requests.map((req, index) => {
-          const meta = ISSUE_CATEGORIES.find((c) => c.id === req.category);
-          return (
-          <ScreenEntrance key={req.id} delay={100 + index * 100}>
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.categoryRow}>
-                  <Feather name={req.icon} size={14} color={theme.colors.textSecondary} />
-                  <Text style={styles.categoryText}>{req.category}</Text>
+      <ScrollView
+        contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 60 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
+        {requests.length > 0 ? (
+          requests.map((req, index) => {
+            const isDeleted = Boolean(req.deletedAt) || req.status === 'CANCELLED';
+            const isClosed = req.status === 'CLOSED';
+            const isPendingVerification = req.status === 'PENDING_RESIDENT_CONFIRMATION';
+
+            const statusLabel = isDeleted
+              ? req.deletedBy === 'MANAGEMENT'
+                ? 'Deleted by Management'
+                : 'Deleted by Resident'
+              : req.status === 'OPEN'
+              ? 'Open / Unassigned'
+              : req.status === 'ASSIGNED'
+              ? 'Personnel Assigned'
+              : req.status === 'IN_PROGRESS'
+              ? 'In Progress'
+              : req.status === 'COMPLETED_BY_WORKER'
+              ? 'Work Completed'
+              : isPendingVerification
+              ? 'Needs Your Verification'
+              : req.status === 'REOPENED'
+              ? 'Reopened'
+              : isClosed
+              ? 'Closed'
+              : req.status;
+
+            return (
+              <ScreenEntrance key={req.id} delay={80 + index * 60}>
+                <View style={[styles.card, isDeleted && styles.cardDeleted]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.categoryRow}>
+                      <Feather name={req.icon} size={14} color={theme.colors.textSecondary} />
+                      <Text style={styles.categoryText}>{req.category}</Text>
+                    </View>
+                    <View style={styles.headerRight}>
+                      <Text style={styles.ticketId}>{req.id}</Text>
+                      {!isDeleted && (
+                        <PremiumPressable
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          onPress={() => handleDeletePress({ id: req.id, realId: req.realId, title: req.title })}
+                        >
+                          <Feather name="trash-2" size={14} color={theme.colors.error} />
+                        </PremiumPressable>
+                      )}
+                    </View>
+                  </View>
+
+                  <Text style={[styles.title, isDeleted && styles.titleDeleted]}>{req.title}</Text>
+                  {'description' in req && req.description ? (
+                    <Text style={styles.desc}>{req.description}</Text>
+                  ) : null}
+
+                  {'assignedStaff' in req && req.assignedStaff && !isDeleted ? (
+                    <View style={styles.staffPill}>
+                      <Feather name="user-check" size={12} color="#0284C7" />
+                      <Text style={styles.staffPillText}>
+                        Assigned: {req.assignedStaff} ({req.staffCategory})
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {isPendingVerification && req.realId && (
+                    <View style={styles.verificationBox}>
+                      <Text style={styles.verificationTitle}>Work completed. Is the issue resolved?</Text>
+                      <View style={styles.verificationActions}>
+                        <TouchableOpacity
+                          style={styles.verifyAcceptBtn}
+                          onPress={() => handleVerifyTicket(req.realId!, 'ACCEPTED')}
+                        >
+                          <Text style={styles.verifyAcceptText}>Confirm & Close</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.verifyRejectBtn}
+                          onPress={() => handleVerifyTicket(req.realId!, 'REJECTED')}
+                        >
+                          <Text style={styles.verifyRejectText}>Still An Issue</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.time}>{req.time}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        isDeleted
+                          ? styles.statusDeleted
+                          : isClosed
+                          ? styles.statusClosed
+                          : isPendingVerification
+                          ? styles.statusPendingVerification
+                          : req.status === 'OPEN'
+                          ? styles.statusPending
+                          : styles.statusInProgress,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          isDeleted
+                            ? styles.statusTextDeleted
+                            : isClosed
+                            ? styles.statusTextClosed
+                            : isPendingVerification
+                            ? styles.statusTextPendingVerification
+                            : req.status === 'OPEN'
+                            ? styles.statusTextPending
+                            : styles.statusTextInProgress,
+                        ]}
+                      >
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.headerRight}>
-                  <Text style={styles.ticketId}>{req.id}</Text>
-                  <PremiumPressable
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    onPress={() => removeIssue(req.id)}
-                  >
-                    <Feather name="trash-2" size={14} color={theme.colors.error} />
-                  </PremiumPressable>
-                </View>
-              </View>
-              <Text style={styles.title}>{req.title}</Text>
-              <Text style={styles.desc}>{meta?.hint ?? req.category}</Text>
-              <View style={styles.cardFooter}>
-                <Text style={styles.time}>{req.time}</Text>
-                <View style={[styles.statusBadge, req.status === 'Resolved' ? styles.statusResolved : styles.statusInProgress]}>
-                  <Text style={[styles.statusText, req.status === 'Resolved' ? styles.statusTextResolved : styles.statusTextInProgress]}>
-                    {req.status}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </ScreenEntrance>
-        )})) : (
+              </ScreenEntrance>
+            );
+          })
+        ) : (
           <EmptyState
             icon="tool"
             title="No maintenance requests"
-            description="You do not have any open maintenance issues currently."
+            description={
+              activeTab === 'all'
+                ? 'No maintenance history recorded for your unit.'
+                : 'You do not have any open active maintenance issues.'
+            }
           />
         )}
       </ScrollView>
@@ -87,23 +306,64 @@ export default function MaintenanceScreen() {
       <View style={[styles.bottomAction, { paddingBottom: Math.max(bottom, 16) }]}>
         <Button label="Raise New Request" onPress={() => router.push('/services/raise-issue')} />
       </View>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={Boolean(ticketToDelete)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTicketToDelete(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconContainer}>
+              <Feather name="alert-triangle" size={24} color="#EF4444" />
+            </View>
+
+            <Text style={styles.modalTitle}>Delete Request?</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete "{ticketToDelete?.title}"? This action cannot be undone.
+            </Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setTicketToDelete(null)}
+                disabled={deleting}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={handleConfirmDelete}
+                disabled={deleting}
+              >
+                <Text style={styles.modalDeleteText}>
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingHorizontal: 20 },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingHorizontal: cardSystem.pagePadding },
   tab: { paddingVertical: 14, marginRight: 24, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: theme.colors.primary },
   tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: theme.colors.textSecondary },
   tabTextActive: { color: theme.colors.primary },
-  list: { padding: 20, paddingBottom: 110 },
+  list: { paddingHorizontal: cardSystem.pagePadding, paddingVertical: 20, paddingBottom: 110 },
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.04)',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
@@ -112,21 +372,47 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
+  cardDeleted: {
+    backgroundColor: '#F9FAFB',
+    borderColor: 'rgba(0,0,0,0.06)',
+    opacity: 0.85,
+  },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   categoryText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: theme.colors.textSecondary },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   ticketId: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textSecondary },
   title: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 17, letterSpacing: -0.3, color: theme.colors.textPrimary, marginBottom: 6 },
-  desc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, color: theme.colors.textSecondary, marginBottom: 14, lineHeight: 21 },
+  titleDeleted: { textDecorationLine: 'line-through', color: theme.colors.textSecondary },
+  desc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, color: theme.colors.textSecondary, marginBottom: 10, lineHeight: 21 },
+  staffPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  staffPillText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    color: '#0284C7',
+  },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   time: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: theme.colors.textSecondary },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 100 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 98 },
+  statusPending: { backgroundColor: '#FEF3C7' },
   statusInProgress: { backgroundColor: '#EFF6FF' },
-  statusResolved: { backgroundColor: '#ECFDF5' },
+  statusClosed: { backgroundColor: '#ECFDF5' },
+  statusDeleted: { backgroundColor: '#FEE2E2' },
   statusText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12 },
+  statusTextPending: { color: '#B45309' },
   statusTextInProgress: { color: '#1D4ED8' },
-  statusTextResolved: { color: '#047857' },
+  statusTextClosed: { color: '#047857' },
+  statusTextDeleted: { color: '#DC2626' },
   bottomAction: {
     position: 'absolute',
     bottom: 0,
@@ -142,5 +428,132 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 4,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 24,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  modalDeleteBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalDeleteText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  verificationBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  verificationTitle: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: '#166534',
+    marginBottom: 10,
+  },
+  verificationActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  verifyAcceptBtn: {
+    flex: 1,
+    backgroundColor: '#16A34A',
+    minHeight: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  verifyAcceptText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  verifyRejectBtn: {
+    flex: 1,
+    backgroundColor: '#FEE2E2',
+    minHeight: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  verifyRejectText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    color: '#991B1B',
+  },
+  statusPendingVerification: {
+    backgroundColor: '#FEF08A',
+  },
+  statusTextPendingVerification: {
+    color: '#854D0E',
+  },
 });

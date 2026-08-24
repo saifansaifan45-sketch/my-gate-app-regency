@@ -1,13 +1,16 @@
 import { PremiumPressable } from './ui/PremiumPressable';
+import { Button } from './ui/Button';
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { View, StyleSheet, Modal, SafeAreaView, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Modal, Pressable, Switch, Dimensions, Keyboard, Platform, ScrollView, Text as RNText } from 'react-native';
 import { Text } from './ui/Text';
 import { theme } from '../theme';
+import { useScreenInsets } from '../hooks/useScreenInsets';
+import * as Haptics from 'expo-haptics';
 
 export interface QuickActionItem {
   id: string;
-  icon: any;
+  icon: React.ComponentProps<typeof Feather>['name'];
   label: string;
   bgColor: string;
   iconColor: string;
@@ -21,120 +24,183 @@ interface QuickActionsEditorModalProps {
   onSave: (updated: QuickActionItem[]) => void;
 }
 
-export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: QuickActionsEditorModalProps) {
-  const [localActions, setLocalActions] = useState<QuickActionItem[]>(actions);
+const MAX_SHEET_HEIGHT_RATIO = 0.75;
 
-  React.useEffect(() => {
+export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: QuickActionsEditorModalProps) {
+  const { bottomClearance } = useScreenInsets(false);
+  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const maxHeight = SCREEN_HEIGHT * MAX_SHEET_HEIGHT_RATIO;
+  const [localActions, setLocalActions] = useState<QuickActionItem[]>(actions);
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  useEffect(() => {
     if (visible) {
       setLocalActions(actions);
+      Keyboard.dismiss();
     }
   }, [visible, actions]);
 
+  const handleSave = async () => {
+    setSaveLoading(true);
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onSave(localActions);
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
   const toggleAction = (id: string) => {
-    const updated = localActions.map(a => 
+    const updated = localActions.map(a =>
       a.id === id ? { ...a, visible: !a.visible } : a
     );
-    if (updated.filter(a => a.visible).length === 0) return; // Enforce min 1
+    if (updated.filter(a => a.visible).length === 0) return;
     setLocalActions(updated);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const moveUp = (index: number) => {
-    if (index === 0) return;
+  const moveItem = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= localActions.length) return;
     const updated = [...localActions];
-    const temp = updated[index - 1];
-    updated[index - 1] = updated[index];
-    updated[index] = temp;
+    const [item] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, item);
     setLocalActions(updated);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const moveDown = (index: number) => {
-    if (index === localActions.length - 1) return;
-    const updated = [...localActions];
-    const temp = updated[index + 1];
-    updated[index + 1] = updated[index];
-    updated[index] = temp;
-    setLocalActions(updated);
-  };
+  const moveUp = (index: number) => moveItem(index, index - 1);
+  const moveDown = (index: number) => moveItem(index, index + 1);
+
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={styles.container}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType={Platform.OS === 'ios' ? 'none' : 'slide'}
+      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.backdrop} onPress={onClose}><View /></Pressable>
+      <View style={[styles.sheet, { maxHeight }]}>
+        <View style={styles.handleRow}>
+          <View style={styles.handle} />
+        </View>
+
         <View style={styles.header}>
           <Text style={styles.title}>Edit quick actions</Text>
           <Text style={styles.subtitle}>Choose which actions appear on your Home screen.</Text>
         </View>
 
-        <View style={styles.list}>
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
           {localActions.map((action, index) => (
             <View key={action.id} style={styles.row}>
               <View style={styles.rowLeft}>
+                <View style={[styles.dragHandle, { backgroundColor: 'rgba(0,0,0,0.04)' }]}>
+                  <Feather name="menu" size={16} color={theme.colors.textSecondary} />
+                </View>
                 <View style={[styles.iconContainer, { backgroundColor: action.bgColor }]}>
                   <Feather name={action.icon} size={18} color={action.iconColor} />
                 </View>
                 <Text style={styles.rowLabel}>{action.label}</Text>
               </View>
               <View style={styles.rowRight}>
-                <View style={styles.arrows}>
-                  <PremiumPressable onPress={() => moveUp(index)} disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }}>
-                    <Feather name="chevron-up" size={20} color={theme.colors.textSecondary} />
-                  </PremiumPressable>
-                  <PremiumPressable onPress={() => moveDown(index)} disabled={index === localActions.length - 1} style={{ opacity: index === localActions.length - 1 ? 0.3 : 1 }}>
-                    <Feather name="chevron-down" size={20} color={theme.colors.textSecondary} />
-                  </PremiumPressable>
-                </View>
-                <Switch 
-                  value={action.visible} 
-                  onValueChange={() => toggleAction(action.id)} 
+                <Switch
+                  value={action.visible}
+                  onValueChange={() => toggleAction(action.id)}
                   trackColor={{ true: theme.colors.primary, false: 'rgba(0,0,0,0.1)' }}
+                  thumbColor={action.visible ? theme.colors.primary : '#fff'}
+                  accessibilityLabel={`${action.label} ${action.visible ? 'enabled' : 'disabled'}`}
+                  accessibilityRole="switch"
                 />
               </View>
             </View>
           ))}
-        </View>
+        </ScrollView>
 
-        <View style={styles.footer}>
-          <PremiumPressable style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </PremiumPressable>
-          <PremiumPressable style={styles.saveBtn} onPress={() => onSave(localActions)}>
-            <Text style={styles.saveBtnText}>Save changes</Text>
-          </PremiumPressable>
+        <View style={[styles.footer, { paddingBottom: 20 + bottomClearance }]}>
+          <View style={styles.buttonRow}>
+            <Button
+              label="Cancel"
+              variant="outline"
+              size="md"
+              onPress={onClose}
+              disabled={saveLoading}
+              style={styles.cancelBtn}
+            />
+            <Button
+              label={saveLoading ? 'Saving...' : 'Save changes'}
+              variant="primary"
+              size="md"
+              onPress={handleSave}
+              disabled={saveLoading}
+              loading={saveLoading}
+              style={styles.saveBtn}
+            />
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FDFBF7',
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  handleRow: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   header: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   title: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 22,
+    fontSize: 20,
     color: theme.colors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
     fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.textSecondary,
   },
   list: {
     flex: 1,
-    padding: 24,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
   },
@@ -142,13 +208,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  dragHandle: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   rowLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -158,45 +232,28 @@ const styles = StyleSheet.create({
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   arrows: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   footer: {
-    padding: 24,
-    flexDirection: 'row',
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   cancelBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 14,
-    color: theme.colors.textPrimary,
+    borderRadius: 14,
   },
   saveBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 14,
-    color: '#FFF',
+    borderRadius: 14,
   },
 });

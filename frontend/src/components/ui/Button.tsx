@@ -12,16 +12,17 @@ interface ButtonProps extends Omit<TouchableOpacityProps, 'children'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'dangerOutline';
   size?: 'sm' | 'md' | 'lg';
   icon?: FeatherName;
+  iconPosition?: 'left' | 'right';
   loading?: boolean;
 }
 
 const SIZES = {
-  sm: { minHeight: 48, fontSize: 14, iconSize: 16, radius: 24, paddingVertical: 12 },
-  md: { minHeight: 56, fontSize: 16, iconSize: 18, radius: 28, paddingVertical: 16 },
-  lg: { minHeight: 62, fontSize: 17, iconSize: 20, radius: 31, paddingVertical: 18 },
+  sm: { minHeight: 44, fontSize: 14, iconSize: 16, radius: 97, paddingVertical: 10 },
+  md: { minHeight: 52, fontSize: 16, iconSize: 18, radius: 97, paddingVertical: 13 },
+  lg: { minHeight: 58, fontSize: 17, iconSize: 20, radius: 97, paddingVertical: 16 },
 };
 
-export function Button({ label, variant = 'primary', size = 'md', icon, loading, style, disabled, ...props }: ButtonProps) {
+export function Button({ label, variant = 'primary', size = 'md', icon, iconPosition = 'left', loading, style, disabled, ...props }: ButtonProps) {
   const dims = SIZES[size];
   const palette = VARIANTS[variant];
   const isDisabled = disabled || loading;
@@ -44,8 +45,9 @@ export function Button({ label, variant = 'primary', size = 'md', icon, loading,
         <ActivityIndicator color={palette.textColor} />
       ) : (
         <>
-          {icon && <Feather name={icon} size={dims.iconSize} color={palette.textColor} style={{ marginRight: 8 }} />}
+          {icon && iconPosition === 'left' && <Feather name={icon} size={dims.iconSize} color={palette.textColor} style={{ marginRight: 8 }} />}
           <Text style={[styles.label, { fontSize: dims.fontSize, color: palette.textColor }]}>{label}</Text>
+          {icon && iconPosition === 'right' && <Feather name={icon} size={dims.iconSize} color={palette.textColor} style={{ marginLeft: 8 }} />}
         </>
       )}
     </PremiumPressable>
@@ -68,12 +70,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   secondary: {
-    backgroundColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.22)',
   },
   danger: {
     backgroundColor: '#DC2626',

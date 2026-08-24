@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewProps } from 'react-native';
-import { theme } from '../../theme';
+import { cardSurface, cardSystem } from './cardSystem';
 
 interface CardProps extends ViewProps {
   children: React.ReactNode;
@@ -16,11 +16,7 @@ export function Card({ children, style, ...props }: CardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
-    ...theme.shadows.card,
+    ...cardSurface,
+    padding: cardSystem.padding,
   },
 });

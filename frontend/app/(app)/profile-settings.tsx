@@ -3,11 +3,13 @@ import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { smartBack } from '../../src/navigation/history';
 import { Text } from '../../src/components/ui/Text';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
+import { cardSystem } from '../../src/components/ui/cardSystem';
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
@@ -40,23 +42,20 @@ export default function ProfileSettingsScreen() {
       <AppHeader
         variant="subscreen"
         title="Settings"
-        onBackPress={() => router.canGoBack() ? router.back() : router.replace('/profile')}
+        onBackPress={() => smartBack(router, '/profile')}
       />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}>
         <ScreenEntrance delay={100}>
           {renderSection('Account', [
-            { label: 'Personal details', icon: 'user' },
-            { label: 'Change password', icon: 'lock' },
-            { label: 'Notification preferences', icon: 'bell' },
+            { label: 'Change password', icon: 'lock', onClick: () => router.push('/change-password') },
           ])}
         </ScreenEntrance>
 
         <ScreenEntrance delay={200}>
           {renderSection('Community and home', [
-            { label: 'My home', icon: 'home' },
-            { label: 'Community details', icon: 'map-pin' },
-            { label: 'Announcement access', icon: 'radio' },
+            { label: 'Community Hub', icon: 'map-pin', onClick: () => router.push('/community-hub') },
+            { label: 'My home', icon: 'home', onClick: () => router.push('/my-home') },
           ])}
         </ScreenEntrance>
 
@@ -83,7 +82,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: cardSystem.pagePadding,
     paddingTop: 12,
   },
   section: {
@@ -99,7 +98,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.04)',
     overflow: 'hidden',

@@ -1,178 +1,112 @@
-import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { householdApi, HouseholdActivity } from '../../src/api/household';
 import { AppHeader } from '../../src/components/ui/AppHeader';
-import { useScreenInsets } from '../../src/hooks/useScreenInsets';
-import { Text } from '../../src/components/ui/Text';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
-import { useIssues, removeIssue } from '../../src/store/issues';
+import { Text } from '../../src/components/ui/Text';
+import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
+import { cardSystem } from '../../src/components/ui/cardSystem';
 
-const FIXTURES = {
-  visitors: [
-    { id: 1, name: 'Rahul Sharma', time: 'Today · 6:30 PM', type: 'Personal Visitor', status: 'Expected' },
-    { id: 2, name: 'Amazon Delivery', time: 'Today · 2:15 PM', type: 'Delivery', status: 'Arrived' },
-    { id: 3, name: 'Swiggy', time: 'Today · 1:00 PM', type: 'Delivery', status: 'Completed' },
-  ],
-  deliveries: [
-    { id: 1, item: 'Amazon Package', time: 'Today · 2:15 PM', status: 'At Gate' },
-  ],
-  issues: [
-  ],
-  staff: [
-    { id: 1, name: 'Sunita (Maid)', time: 'Today · 8:00 AM - 10:00 AM', status: 'Present' },
-    { id: 2, name: 'Ramesh (Driver)', time: 'Today · 9:00 AM', status: 'Present' },
-  ]
+type Filter = 'ALL' | 'GUEST' | 'CAB' | 'DELIVERY' | 'SERVICE';
+type DateRange = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'ALL', label: 'All activity' }, { id: 'GUEST', label: 'Visitors' }, { id: 'CAB', label: 'Cabs' }, { id: 'DELIVERY', label: 'Deliveries' }, { id: 'SERVICE', label: 'Services' },
+];
+
+const DATE_RANGES: { id: DateRange; label: string }[] = [
+  { id: 'ALL', label: 'All dates' }, { id: 'TODAY', label: 'Today' }, { id: 'WEEK', label: 'Past 7 days' }, { id: 'MONTH', label: 'Past 30 days' }, { id: 'CUSTOM', label: 'Custom' },
+];
+
+const dateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
+
+const isDateKey = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime());
+
+const kindStyle = (kind: HouseholdActivity['kind']) => {
+  if (kind === 'DELIVERY') return { icon: 'package' as const, color: '#A16207', background: '#FFF3D6' };
+  if (kind === 'CAB') return { icon: 'map-pin' as const, color: '#2563EB', background: '#EAF1FF' };
+  if (kind === 'SERVICE') return { icon: 'tool' as const, color: '#7C3AED', background: '#F3E8FF' };
+  return { icon: 'user-check' as const, color: theme.colors.primary, background: '#E8F5E9' };
+};
+
+function timeLabel(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  return `${isToday ? 'Today' : date.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 export default function ActivityOverviewScreen() {
   const { bottomClearance } = useScreenInsets(false);
-  const issues = useIssues();
-
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({
-    'Visitors': false,
-    'Deliveries': false,
-    'Issues': false,
-    'Staff': false
-  });
-
-  const toggleSection = (title: string) => {
-    setExpanded(prev => ({ ...prev, [title]: !prev[title] }));
-  };
-
-  const renderSection = (title: string, data: any[], icon: any, color: string, onDelete?: (id: string) => void) => {
-    const isExpanded = expanded[title];
-    return (
-      <View style={styles.section} key={title}>
-        <PremiumPressable style={styles.sectionHeader} onPress={() => toggleSection(title)} activeOpacity={0.8}>
-          <View style={styles.sectionTitleRow}>
-            <Feather name={icon} size={18} color={color} />
-            <Text style={styles.sectionTitle}>{title} <Text style={{color: theme.colors.textSecondary}}>({data.length})</Text></Text>
-          </View>
-          <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.textSecondary} />
-        </PremiumPressable>
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            {data.map((item, index) => (
-              <View key={item.id ?? index} style={styles.detailRow}>
-                <View style={styles.detailInfo}>
-                  <Text style={styles.detailTitle}>{item.name || item.item || item.title}</Text>
-                  <Text style={styles.detailStatus}>{item.status || item.time}</Text>
-                </View>
-                {onDelete && (
-                  <PremiumPressable
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${item.title || item.name || item.item || ''}`}
-                    onPress={() => onDelete(item.id)}
-                  >
-                    <Feather name="trash-2" size={15} color={theme.colors.textSecondary} />
-                  </PremiumPressable>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
+  const [filter, setFilter] = useState<Filter>('ALL');
+  const [dateRange, setDateRange] = useState<DateRange>('ALL');
+  const [startDate, setStartDate] = useState(dateKey(new Date()));
+  const [endDate, setEndDate] = useState(dateKey(new Date()));
+  const dateParams = useMemo(() => {
+    const today = new Date();
+    if (dateRange === 'TODAY') return { from: dateKey(today), to: dateKey(today) };
+    if (dateRange === 'WEEK') { const from = new Date(today); from.setDate(today.getDate() - 6); return { from: dateKey(from), to: dateKey(today) }; }
+    if (dateRange === 'MONTH') { const from = new Date(today); from.setDate(today.getDate() - 29); return { from: dateKey(from), to: dateKey(today) }; }
+    if (dateRange === 'CUSTOM' && isDateKey(startDate) && isDateKey(endDate) && startDate <= endDate) return { from: startDate, to: endDate };
+    return {};
+  }, [dateRange, endDate, startDate]);
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: ['household-activity', dateParams.from || null, dateParams.to || null], queryFn: () => householdApi.getActivity(dateParams) });
+  const activities = useMemo(() => (data?.activities || []).filter((activity) => filter === 'ALL' || activity.kind === filter), [data, filter]);
 
   return (
     <View style={styles.container}>
-      <AppHeader variant="subscreen" title="Activity Overview" />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}>
-        <ScreenEntrance delay={100}>
-          {renderSection('Visitors', FIXTURES.visitors, 'user', theme.colors.primary)}
-        </ScreenEntrance>
-        <ScreenEntrance delay={200}>
-          {renderSection('Deliveries', FIXTURES.deliveries, 'package', theme.colors.accent)}
-        </ScreenEntrance>
-        <ScreenEntrance delay={300}>
-          {renderSection('Issues', issues, 'tool', '#8B4513', (id) => removeIssue(id))}
-        </ScreenEntrance>
-        <ScreenEntrance delay={400}>
-          {renderSection('Staff', FIXTURES.staff, 'users', theme.colors.primary)}
-        </ScreenEntrance>
+      <AppHeader variant="subscreen" title="Household activity" />
+      <View style={styles.intro}>
+        <View style={styles.introIcon}><Feather name="eye" size={19} color={theme.colors.primary} /></View>
+        <View style={styles.introCopy}><Text style={styles.introTitle}>Shared activity for your home</Text><Text style={styles.introText}>Every household member can see visits, approvals, arrivals, and delivery handoffs.</Text></View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
+        {FILTERS.map((item) => {
+          const selected = filter === item.id;
+          return <PremiumPressable key={item.id} style={[styles.filter, selected && styles.filterSelected]} onPress={() => setFilter(item.id)} accessibilityRole="tab" accessibilityState={{ selected }}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{item.label}</Text></PremiumPressable>;
+        })}
+      </ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow} style={styles.dateScroll}>
+        {DATE_RANGES.map((item) => {
+          const selected = dateRange === item.id;
+          return <PremiumPressable key={item.id} style={[styles.dateChip, selected && styles.dateChipSelected]} onPress={() => setDateRange(item.id)} accessibilityRole="tab" accessibilityState={{ selected }}><Feather name={item.id === 'CUSTOM' ? 'calendar' : 'clock'} size={13} color={selected ? '#FFFFFF' : theme.colors.textSecondary} /><Text style={[styles.dateChipText, selected && styles.dateChipTextSelected]}>{item.label}</Text></PremiumPressable>;
+        })}
+      </ScrollView>
+      {dateRange === 'CUSTOM' ? <View style={styles.customDates}>
+        <View style={styles.dateInputWrap}><Text style={styles.dateInputLabel}>From</Text><TextInput style={styles.dateInput} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textSecondary} autoCapitalize="none" maxLength={10} accessibilityLabel="Start date" /></View>
+        <Feather name="arrow-right" size={16} color={theme.colors.textSecondary} />
+        <View style={styles.dateInputWrap}><Text style={styles.dateInputLabel}>To</Text><TextInput style={styles.dateInput} value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textSecondary} autoCapitalize="none" maxLength={10} accessibilityLabel="End date" /></View>
+      </View> : null}
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 16 }]} refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={() => refetch()} tintColor={theme.colors.primary} />}>
+        {isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
+        {!isLoading && activities.length === 0 ? <EmptyState icon="activity" title="No activity found" description={dateRange === 'CUSTOM' && (!isDateKey(startDate) || !isDateKey(endDate) || startDate > endDate) ? 'Enter valid dates in YYYY-MM-DD format, with the start date before the end date.' : filter === 'ALL' ? 'No household activity was recorded for this date range.' : 'No matching household activity was recorded for this date range.'} /> : null}
+        {activities.map((activity, index) => {
+          const visual = kindStyle(activity.kind);
+          return <ScreenEntrance key={activity.id} delay={Math.min(60 + index * 35, 240)}><View style={styles.row}>
+            <View style={[styles.iconBox, { backgroundColor: visual.background }]}><Feather name={visual.icon} size={18} color={visual.color} /></View>
+            <View style={styles.activityCopy}><Text style={styles.activityTitle}>{activity.title}</Text><Text style={styles.activityDetail}>{activity.detail}</Text></View>
+            <Text style={styles.time}>{timeLabel(activity.createdAt)}</Text>
+          </View></ScreenEntrance>;
+        })}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  section: {
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sectionTitle: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 17,
-    letterSpacing: -0.3,
-    color: theme.colors.textPrimary,
-  },
-  sectionCount: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 15,
-    color: theme.colors.textSecondary,
-  },
-  expandedContent: {
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    borderTopWidth: 0,
-    marginTop: -4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.04)',
-  },
-  detailInfo: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  detailTitle: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-  },
-  detailStatus: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  }
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  intro: { marginHorizontal: 20, marginTop: 16, padding: 16, borderRadius: 16, flexDirection: 'row', backgroundColor: '#EDF6F0' }, introIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D6EBDD', marginRight: 12 }, introCopy: { flex: 1 }, introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, introText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: '#52705F' },
+  filterScroll: { flexGrow: 0, marginTop: 16 }, filterRow: { paddingHorizontal: 20, gap: 8 }, filter: { paddingHorizontal: 14, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#ECECE5' }, filterSelected: { backgroundColor: theme.colors.primary }, filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textSecondary }, filterTextSelected: { color: '#FFFFFF' },
+  dateScroll: { flexGrow: 0, marginTop: 10 }, dateRow: { paddingHorizontal: 20, gap: 8 }, dateChip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F4F2EC', flexDirection: 'row', alignItems: 'center', gap: 5 }, dateChipSelected: { backgroundColor: '#365F4A' }, dateChipText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary }, dateChipTextSelected: { color: '#FFFFFF' }, customDates: { marginHorizontal: 20, marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8, ...theme.shadows.card }, dateInputWrap: { flex: 1 }, dateInputLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary, marginBottom: 3 }, dateInput: { minHeight: 32, padding: 0, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.textPrimary },
+  list: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 18, gap: 10 }, loader: { paddingVertical: 54, alignItems: 'center' }, row: { minHeight: 76, padding: 14, borderRadius: 16, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', ...theme.shadows.card }, iconBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, activityCopy: { flex: 1, paddingRight: 10 }, activityTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, lineHeight: 19, color: theme.colors.textPrimary }, activityDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: theme.colors.textSecondary, marginTop: 2 }, time: { width: 66, textAlign: 'right', fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, lineHeight: 15, color: theme.colors.textSecondary },
 });

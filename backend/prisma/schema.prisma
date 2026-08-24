@@ -8,52 +8,790 @@ datasource db {
 
 enum Role {
   LEADERSHIP
+  MANAGER
   OWNER
   RESIDENT
   TENANT
   WORKFORCE
 }
 
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  REVOKED
+  BLOCKED
+}
+
+enum OwnershipStatus {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+}
+
+enum ResidencyStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  EXPIRED
+}
+
+enum ResidencyType {
+  OWNER
+  TENANT
+  FAMILY_MEMBER
+}
+
+enum SpaceType {
+  LEADERSHIP_OPERATIONS
+  OWNER_COMMUNITY
+  RESIDENT_COMMUNITY
+  EMERGENCY
+  CUSTOM
+}
+
+enum SpaceAccessType {
+  OWNERS
+  ACTIVE_RESIDENTS
+  MANAGERS
+  LEADERSHIP
+  WORKFORCE
+  ALL_COMMUNITY
+}
+
+enum PostType {
+  GENERAL
+  EVENT
+  DISCUSSION
+  UPDATE
+}
+
+enum PollStatus {
+  ACTIVE
+  EXPIRED
+  CLOSED
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+enum AnnouncementCategory {
+  GENERAL
+  MAINTENANCE
+  SECURITY
+  EVENT
+  EMERGENCY
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SpaceMessageType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TASK_COMPLETED
+  EMERGENCY_ALERT
+  SYSTEM_NOTICE
+}
+
+enum StaffType {
+  SECURITY
+  ELECTRICIAN
+  PLUMBER
+  CLEANER
+  MAINTENANCE
+  DRIVER
+  OTHER
+}
+
+enum StaffRequestStatus {
+  PENDING
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+enum Department {
+  SECURITY
+  HOUSEKEEPING
+  MAINTENANCE
+  GARDENING
+  OTHER
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum PersonnelActivityType {
+  TASK_COMPLETED
+  TASK_FAILED
+  ATTENDANCE_MARKED
+  LEAVE_REQUESTED
+  OVERTIME_LOGGED
+}
+
+enum PersonnelCategory {
+  ELECTRICIAN
+  PLUMBER
+  CLEANER
+  SECURITY
+  GARDENER
+  MAINTENANCE
+  OTHER
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BUSY
+  OFF_DUTY
+  LEAVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED_BY_WORKER
+  PENDING_RESIDENT_CONFIRMATION
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+enum VerificationType {
+  MANAGER_VALIDATION
+  RESIDENT_CONFIRMATION
+}
+
+enum VerificationDecision {
+  ACCEPTED
+  REJECTED
+}
+
+enum TaskStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+  CANCELLED
+}
+
+enum VisitorStatus {
+  PENDING
+  APPROVED
+  CHECKED_IN
+  CHECKED_OUT
+  EXPIRED
+  REJECTED
+  REVOKED
+}
+
+enum VisitorType {
+  GUEST
+  DELIVERY
+  SERVICE
+  CAB
+  OTHER
+}
+
 model User {
-  id           String       @id @default(uuid())
-  email        String       @unique
-  passwordHash String
-  firstName    String?
-  unitNumber   String?
-  role         Role         @default(OWNER)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  memberships  Membership[]
-  sessions     Session[]
+  id                      String             @id @default(uuid())
+  email                   String             @unique
+  passwordHash            String
+  tokenVersion            Int                @default(0)
+  resetTokenHash          String?
+  resetTokenExpiresAt     DateTime?
+  firstName               String?
+  lastName                String?
+  phoneNumber             String?
+  unitNumber              String?
+  role                    Role?              @default(RESIDENT)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  memberships             Membership[]
+  ownerships              UnitOwnership[]    @relation("UserOwnerships")
+  residencies             UnitResidency[]    @relation("UserResidencies")
+  verifiedResidencies     UnitResidency[]    @relation("VerifiedResidencies")
+  sessions                Session[]
+  auditLogsActor          AuditLog[]         @relation("AuditActor")
+  auditLogsTarget         AuditLog[]         @relation("AuditTarget")
+  staffRequests           StaffRequest[]     @relation("RequestedByUser")
+  tickets                 Ticket[]           @relation("ResidentTickets")
+  assignedTasks           Task[]             @relation("ManagerTasks")
+  notifications           Notification[]     @relation("UserNotifications")
+  posts                   CommunityPost[]    @relation("UserPosts")
+  polls                   Poll[]             @relation("UserPolls")
+  pollVotes               PollVote[]         @relation("UserPollVotes")
+  announcements           Announcement[]     @relation("UserAnnouncements")
+  lostAndFoundItems       LostAndFoundItem[]
+  announcementReads       AnnouncementRead[]
+  visitors                Visitor[]          @relation("UserVisitors")
+  householdMembers        HouseholdMember[]  @relation("HouseholdMemberCreator")
+  householdVehicles       HouseholdVehicle[] @relation("HouseholdVehicleCreator")
+  householdPets           HouseholdPet[]     @relation("HouseholdPetCreator")
+  personnelProfile        Personnel?         @relation("UserPersonnel")
+  householdHelps          HouseholdHelp[]    @relation("HouseholdHelpCreator")
+  attendanceConfirmations Attendance[]       @relation("AttendanceConfirmer")
 }
 
 model Community {
-  id          String       @id @default(uuid())
+  id                String             @id @default(uuid())
+  name              String
+  address           String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  units             Unit[]
+  memberships       Membership[]
+  spaces            Space[]
+  auditLogs         AuditLog[]
+  staffRequests     StaffRequest[]
+  personnel         Personnel[]
+  tickets           Ticket[]
+  visitors          Visitor[]
+  householdMembers  HouseholdMember[]
+  householdVehicles HouseholdVehicle[]
+  householdPets     HouseholdPet[]
+  householdHelps    HouseholdHelp[]
+  announcements     Announcement[]
+  lostAndFoundItems LostAndFoundItem[]
+}
+
+model HouseholdMember {
+  id           String     @id @default(uuid())
+  unitId       String
+  createdById  String
+  name         String
+  relationship String
+  phone        String?
+  email        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  unit         Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdBy    User       @relation("HouseholdMemberCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  community    Community? @relation(fields: [communityId], references: [id])
+  communityId  String?
+
+  @@index([unitId])
+}
+
+model HouseholdVehicle {
+  id                 String     @id @default(uuid())
+  unitId             String
+  createdById        String
+  registrationNumber String
+  make               String?
+  model              String?
+  color              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  unit               Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdBy          User       @relation("HouseholdVehicleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  community          Community? @relation(fields: [communityId], references: [id])
+  communityId        String?
+
+  @@unique([unitId, registrationNumber])
+  @@index([unitId])
+}
+
+model HouseholdPet {
+  id          String     @id @default(uuid())
+  unitId      String
+  createdById String
   name        String
-  address     String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  memberships Membership[]
+  species     String
+  breed       String?
+  color       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  unit        Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdBy   User       @relation("HouseholdPetCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  community   Community? @relation(fields: [communityId], references: [id])
+  communityId String?
+
+  @@index([unitId])
+}
+
+model HouseholdHelp {
+  id              String   @id @default(uuid())
+  unitId          String
+  communityId     String
+  createdById     String
+  name            String
+  phone           String
+  role            String
+  vehicleNumber   String?
+  recurringDays   String // e.g. "1,2,3,4,5"
+  arrivalWindow   String?
+  departureWindow String?
+  status          String   @default("ACTIVE") // ACTIVE, PAUSED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("HouseholdHelpCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@index([communityId])
+}
+
+model Unit {
+  id                String             @id @default(uuid())
+  communityId       String
+  unitNumber        String // e.g. "9A", "A-101", "A-302"
+  floor             String? // e.g. "9", "1"
+  block             String? // e.g. "Tower A", "Tower B"
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  community         Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  ownerships        UnitOwnership[]    @relation("UnitOwnerships")
+  residencies       UnitResidency[]    @relation("UnitResidencies")
+  memberships       Membership[]
+  staffRequests     StaffRequest[]
+  tickets           Ticket[]
+  visitors          Visitor[]
+  householdMembers  HouseholdMember[]
+  householdVehicles HouseholdVehicle[]
+  householdPets     HouseholdPet[]
+  householdHelps    HouseholdHelp[]
+
+  @@unique([communityId, unitNumber])
+}
+
+model UnitOwnership {
+  id        String          @id @default(uuid())
+  userId    String
+  unitId    String
+  status    OwnershipStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User            @relation("UserOwnerships", fields: [userId], references: [id], onDelete: Cascade)
+  unit      Unit            @relation("UnitOwnerships", fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, unitId])
+  @@index([unitId])
+  @@index([userId])
+}
+
+model UnitResidency {
+  id               String          @id @default(uuid())
+  userId           String
+  unitId           String
+  status           ResidencyStatus @default(PENDING)
+  relationshipType ResidencyType   @default(TENANT)
+  verifiedById     String?
+  verifiedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  user             User            @relation("UserResidencies", fields: [userId], references: [id], onDelete: Cascade)
+  unit             Unit            @relation("UnitResidencies", fields: [unitId], references: [id], onDelete: Cascade)
+  verifiedBy       User?           @relation("VerifiedResidencies", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, unitId, relationshipType])
+  @@index([unitId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Space {
+  id            String            @id @default(uuid())
+  communityId   String
+  name          String
+  description   String?
+  type          SpaceType         @default(CUSTOM)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  community     Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  accessRules   SpaceAccessRule[]
+  posts         CommunityPost[]
+  polls         Poll[]
+  announcements Announcement[]
+  messages      SpaceMessage[]
+
+  @@index([communityId, type])
+}
+
+model SpaceAccessRule {
+  id         String          @id @default(uuid())
+  spaceId    String
+  accessType SpaceAccessType
+  createdAt  DateTime        @default(now())
+  space      Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, accessType])
+}
+
+model CommunityPost {
+  id            String   @id @default(uuid())
+  spaceId       String
+  authorId      String
+  type          PostType @default(GENERAL)
+  content       String
+  attachmentUrl String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  space         Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  author        User     @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, createdAt])
+}
+
+model Poll {
+  id        String       @id @default(uuid())
+  spaceId   String
+  authorId  String
+  question  String
+  status    PollStatus   @default(ACTIVE)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  space     Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  author    User         @relation("UserPolls", fields: [authorId], references: [id], onDelete: Cascade)
+  options   PollOption[]
+  votes     PollVote[]
+
+  @@index([spaceId, status])
+}
+
+model PollOption {
+  id        String     @id @default(uuid())
+  pollId    String
+  text      String
+  createdAt DateTime   @default(now())
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+}
+
+model PollVote {
+  id        String     @id @default(uuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime   @default(now())
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User       @relation("UserPollVotes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([optionId])
+}
+
+model Announcement {
+  id          String               @id @default(uuid())
+  communityId String
+  spaceId     String
+  authorId    String
+  title       String
+  content     String
+  category    AnnouncementCategory @default(GENERAL)
+  priority    AnnouncementPriority @default(NORMAL)
+  status      AnnouncementStatus   @default(DRAFT)
+  expiresAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  community   Community            @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  space       Space                @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  author      User                 @relation("UserAnnouncements", fields: [authorId], references: [id], onDelete: Cascade)
+  reads       AnnouncementRead[]
+
+  @@index([communityId, status, createdAt])
+  @@index([spaceId, priority, createdAt])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  announcementId String
+  userId         String
+  readAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId, readAt])
+}
+
+model SpaceMessage {
+  id        String           @id @default(uuid())
+  spaceId   String
+  type      SpaceMessageType
+  title     String
+  content   String
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  space     Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, createdAt])
 }
 
 model Membership {
-  id          String    @id @default(uuid())
+  id          String           @id @default(uuid())
   userId      String
   communityId String
+  unitId      String? // Nullable for community-wide leadership/workforce/managers
   role        Role
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  status      MembershipStatus @default(APPROVED)
+  requestedCategory String?
+  requestedDepartment String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unit        Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   @@unique([userId, communityId, role])
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  communityId String
+  actorId     String
+  targetId    String?
+  action      String // e.g. "TENANT_APPROVED", "TENANT_REJECTED", "ROLE_PROMOTED", "ACCOUNT_SUSPENDED"
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  actor       User      @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target      User?     @relation("AuditTarget", fields: [targetId], references: [id], onDelete: SetNull)
+}
+
+model StaffRequest {
+  id            String             @id @default(uuid())
+  communityId   String
+  unitId        String?
+  requestedById String
+  staffType     StaffType
+  reason        String
+  notes         String?
+  startDate     DateTime?
+  endDate       DateTime?
+  status        StaffRequestStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  community     Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unit          Unit?              @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  requestedBy   User               @relation("RequestedByUser", fields: [requestedById], references: [id], onDelete: Cascade)
+}
+
+model Personnel {
+  id                 String              @id @default(uuid())
+  userId             String?             @unique
+  user               User?               @relation("UserPersonnel", fields: [userId], references: [id], onDelete: SetNull)
+  name               String
+  phone              String
+  category           PersonnelCategory   @default(MAINTENANCE)
+  department         Department          @default(MAINTENANCE)
+  designation        String?
+  joiningDate        DateTime            @default(now())
+  employmentStatus   EmploymentStatus    @default(ACTIVE)
+  availabilityStatus AvailabilityStatus  @default(AVAILABLE)
+  communityId        String?
+  community          Community?          @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tasks              Task[]
+  attendances        Attendance[]
+  activities         PersonnelActivity[]
+}
+
+model PersonnelActivity {
+  id          String                @id @default(uuid())
+  personnelId String
+  personnel   Personnel             @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  type        PersonnelActivityType
+  description String
+  referenceId String?
+  createdAt   DateTime              @default(now())
+
+  @@index([personnelId])
+}
+
+model Attendance {
+  id            String           @id @default(uuid())
+  personnelId   String
+  personnel     Personnel        @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  date          DateTime         @default(now())
+  status        AttendanceStatus @default(PRESENT)
+  checkIn       DateTime?
+  checkOut      DateTime?
+  confirmedById String?
+  confirmedAt   DateTime?
+  remarks       String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  confirmedBy User? @relation("AttendanceConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@index([personnelId, date])
+}
+
+model Ticket {
+  id            String               @id @default(uuid())
+  residentId    String
+  resident      User                 @relation("ResidentTickets", fields: [residentId], references: [id], onDelete: Cascade)
+  unitId        String?
+  unit          Unit?                @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  communityId   String?
+  community     Community?           @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  category      String // e.g. "Plumbing", "Electrical", "Lift", "Housekeeping", "Security", "Other"
+  title         String
+  description   String
+  priority      TicketPriority       @default(MEDIUM)
+  status        TicketStatus         @default(OPEN)
+  remarks       String?
+  deletedAt     DateTime?
+  deletedBy     String? // "RESIDENT" | "MANAGEMENT"
+  deletedReason String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  tasks         Task[]
+  verifications TicketVerification[]
+}
+
+model TicketVerification {
+  id            String               @id @default(uuid())
+  ticketId      String
+  verifierId    String
+  type          VerificationType
+  decision      VerificationDecision
+  note          String?
+  createdAt     DateTime             @default(now())
+  verifiedAt    DateTime             @default(now())
+  createdByRole String // To track if verified by 'RESIDENT', 'MANAGER', or 'SYSTEM'
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id                  String     @id @default(uuid())
+  ticketId            String
+  ticket              Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assignedPersonnelId String
+  assignedPersonnel   Personnel  @relation(fields: [assignedPersonnelId], references: [id], onDelete: Cascade)
+  assignedById        String
+  assignedBy          User       @relation("ManagerTasks", fields: [assignedById], references: [id], onDelete: Cascade)
+  status              TaskStatus @default(ASSIGNED)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  remarks             String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type       String // "NEW_TICKET", "TICKET_ACCEPTED", "TASK_ASSIGNED", "WORK_STARTED", "WORK_COMPLETED", "TICKET_VERIFIED", "TENANT_VERIFICATION_REQUEST", "RESIDENCY_APPROVED", "RESIDENCY_REJECTED"
+  title      String
+  message    String
+  readStatus Boolean  @default(false)
+  metadata   Json?
+  createdAt  DateTime @default(now())
 }
 
 model Session {
   id           String   @id @default(uuid())
   userId       String
-  refreshToken String   @unique // Hashed before storage
+  refreshToken String   @unique
   expiresAt    DateTime
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Visitor {
+  id                    String        @id @default(uuid())
+  name                  String
+  phone                 String?
+  purpose               String?
+  vehicleNumber         String?
+  visitorType           VisitorType   @default(GUEST)
+  status                VisitorStatus @default(PENDING)
+  otp                   String?
+  isPreApproved         Boolean       @default(false)
+  createdById           String
+  createdBy             User          @relation("UserVisitors", fields: [createdById], references: [id], onDelete: Cascade)
+  unitId                String?
+  unit                  Unit?         @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  communityId           String?
+  community             Community?    @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  validFrom             DateTime      @default(now())
+  validUntil            DateTime?
+  checkInTime           DateTime?
+  checkOutTime          DateTime?
+  provider              String?
+  orderReference        String?
+  packageCount          Int?
+  handoffSuggestionType String?
+  handoffSuggestionName String?
+  handoffRecipientType  String?
+  handoffRecipientName  String?
+  handoffTimestamp      DateTime?
+  handoffActorId        String?
+  handoffProofReference String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([communityId, createdAt])
+  @@index([communityId, updatedAt])
+  @@index([communityId, visitorType, status])
+  @@index([createdById])
+  @@index([unitId])
+  @@index([communityId])
+  @@index([status])
+  @@index([validFrom])
+}
+
+enum LostAndFoundType {
+  LOST
+  FOUND
+}
+
+enum LostAndFoundStatus {
+  ACTIVE
+  RESOLVED
+  ARCHIVED
+}
+
+model LostAndFoundItem {
+  id          String             @id @default(uuid())
+  communityId String
+  type        LostAndFoundType
+  title       String
+  description String
+  location    String?
+  reportedAt  DateTime
+  status      LostAndFoundStatus @default(ACTIVE)
+  authorId    String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, status, createdAt])
 }

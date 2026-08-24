@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './Text';
 import { PremiumPressable } from './PremiumPressable';
 import { theme } from '../../theme';
+import { smartBack } from '../../navigation/history';
 
 export type HeaderVariant = 'home' | 'subscreen' | 'tabroot';
 
@@ -42,11 +43,7 @@ export function AppHeader({
       onBackPress();
       return;
     }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(app)/home');
-    }
+    smartBack(router, '/(app)/home');
   };
 
   const isHome = variant === 'home';
@@ -75,7 +72,7 @@ export function AppHeader({
                 <PremiumPressable
                   style={styles.bellIconContainer}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => router.push('/announcements')}
+                  onPress={() => router.push('/notifications')}
                 >
                   <Feather name="bell" size={22} color={theme.colors.textPrimary} />
                   {hasUnreadNotifications && <View style={styles.unreadDot} />}
@@ -127,7 +124,7 @@ export function AppHeader({
                 <PremiumPressable
                   style={styles.bellIconContainer}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => router.push('/announcements')}
+                  onPress={() => router.push('/notifications')}
                 >
                   <Feather name="bell" size={22} color={theme.colors.textPrimary} />
                   {hasUnreadNotifications && <View style={styles.unreadDot} />}
@@ -183,9 +180,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginRight: 14,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.03)',
@@ -214,9 +211,9 @@ const styles = StyleSheet.create({
   bellIconContainer: {
     position: 'relative',
     marginRight: 14,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.03)',
@@ -227,15 +224,15 @@ const styles = StyleSheet.create({
     right: 6,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 2,
     backgroundColor: theme.colors.error,
     borderWidth: 1.5,
     borderColor: theme.colors.background,
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 20,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,63 +1,150 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
+import { smartBack } from '../../../src/navigation/history';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
+import { Skeleton } from '../../../src/components/ui/Skeleton';
+import { EmptyState } from '../../../src/components/ui/EmptyState';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
-
-const STAFF_LIST = [
-  { id: '1', name: 'Security', icon: 'shield', iconBg: '#E8F5E9', iconColor: '#2E7D32', status: 'Present', count: '8 / 10' },
-  { id: '2', name: 'Housekeeping', icon: 'home', iconBg: '#E3F2FD', iconColor: '#1976D2', status: 'Present', count: '6 / 8' },
-  { id: '3', name: 'Plumbing', icon: 'tool', iconBg: '#EDE7F6', iconColor: '#512DA8', status: 'Present', count: '2 / 2' },
-  { id: '4', name: 'Electrician', icon: 'zap', iconBg: '#FFF3E0', iconColor: '#F57C00', status: 'Present', count: '2 / 2' },
-  { id: '5', name: 'Landscaping', icon: 'feather', iconBg: '#E8F5E9', iconColor: '#388E3C', status: 'Present', count: '3 / 4' },
-  { id: '6', name: 'Waste Management', icon: 'trash-2', iconBg: '#FBE9E7', iconColor: '#D84315', status: 'Present', count: '4 / 5' },
-  { id: '7', name: 'Drivers', icon: 'truck', iconBg: '#E0F7FA', iconColor: '#00838F', status: 'Present', count: '3 / 4' },
-];
+import { managerApi, AttendanceRecord, AttendanceSummary } from '../../../src/api/manager';
 
 export default function StaffAttendanceScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [summary, setSummary] = useState<AttendanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAttendance = useCallback(async () => {
+    try {
+      const res = await managerApi.getAttendance();
+      setRecords(res.records);
+      setSummary(res.summary);
+    } catch (err) {
+      console.warn('Failed to load staff attendance:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAttendance();
+  };
+
+  const getCategoryIcon = (category: string): { icon: React.ComponentProps<typeof Feather>['name']; bg: string; color: string } => {
+    switch (category) {
+      case 'SECURITY':
+        return { icon: 'shield', bg: '#E8F5E9', color: '#2E7D32' };
+      case 'PLUMBER':
+        return { icon: 'droplet', bg: '#EDE7F6', color: '#512DA8' };
+      case 'ELECTRICIAN':
+        return { icon: 'zap', bg: '#FFF3E0', color: '#F57C00' };
+      case 'CLEANER':
+        return { icon: 'home', bg: '#E3F2FD', color: '#1976D2' };
+      case 'GARDENER':
+        return { icon: 'feather', bg: '#E8F5E9', color: '#388E3C' };
+      default:
+        return { icon: 'tool', bg: '#FBE9E7', color: '#D84315' };
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PRESENT':
+        return { bg: '#ECFDF5', color: '#059669', label: 'Present' };
+      case 'HALF_DAY':
+        return { bg: '#FEF3C7', color: '#D97706', label: 'Half Day' };
+      case 'LEAVE':
+        return { bg: '#EFF6FF', color: '#2563EB', label: 'On Leave' };
+      default:
+        return { bg: '#FEE2E2', color: '#DC2626', label: 'Absent' };
+    }
+  };
 
   return (
     <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Staff Attendance"
-        onBackPress={() => router.canGoBack() ? router.back() : router.replace('/services')}
+        onBackPress={() => smartBack(router, '/services')}
       />
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
         <ScreenEntrance delay={50}>
           <View style={styles.subHeader}>
-            <Text style={styles.subHeaderDate}>Today, 4 Jun 2026</Text>
-            <Feather name="calendar" size={18} color={theme.colors.textSecondary} />
+            <Text style={styles.subHeaderDate}>
+              Today, {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
+            {summary && (
+              <View style={styles.summaryBadge}>
+                <Text style={styles.summaryBadgeText}>{summary.present} / {summary.total} On Duty</Text>
+              </View>
+            )}
           </View>
         </ScreenEntrance>
 
         <ScreenEntrance delay={100}>
-          <View style={styles.card}>
-            {STAFF_LIST.map((staff, index) => (
-              <View key={staff.id} style={[styles.staffRow, index === STAFF_LIST.length - 1 && styles.noBorder]}>
-                <View style={[styles.iconContainer, { backgroundColor: staff.iconBg }]}>
-                  <Feather name={staff.icon as React.ComponentProps<typeof Feather>['name']} size={18} color={staff.iconColor} />
-                </View>
-                
-                <View style={styles.staffInfo}>
-                  <Text style={styles.staffName}>{staff.name}</Text>
-                </View>
+          {loading ? (
+            <View style={{ gap: 12 }}>
+              <Skeleton height={64} borderRadius={18} />
+              <Skeleton height={64} borderRadius={18} />
+              <Skeleton height={64} borderRadius={18} />
+            </View>
+          ) : records.length > 0 ? (
+            <View style={styles.card}>
+              {records.map((staff, index) => {
+                const iconMeta = getCategoryIcon(staff.category);
+                const statusMeta = getStatusBadge(staff.status);
 
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>{staff.status}</Text>
-                </View>
+                return (
+                  <View
+                    key={staff.personnelId}
+                    style={[styles.staffRow, index === records.length - 1 && styles.noBorder]}
+                  >
+                    <View style={[styles.iconContainer, { backgroundColor: iconMeta.bg }]}>
+                      <Feather name={iconMeta.icon} size={18} color={iconMeta.color} />
+                    </View>
 
-                <Text style={styles.countText}>{staff.count}</Text>
-              </View>
-            ))}
-          </View>
+                    <View style={styles.staffInfo}>
+                      <Text style={styles.staffName}>{staff.name}</Text>
+                      <Text style={styles.staffCategory}>{staff.category}</Text>
+                    </View>
+
+                    <View style={[styles.statusBadge, { backgroundColor: statusMeta.bg }]}>
+                      <Text style={[styles.statusText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+                    </View>
+
+                    {staff.checkIn && (
+                      <Text style={styles.countText}>
+                        {new Date(staff.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <EmptyState
+              icon="users"
+              title="No staff attendance logged"
+              description="Today's attendance records will appear here once marked by management."
+            />
+          )}
         </ScreenEntrance>
       </ScrollView>
     </View>
@@ -85,9 +172,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.colors.textPrimary,
   },
+  summaryBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 98,
+  },
+  summaryBadgeText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12,
+    color: '#059669',
+  },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.04)',
     overflow: 'hidden',
@@ -100,8 +198,8 @@ const styles = StyleSheet.create({
   staffRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
   },
@@ -111,7 +209,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -120,27 +218,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   staffName: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
     color: theme.colors.textPrimary,
+    marginBottom: 2,
+  },
+  staffCategory: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
   },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 100,
-    backgroundColor: '#ECFDF5',
-    marginRight: 14,
+    borderRadius: 98,
+    marginRight: 10,
   },
   statusText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
-    color: '#059669',
   },
   countText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 14,
-    color: theme.colors.textPrimary,
-    minWidth: 42,
-    textAlign: 'right',
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
   },
 });

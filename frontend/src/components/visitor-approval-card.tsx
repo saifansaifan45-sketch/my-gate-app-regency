@@ -5,6 +5,7 @@ import { Text } from './ui/Text';
 import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
 import { theme } from '../theme';
+import { homeLayout, homeSurface } from './home/homeSurface';
 
 export interface VisitorApproval {
   id: string;
@@ -56,13 +57,20 @@ export function VisitorApprovalCard({ visitor, onApprove, onReject, onDelete, on
 
         <View style={styles.divider} />
 
-        <View style={styles.otpRow}>
-          <Text style={styles.otpLabel}>Share OTP with your guest</Text>
-          <View style={styles.otpPill}>
-            <Text style={styles.otpCode}>{visitor.otp || '3941'}</Text>
-            <Feather name="copy" size={14} color={theme.colors.primary} />
+        {visitor.otp && (
+          <View style={styles.otpRow}>
+            <Text style={styles.otpLabel}>Share OTP with your guest</Text>
+            <View style={styles.otpPill}>
+              <Text style={styles.otpCode}>{visitor.otp}</Text>
+              <Feather name="copy" size={14} color={theme.colors.primary} />
+            </View>
           </View>
-        </View>
+        )}
+        {!visitor.otp && (
+          <View style={styles.otpRow}>
+            <Text style={styles.otpLabel}>Gate check-in approved</Text>
+          </View>
+        )}
       </PremiumPressable>
     );
   }
@@ -119,17 +127,9 @@ export function VisitorApprovalCard({ visitor, onApprove, onReject, onDelete, on
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    padding: 16,
+    ...homeSurface,
+    padding: homeLayout.cardPadding,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
   },
   cardApproved: {
     backgroundColor: '#F0FDF4',
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: 24,
     backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     right: 0,
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: 5,
     backgroundColor: '#FBBF24',
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
@@ -201,14 +201,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 100,
+    borderRadius: 98,
     gap: 6,
     marginLeft: 8,
   },
   pulseDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 2,
     backgroundColor: '#D97706',
   },
   atGateText: {
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(20, 61, 42, 0.1)',
   },

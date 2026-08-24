@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, ViewStyle } from 'react-native';
+import { Platform, Animated, Easing, ViewStyle } from 'react-native';
 
 interface AnimatedEntranceProps {
   children: React.ReactNode;
@@ -29,13 +29,13 @@ export function AnimatedEntrance({
           toValue: 1,
           duration,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(translate, {
           toValue: 0,
           duration,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
     ]).start();

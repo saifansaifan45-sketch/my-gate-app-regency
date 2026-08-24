@@ -1,71 +1,110 @@
-import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
-import { Feather } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text } from '../../../src/components/ui/Text';
-import { Button } from '../../../src/components/ui/Button';
-import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
-import { VisitorApprovalCard } from '../../../src/components/visitor-approval-card';
-import { AddVisitorModal } from '../../../src/components/add-visitor-modal';
+import { Feather } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
-import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
+import { Text } from '../../../src/components/ui/Text';
+import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
+import { Button } from '../../../src/components/ui/Button';
+import { AddVisitorModal } from '../../../src/components/add-visitor-modal';
+import { EmptyState } from '../../../src/components/ui/EmptyState';
+import { Skeleton } from '../../../src/components/ui/Skeleton';
 import { theme } from '../../../src/theme';
-
-const FIXTURES = [
-  { id: '1', name: 'Rahul Sharma', type: 'Personal Visitor', time: '6:30 PM', status: 'pending', group: 'Today' },
-  { id: '2', name: 'Amazon Delivery', type: 'Delivery', time: '2:15 PM', status: 'approved', group: 'Today' },
-  { id: '3', name: 'Plumber', type: 'Service', time: '10:00 AM', status: 'pending', group: 'Tomorrow' },
-];
+import { smartBack } from '../../../src/navigation/history';
+import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
+import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
+import { visitorsApi, VisitorItem } from '../../../src/api/visitors';
+import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function VisitorsScreen() {
   const router = useRouter();
-  const { bottom, bottomClearance } = useScreenInsets(false);
-  const [activeTab, setActiveTab] = useState<'upcoming'|'history'>('upcoming');
+  const { bottomClearance } = useScreenInsets();
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [visitors, setVisitors] = useState(FIXTURES);
+  const [category, setCategory] = useState<'VISITORS' | 'CABS' | 'DELIVERIES'>('VISITORS');
 
-  const handleDeleteVisitor = (id: string) => {
-    setVisitors((prev) => prev.filter((v) => v.id !== id));
-  };
+  const { data, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ['my-visitors'],
+    queryFn: () => visitorsApi.getMyVisitors(),
+    refetchInterval: 15000,
+  });
 
-  const handleCopyOtp = async (id: string, otp: string) => {
-    await Clipboard.setStringAsync(otp);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1600);
-  };
+  const visitors = data?.visitors || [];
 
-  const renderVisitorCard = (visitor: { id: string; name: string; type: string; time: string; status: string; group: string }, index: number) => {
-    if (visitor.status === 'pending') {
-      return (
-        <ScreenEntrance key={visitor.id} delay={100 + index * 100}>
-          <VisitorApprovalCard
-            visitor={{ id: visitor.id, name: visitor.name, type: visitor.type, time: visitor.time, otp: '3941' }}
-            onDelete={handleDeleteVisitor}
-            onPress={() => router.push(`/visitors/${visitor.id}`)}
-          />
-        </ScreenEntrance>
-      );
-    }
+  const { upcomingVisitors, historyVisitors } = useMemo(() => {
+    // Filter only GUEST and SERVICE as requested (hide Cab/Delivery in this phase if desired, or include them? The prompt says: "filters for Guest and Service... Do not alter cab or delivery UI in this phase." I will just show all or filter if needed.)
+    const categoryFiltered = visitors.filter(v => {
+      if (category === 'CABS') return v.visitorType === 'CAB';
+      if (category === 'DELIVERIES') return v.visitorType === 'DELIVERY';
+      return v.visitorType === 'GUEST' || v.visitorType === 'SERVICE' || v.visitorType === 'OTHER';
+    });
+    const upcoming = categoryFiltered.filter(v => ['PENDING', 'APPROVED', 'CHECKED_IN'].includes(v.status));
+    const history = categoryFiltered.filter(v => ['CHECKED_OUT', 'REJECTED', 'REVOKED', 'EXPIRED'].includes(v.status));
+    return { upcomingVisitors: upcoming, historyVisitors: history };
+  }, [visitors]);
+
+  const displayedVisitors = activeTab === 'upcoming' ? upcomingVisitors : historyVisitors;
+
+  const renderVisitorCard = (v: VisitorItem, index: number) => {
+    const isCheckedIn = v.status === 'CHECKED_IN';
+    const isApproved = v.status === 'APPROVED';
+    const isRejected = v.status === 'REJECTED';
+    const isRevoked = v.status === 'REVOKED';
 
     return (
-      <ScreenEntrance key={visitor.id} delay={100 + index * 100}>
-        <View style={styles.card}>
+      <ScreenEntrance key={v.id} delay={index * 40} animation="rise" distance={20}>
+        <PremiumPressable
+          style={[styles.card, (isRejected || isRevoked) && styles.cardRejected]}
+          onPress={() => router.push(`/visitors/${v.id}` as any)}
+          scaleTo={0.98}
+        >
           <View style={styles.cardHeader}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{visitor.name.charAt(0)}</Text>
+            <View style={[
+              styles.avatar, 
+              isCheckedIn && styles.avatarCheckedIn, 
+              (isRejected || isRevoked) && styles.avatarRejected
+            ]}>
+              <Feather name={v.visitorType === 'DELIVERY' ? 'package' : v.visitorType === 'CAB' ? 'map-pin' : 'user'} size={20} color={theme.colors.primary} />
             </View>
             <View style={styles.cardInfo}>
-              <Text style={styles.visitorName}>{visitor.name}</Text>
-              <Text style={styles.visitorMeta}>{visitor.type} · {visitor.time}</Text>
+              <Text style={styles.visitorName}>{v.visitorType === 'DELIVERY' || v.visitorType === 'CAB' ? (v.provider || v.name || v.visitorType) : v.name}</Text>
+              <Text style={styles.visitorMeta}>
+                {v.visitorType === 'DELIVERY' && v.orderReference ? `Order: ${v.orderReference} · ` : ''}
+                {v.visitorType === 'CAB' && v.vehicleNumber ? `${v.vehicleNumber} · ` : ''}
+                {new Date(v.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </Text>
             </View>
-            <View style={[styles.statusBadge, styles.statusApproved]}>
-              <Text style={[styles.statusText, styles.statusTextApproved]}>Approved</Text>
+
+            <View
+              style={[
+                styles.statusBadge,
+                isApproved && styles.statusApproved,
+                isCheckedIn && styles.statusCheckedIn,
+                v.status === 'CHECKED_OUT' && styles.statusCheckedOut,
+                (isRejected || isRevoked) && styles.statusRejected,
+                v.status === 'PENDING' && styles.statusPending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  isApproved && styles.statusTextApproved,
+                  isCheckedIn && styles.statusTextCheckedIn,
+                  v.status === 'CHECKED_OUT' && styles.statusTextCheckedOut,
+                  (isRejected || isRevoked) && styles.statusTextRejected,
+                  v.status === 'PENDING' && styles.statusTextPending,
+                ]}
+              >
+                {isCheckedIn ? 'Inside' : 
+                 isApproved ? 'Approved' : 
+                 v.status === 'PENDING' ? 'Pending' : 
+                 v.status === 'CHECKED_OUT' ? 'Checked Out' : 
+                 isRevoked ? 'Revoked' : 'Declined'}
+              </Text>
             </View>
           </View>
-        </View>
+        </PremiumPressable>
       </ScreenEntrance>
     );
   };
@@ -74,25 +113,34 @@ export default function VisitorsScreen() {
     <View style={styles.container}>
       <AppHeader
         variant="subscreen"
-        title="Visitors"
-        rightAction={
-          <PremiumPressable
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.headerIconBtn}
-          >
-            <Feather name="filter" size={20} color={theme.colors.textPrimary} />
-          </PremiumPressable>
-        }
+        title="Access Passes"
+        onBackPress={() => smartBack(router, '/services')}
       />
 
-      {/* Tabs */}
+      
+      <View style={styles.categoryTabs}>
+        <PremiumPressable style={[styles.categoryTab, category === 'VISITORS' && styles.categoryTabActive]} onPress={() => setCategory('VISITORS')}>
+          <Text style={[styles.categoryTabText, category === 'VISITORS' && styles.categoryTabTextActive]}>Guests</Text>
+        </PremiumPressable>
+        <PremiumPressable style={[styles.categoryTab, category === 'CABS' && styles.categoryTabActive]} onPress={() => setCategory('CABS')}>
+          <Text style={[styles.categoryTabText, category === 'CABS' && styles.categoryTabTextActive]}>Cabs</Text>
+        </PremiumPressable>
+        <PremiumPressable style={[styles.categoryTab, category === 'DELIVERIES' && styles.categoryTabActive]} onPress={() => setCategory('DELIVERIES')}>
+          <Text style={[styles.categoryTabText, category === 'DELIVERIES' && styles.categoryTabTextActive]}>Deliveries</Text>
+        </PremiumPressable>
+      </View>
+
       <View style={styles.tabs}>
         <PremiumPressable
           style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
           onPress={() => setActiveTab('upcoming')}
         >
-          <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>Upcoming</Text>
-          <View style={styles.badge}><Text style={styles.badgeText}>3</Text></View>
+          <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>Upcoming / Active</Text>
+          {upcomingVisitors.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{upcomingVisitors.length}</Text>
+            </View>
+          )}
         </PremiumPressable>
         <PremiumPressable
           style={[styles.tab, activeTab === 'history' && styles.tabActive]}
@@ -102,44 +150,58 @@ export default function VisitorsScreen() {
         </PremiumPressable>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.listContent, { paddingBottom: bottomClearance + 60 }]}>
-        {/* Today Group */}
-        <Text style={styles.groupHeader}>Today</Text>
-        {visitors.filter(f => f.group === 'Today').map(renderVisitorCard)}
-
-        {/* Tomorrow Group */}
-        <Text style={styles.groupHeader}>Tomorrow</Text>
-        {visitors.filter(f => f.group === 'Tomorrow').map(renderVisitorCard)}
+      <ScrollView
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomClearance + 90 }]}
+        refreshControl={<RefreshControl refreshing={isRefetching && !isLoading} onRefresh={refetch} tintColor={theme.colors.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <View style={{ gap: 12 }}>
+            <Skeleton height={80} borderRadius={18} />
+            <Skeleton height={80} borderRadius={18} />
+            <Skeleton height={80} borderRadius={18} />
+          </View>
+        ) : displayedVisitors.length > 0 ? (
+          displayedVisitors.map((v, i) => renderVisitorCard(v, i))
+        ) : (
+          <EmptyState
+            icon="shield"
+            title={activeTab === 'upcoming' ? 'No expected records' : 'No history'}
+            description={
+              activeTab === 'upcoming'
+                ? category === 'DELIVERIES' ? 'Register an expected delivery to ensure smooth gate handoff.' : category === 'CABS' ? 'Register an expected cab for quick gate entry.' : 'Create a pre-approved entry pass to grant someone fast access at the gate.'
+                : category === 'DELIVERIES' ? 'No past deliveries found for your unit.' : category === 'CABS' ? 'No past cabs found for your unit.' : 'No past visitor records found for your unit.'
+            }
+          />
+        )}
       </ScrollView>
 
-      {/* Bottom Action */}
-      <View style={[styles.bottomAction, { paddingBottom: Math.max(bottom, 16) }]}>
-        <Button label="Add New Visitor" onPress={() => setShowAddModal(true)} />
+      <View style={[styles.bottomAction, { paddingBottom: bottomClearance || 24 }]}>
+        <Button label="Create Access Pass" icon="plus" onPress={() => setShowAddModal(true)} />
       </View>
 
-      <AddVisitorModal visible={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AddVisitorModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={() => refetch()}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
-  },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  categoryTabs: { flexDirection: 'row', paddingHorizontal: cardSystem.pagePadding, paddingTop: 10, paddingBottom: 5, gap: 8 },
+  categoryTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 98, backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: 'transparent' },
+  categoryTabActive: { backgroundColor: '#ECFDF5', borderColor: theme.colors.primary },
+  categoryTabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+  categoryTabTextActive: { color: theme.colors.primary },
+
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-    paddingHorizontal: 20,
+    paddingHorizontal: cardSystem.pagePadding,
   },
   tab: {
     flexDirection: 'row',
@@ -148,120 +210,98 @@ const styles = StyleSheet.create({
     marginRight: 24,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
+    gap: 8,
   },
-  tabActive: {
-    borderBottomColor: theme.colors.primary,
-  },
-  tabText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 15,
-    color: theme.colors.textSecondary,
-  },
-  tabTextActive: {
-    color: theme.colors.primary,
-  },
+  tabActive: { borderBottomColor: theme.colors.primary },
+  tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14.5, color: theme.colors.textSecondary },
+  tabTextActive: { color: theme.colors.primary },
   badge: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: 100,
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    marginLeft: 8,
+    borderRadius: 98,
   },
   badgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 11,
-    color: '#FFF',
+    color: theme.colors.primary,
   },
-  listContent: {
-    padding: 20,
-    paddingBottom: 110,
-  },
-  groupHeader: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
-    letterSpacing: -0.3,
-    color: theme.colors.textPrimary,
-    marginBottom: 14,
-    marginTop: 8,
-  },
+  listContent: { padding: 20 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
     borderRadius: 18,
-    padding: 20,
-    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 2,
+  },
+  cardRejected: {
+    backgroundColor: '#F9FAFB',
+    opacity: 0.85,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: theme.colors.background,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    marginRight: 12,
   },
+  avatarCheckedIn: { backgroundColor: '#EFF6FF' },
+  avatarRejected: { backgroundColor: '#FEE2E2' },
   avatarText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 18,
-    color: theme.colors.textPrimary,
+    fontSize: 17,
+    color: theme.colors.primary,
   },
-  cardInfo: {
-    flex: 1,
-  },
+  cardInfo: { flex: 1 },
   visitorName: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: -0.2,
     color: theme.colors.textPrimary,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   visitorMeta: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12,
     color: theme.colors.textSecondary,
   },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 100,
+    borderRadius: 8,
   },
-  statusApproved: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-  },
-  statusTextApproved: {
-    color: '#047857',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-  },
+  statusPending: { backgroundColor: '#FFF7ED' },
+  statusApproved: { backgroundColor: '#ECFDF5' },
+  statusCheckedIn: { backgroundColor: '#EFF6FF' },
+  statusCheckedOut: { backgroundColor: '#F3F4F6' },
+  statusRejected: { backgroundColor: '#FEF2F2' },
+  
+  statusText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11 },
+  statusTextPending: { color: '#C2410C' },
+  statusTextApproved: { color: '#047857' },
+  statusTextCheckedIn: { color: '#1D4ED8' },
+  statusTextCheckedOut: { color: '#6B7280' },
+  statusTextRejected: { color: '#B91C1C' },
+
   bottomAction: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: theme.colors.surface,
-    paddingHorizontal: 20,
+    paddingHorizontal: cardSystem.pagePadding,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
@@ -270,5 +310,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 4,
-  }
+  },
 });

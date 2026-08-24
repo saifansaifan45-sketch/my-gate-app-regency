@@ -1,33 +1,122 @@
 import express from 'express';
 import cors from 'cors';
-import authRoutes from './routes/auth';
 import dotenv from 'dotenv';
+import { prisma } from './prisma';
+import authRoutes from './routes/auth';
+import managerRoutes from './routes/manager';
+import ticketsRoutes from './routes/tickets';
+import notificationsRoutes from './routes/notifications';
+import propertiesRoutes from './routes/properties';
+import communityRoutes from './routes/community';
+import visitorsRoutes from './routes/visitors';
+import leadershipRoutes from './routes/leadership';
+import workforceRoutes from './routes/workforce';
+import emergencyRoutes from './routes/emergency';
+import householdRoutes from './routes/household';
+import activityLogRoutes from './routes/activity-log';
+// import lostFoundRoutes from './routes/lost-found';
 
 dotenv.config();
 
 const app = express();
 
-app.use(cors());
+
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:8081']; // Default Expo web port
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // In development, allow all localhost and LAN IP origins for easy Expo testing
+    if (process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+/))) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health Check with Database Connectivity Verification
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (dbErr) {
+    console.error('Database connection failure in /health:', dbErr);
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected',
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
-app.post('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.post('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected',
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 app.use('/auth', authRoutes);
+app.use('/manager', managerRoutes);
+app.use('/leadership', leadershipRoutes);
+app.use('/work', workforceRoutes);
+app.use('/tickets', ticketsRoutes);
+app.use('/notifications', notificationsRoutes);
+app.use('/properties', propertiesRoutes);
+app.use('/community', communityRoutes);
+app.use('/visitors', visitorsRoutes);
+app.use('/emergency', emergencyRoutes);
+app.use('/household', householdRoutes);
+app.use('/activity-log', activityLogRoutes);
+// app.use('/lost-found', lostFoundRoutes);
 
-// Consistent error handling
+// Centralized safe error handling — never leaks raw Zod or Prisma objects
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-app.use((_err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(_err);
-  res.status(_err.status || 500).json({
+app.use((_err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // Extract clean message from Zod validation errors
+  if (_err?.name === 'ZodError' || Array.isArray(_err?.issues)) {
+    const firstIssue = _err.issues?.[0];
+    const message = firstIssue?.message || 'Invalid input details provided';
+    return res.status(400).json({
+      error: { message },
+      message,
+    });
+  }
+
+  const statusCode = typeof _err.status === 'number' && _err.status >= 400 && _err.status < 600 ? _err.status : 500;
+  const safeMessage = statusCode >= 500 ? 'Internal Server Error' : (_err.message || 'An unexpected error occurred');
+
+  res.status(statusCode).json({
     error: {
-      message: _err.message || 'Internal Server Error',
+      message: safeMessage,
     },
+    message: safeMessage,
   });
 });
 

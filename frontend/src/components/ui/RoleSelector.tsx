@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, StyleSheet, Pressable } from 'react-native';
+import { Platform, Animated, Easing, View, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from './Text';
 import { theme } from '../../theme';
@@ -12,6 +12,7 @@ interface RoleSelectorProps {
 interface RoleTileProps {
   icon: React.ComponentProps<typeof Feather>['name'];
   label: string;
+  sublabel: string;
   selected: boolean;
   selectedColor: string;
   selectedBackground: string;
@@ -22,6 +23,7 @@ interface RoleTileProps {
 function RoleTile({
   icon,
   label,
+  sublabel,
   selected,
   selectedColor,
   selectedBackground,
@@ -34,17 +36,17 @@ function RoleTile({
   const bounce = () => {
     pop.setValue(1);
     Animated.sequence([
-      Animated.spring(pop, {
-        toValue: 1.08,
-        friction: 4,
-        tension: 240,
-        useNativeDriver: true,
+      Animated.timing(pop, {
+        toValue: 1.03,
+        duration: 130,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: Platform.OS !== 'web',
       }),
-      Animated.spring(pop, {
+      Animated.timing(pop, {
         toValue: 1,
-        friction: 6,
-        tension: 200,
-        useNativeDriver: true,
+        duration: 150,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   };
@@ -61,11 +63,11 @@ function RoleTile({
       bounce();
     }
 
-    Animated.spring(check, {
+    Animated.timing(check, {
       toValue: selected ? 1 : 0,
-      friction: 7,
-      tension: 200,
-      useNativeDriver: true,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   }, [selected, pop, check]);
 
@@ -86,11 +88,18 @@ function RoleTile({
       ]}
     >
       <Animated.View style={[styles.tileInner, { transform: [{ scale: pop }] }]}>
-        <Feather name={icon} size={22} color={iconColor} />
+        <View style={[styles.iconCircle, { backgroundColor: selected ? 'rgba(20, 61, 42, 0.08)' : 'rgba(0,0,0,0.04)' }]}>
+          <Feather name={icon} size={20} color={iconColor} />
+        </View>
 
-        <Text numberOfLines={1} style={[styles.tileText, { color: textColor }]}>
-          {label}
-        </Text>
+        <View style={styles.textWrap}>
+          <Text numberOfLines={1} style={[styles.tileText, { color: textColor }]}>
+            {label}
+          </Text>
+          <Text numberOfLines={1} style={styles.tileSubtext}>
+            {sublabel}
+          </Text>
+        </View>
       </Animated.View>
 
       <Animated.View
@@ -103,7 +112,7 @@ function RoleTile({
           },
         ]}
       >
-        <Feather name="check" size={11} color={selectedColor} />
+        <Feather name="check" size={12} color={selectedColor} style={styles.checkIcon} />
       </Animated.View>
     </Pressable>
   );
@@ -112,12 +121,13 @@ function RoleTile({
 export function RoleSelector({ selected, onChange }: RoleSelectorProps) {
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>I am a</Text>
+      <Text style={styles.label}>What is your relationship with this property?</Text>
 
-      <View style={styles.row}>
+      <View style={styles.column}>
         <RoleTile
           icon="home"
-          label="Owner / Resident"
+          label="I own this property"
+          sublabel="Property Owner / Landlord"
           selected={selected === 'owner'}
           selectedColor={theme.colors.primary}
           selectedBackground="#F3F8F5"
@@ -126,8 +136,9 @@ export function RoleSelector({ selected, onChange }: RoleSelectorProps) {
         />
 
         <RoleTile
-          icon="user"
-          label="Tenant"
+          icon="key"
+          label="I don't own the property"
+          sublabel="Tenant / Co-resident"
           selected={selected === 'tenant'}
           selectedColor={theme.colors.accent}
           selectedBackground="#FBF4F0"
@@ -148,34 +159,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: theme.colors.textPrimary,
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 20,
   },
 
-  row: {
-    flexDirection: 'row',
+  column: {
+    flexDirection: 'column',
     width: '100%',
-    gap: 12,
+    gap: 10,
   },
 
   tile: {
-    flex: 1,
-    minHeight: 74,
-    flexShrink: 0,
-    borderRadius: 20,
+    width: '100%',
+    minHeight: 58,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#E0E4E2',
-    borderBottomWidth: 5,
+    borderBottomWidth: 4,
     borderBottomColor: '#CCD1D3',
     backgroundColor: '#FFFFFF',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
     elevation: 2,
   },
 
@@ -184,29 +193,51 @@ const styles = StyleSheet.create({
   },
 
   tileInner: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 16,
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  textWrap: {
+    flex: 1,
   },
 
   tileText: {
-    marginTop: 6,
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 14,
     lineHeight: 18,
-    textAlign: 'center',
+  },
+
+  tileSubtext: {
+    marginTop: 2,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
   },
 
   checkBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
+  },
+
+  checkIcon: {
+    textAlign: 'center',
+    lineHeight: 12,
   },
 });

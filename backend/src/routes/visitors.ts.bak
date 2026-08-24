@@ -1,0 +1,569 @@
+import { Router, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { prisma } from '../prisma';
+import { requireAuth, requireVerifiedResidence, requireWorkforceOrManager, AuthRequest } from '../middleware/auth';
+import rateLimit from 'express-rate-limit';
+import { VisitorStatus, VisitorType, Role, ResidencyStatus, OwnershipStatus } from '@prisma/client';
+import bcrypt from 'bcrypt';
+
+const router = Router();
+
+async function verifyCommunityMembership(userId: string, communityId: string | null): Promise<boolean> {
+  if (!communityId) return false;
+  const mem = await prisma.membership.findFirst({
+    where: { userId, communityId, status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP', 'WORKFORCE'] } }
+  });
+  return !!mem;
+}
+
+router.use(requireAuth);
+
+const createVisitorSchema = z.object({
+  name: z.string().min(2, 'Visitor name is required'),
+  phone: z.string().optional(),
+  purpose: z.string().optional(),
+  vehicleNumber: z.string().optional(),
+  visitorType: z.nativeEnum(VisitorType).default(VisitorType.GUEST),
+  isPreApproved: z.boolean().default(false),
+  validFrom: z.string().optional(),
+  validUntil: z.string().optional(),
+  provider: z.string().optional(),
+  orderReference: z.string().optional(),
+  packageCount: z.number().int().optional(),
+});
+
+function generateOtp() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function getResidentActiveUnit(userId: string) {
+  const resident = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      residencies: { where: { status: ResidencyStatus.ACTIVE }, include: { unit: true } },
+      ownerships: { where: { status: OwnershipStatus.ACTIVE }, include: { unit: true } },
+    },
+  });
+  const unit = resident?.residencies[0]?.unit || resident?.ownerships[0]?.unit;
+  return unit;
+}
+
+// Helper to verify visitor belongs to resident
+async function getResidentVisitor(visitorId: string, userId: string) {
+  const visitor = await prisma.visitor.findUnique({ where: { id: visitorId }, include: { unit: true } });
+  if (!visitor) throw new Error('Visitor not found');
+  const unit = await getResidentActiveUnit(userId);
+  if (visitor.unitId !== unit?.id) throw new Error('Unauthorized to manage this visitor');
+  return visitor;
+}
+
+// ----------------------------------------------------
+// 1. POST /visitors (Resident creates an expected visitor / pass)
+// ----------------------------------------------------
+router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const body = createVisitorSchema.parse(req.body);
+
+    const unit = await getResidentActiveUnit(userId);
+    if (!unit) {
+      return res.status(403).json({ error: { message: 'Verified residence required.' } });
+    }
+
+    const initialStatus = body.isPreApproved ? VisitorStatus.APPROVED : VisitorStatus.PENDING;
+    let plaintextOtp: string | undefined;
+    let hashedOtp: string | null = null;
+
+    if (body.isPreApproved) {
+      plaintextOtp = generateOtp();
+      hashedOtp = await bcrypt.hash(plaintextOtp, 10);
+    }
+
+    const validFromDate = body.validFrom ? new Date(body.validFrom) : new Date();
+    const validUntilDate = body.validUntil
+      ? new Date(body.validUntil)
+      : new Date(validFromDate.getTime() + 24 * 60 * 60 * 1000);
+
+    const visitor = await prisma.visitor.create({
+      data: {
+        name: body.name.trim(),
+        phone: body.phone?.trim() || null,
+        purpose: body.purpose?.trim() || 'Visitor',
+        vehicleNumber: body.vehicleNumber?.trim() || null,
+        visitorType: body.visitorType,
+        status: initialStatus,
+        otp: hashedOtp, // ONLY STORE HASH
+        isPreApproved: body.isPreApproved,
+        createdById: userId,
+        unitId: unit.id,
+        communityId: unit.communityId,
+        validFrom: validFromDate,
+        validUntil: validUntilDate,
+        provider: body.provider ? body.provider.trim() : null,
+        orderReference: body.orderReference ? body.orderReference.trim() : null,
+        packageCount: body.packageCount ? body.packageCount : null,
+      },
+      include: { unit: true, createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } } },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        type: 'VISITOR_PASS_CREATED',
+        title: body.isPreApproved ? 'Entry Pass Generated' : 'Visitor Request Submitted',
+        message: body.isPreApproved
+          ? `Pass generated for ${visitor.name}.`
+          : `Visitor request for ${visitor.name} has been sent to the gate.`,
+        metadata: { visitorId: visitor.id },
+      },
+    });
+    
+    await prisma.auditLog.create({
+      data: {
+        communityId: unit.communityId!,
+        actorId: userId,
+        action: 'VISITOR_CREATED',
+        metadata: { visitorId: visitor.id, type: visitor.visitorType, status: initialStatus }
+      }
+    });
+
+    const { otp: _, ...visitorData } = visitor;
+    res.status(201).json({ visitor: { ...visitorData, otp: plaintextOtp } });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 2. GET /visitors (Resident gets their unit's visitors)
+// ----------------------------------------------------
+router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const { status, type } = req.query;
+
+    const unit = await getResidentActiveUnit(userId);
+    if (!unit) {
+      return res.json({ visitors: [] });
+    }
+
+    const where: any = { unitId: unit.id };
+    if (status && typeof status === 'string') {
+      where.status = status as VisitorStatus;
+    }
+    if (type && typeof type === 'string') {
+      where.visitorType = type as VisitorType;
+    }
+
+    const visitors = await prisma.visitor.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        unit: true,
+        createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+      },
+    });
+    
+    const sanitized = visitors.map(v => {
+      const { otp: _otp, ...rest } = v;
+      return rest;
+    });
+
+    res.json({ visitors: sanitized });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+
+// ----------------------------------------------------
+// GET /visitors/history (Manager)
+// ----------------------------------------------------
+router.get('/history', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const manager = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberships: { where: { status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP'] } } } }
+    });
+    
+    const communityId = manager?.memberships[0]?.communityId;
+    if (!communityId) return res.status(403).json({ error: { message: 'Unauthorized.' } });
+
+    const visitors = await prisma.visitor.findMany({
+      where: { communityId },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        unit: true,
+        createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+      },
+    });
+    
+    const sanitized = visitors.map(v => { const { otp: _otp, ...rest } = v; return rest; });
+    res.json({ visitors: sanitized });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// 3. GET /visitors/gate (Gate / Security / Manager overview)
+// ----------------------------------------------------
+router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const manager = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberships: { where: { status: 'APPROVED', role: { in: [Role.MANAGER, Role.LEADERSHIP] } } } }
+    });
+    
+    const communityId = manager?.memberships[0]?.communityId;
+    if (!communityId) {
+      return res.status(403).json({ error: { message: 'Unauthorized.' } });
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const visitors = await prisma.visitor.findMany({
+      where: {
+        communityId,
+        OR: [
+          { status: { in: ['PENDING', 'APPROVED', 'CHECKED_IN'] } },
+          { updatedAt: { gte: startOfToday } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        unit: true,
+        createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+      },
+    });
+    
+    const sanitized = visitors.map(v => {
+      const { otp: _otp, ...rest } = v;
+      return rest;
+    });
+
+    const pending = sanitized.filter((v) => v.status === VisitorStatus.PENDING);
+    const approved = sanitized.filter((v) => v.status === VisitorStatus.APPROVED);
+    const checkedIn = sanitized.filter((v) => v.status === VisitorStatus.CHECKED_IN);
+    const checkedOut = sanitized.filter((v) => v.status === VisitorStatus.CHECKED_OUT);
+    const expired = sanitized.filter((v) => v.status === VisitorStatus.EXPIRED);
+
+    res.json({
+      summary: {
+        totalToday: sanitized.length,
+        pending: pending.length,
+        approved: approved.length,
+        checkedIn: checkedIn.length,
+        checkedOut: checkedOut.length,
+        expired: expired.length,
+      },
+      visitors: sanitized,
+      pending,
+      approved,
+      checkedIn,
+    });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ---
+
+
+
+// ----------------------------------------------------
+// GET /visitors/:id/audit (Manager)
+// ----------------------------------------------------
+router.get('/:id/audit', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const userId = req.user!.userId;
+    const manager = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberships: { where: { status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP'] } } } }
+    });
+    
+    const communityId = manager?.memberships[0]?.communityId;
+    if (!communityId) return res.status(403).json({ error: { message: 'Unauthorized.' } });
+
+    const visitor = await prisma.visitor.findUnique({
+      where: { id: visitorId },
+      include: {
+        unit: true,
+        createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+      },
+    });
+    
+    if (!visitor || visitor.communityId !== communityId) return res.status(404).json({ error: { message: 'Visitor not found' } });
+    
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { communityId, metadata: { path: ['visitorId'], equals: visitor.id } },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { firstName: true, lastName: true, role: true } } }
+    });
+
+    const { otp, ...rest } = visitor;
+    res.json({ visitor: rest, auditLogs });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/approve (Resident)
+// ----------------------------------------------------
+router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const visitor = await getResidentVisitor(visitorId, req.user!.userId);
+    if (visitor.status !== VisitorStatus.PENDING) {
+      return res.status(400).json({ error: { message: 'Only PENDING visitors can be approved' } });
+    }
+    
+    const plaintextOtp = generateOtp();
+    const hashedOtp = await bcrypt.hash(plaintextOtp, 10);
+    
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({
+        where: { id: visitor.id },
+        data: { status: VisitorStatus.APPROVED, otp: hashedOtp, isPreApproved: true },
+        include: { unit: true }
+      });
+      await tx.auditLog.create({
+        data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_APPROVED', metadata: { visitorId: v.id } }
+      });
+      return v;
+    });
+
+    const { otp: _, ...visitorData } = updated;
+    res.json({ success: true, visitor: { ...visitorData, otp: plaintextOtp } });
+  } catch (error: any) {
+    if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
+    if (error.message.includes('Unauthorized')) return res.status(403).json({ error: { message: 'Unauthorized' } });
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/reject (Resident)
+// ----------------------------------------------------
+router.post('/:id/reject', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const visitor = await getResidentVisitor(visitorId, req.user!.userId);
+    if (visitor.status !== VisitorStatus.PENDING) {
+      return res.status(400).json({ error: { message: 'Only PENDING visitors can be rejected' } });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({ where: { id: visitor.id }, data: { status: VisitorStatus.REJECTED } });
+      await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REJECTED', metadata: { visitorId: v.id } } });
+      return v;
+    });
+    res.json({ success: true, visitor: updated });
+  } catch (error: any) {
+    if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/revoke (Resident)
+// ----------------------------------------------------
+router.post('/:id/revoke', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const visitor = await getResidentVisitor(visitorId, req.user!.userId);
+    if (visitor.status !== VisitorStatus.APPROVED && visitor.status !== VisitorStatus.PENDING) {
+      return res.status(400).json({ error: { message: 'Only PENDING or APPROVED visitors can be revoked' } });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({ where: { id: visitor.id }, data: { status: VisitorStatus.REVOKED } });
+      await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REVOKED', metadata: { visitorId: v.id } } });
+      return v;
+    });
+    res.json({ success: true, visitor: updated });
+  } catch (error: any) {
+    if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/check-in (Gate / Manager)
+// ----------------------------------------------------
+
+const checkInLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each IP to 20 requests per windowMs
+  message: { error: { message: 'Too many check-in attempts from this IP, please try again later.' } }
+});
+
+const checkInSchema = z.object({
+  otp: z.string().optional()
+});
+router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const { otp } = checkInSchema.parse(req.body);
+    const userId = req.user!.userId;
+    const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!visitor || !(await verifyCommunityMembership(userId, visitor.communityId))) {
+      return res.status(404).json({ error: { message: 'Visitor not found' } });
+    }
+    if (visitor.status !== VisitorStatus.APPROVED) return res.status(400).json({ error: { message: 'Visitor is not approved for entry' } });
+    if (visitor.validUntil && new Date() > new Date(visitor.validUntil)) return res.status(400).json({ error: { message: 'Pass expired' } });
+
+    if (visitor.otp) {
+      if (!otp) return res.status(400).json({ error: { message: 'OTP is required' } });
+      const isValid = await bcrypt.compare(otp, visitor.otp);
+      if (!isValid) return res.status(400).json({ error: { message: 'Invalid OTP' } });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({
+        where: { id: visitor.id },
+        data: { status: VisitorStatus.CHECKED_IN, checkInTime: new Date() },
+        include: { unit: true }
+      });
+      await tx.auditLog.create({
+        data: { communityId: v.communityId!, actorId: userId, action: 'VISITOR_CHECK_IN', metadata: { visitorId: v.id } }
+      });
+      await tx.notification.create({
+        data: {
+          userId: v.createdById,
+          type: 'VISITOR_ARRIVAL',
+          title: `${v.visitorType === 'DELIVERY' ? 'Delivery' : v.visitorType === 'CAB' ? 'Cab' : 'Visitor'} Arrived`,
+          message: `${v.name} has arrived at the gate and checked in.`,
+          metadata: { visitorId: v.id }
+        }
+      });
+      return v;
+    });
+
+    const { otp: _, ...visitorData } = updated;
+    res.json({ success: true, visitor: visitorData });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/check-out (Gate / Manager)
+// ----------------------------------------------------
+router.post('/:id/check-out', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const userId = req.user!.userId;
+    const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!visitor || !(await verifyCommunityMembership(userId, visitor.communityId))) {
+      return res.status(404).json({ error: { message: 'Visitor not found' } });
+    }
+    if (visitor.status !== VisitorStatus.CHECKED_IN) return res.status(400).json({ error: { message: 'Visitor is not checked in' } });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({
+        where: { id: visitor.id },
+        data: { status: VisitorStatus.CHECKED_OUT, checkOutTime: new Date() }
+      });
+      await tx.auditLog.create({
+        data: { communityId: v.communityId!, actorId: userId, action: 'VISITOR_CHECK_OUT', metadata: { visitorId: v.id } }
+      });
+      return v;
+    });
+
+    const { otp: _, ...visitorData } = updated;
+    res.json({ success: true, visitor: visitorData });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/handoff (Gate / Manager)
+// ----------------------------------------------------
+const handoffSchema = z.object({
+  recipientType: z.enum(['RESIDENT', 'GATE', 'LOCKER']),
+  recipientName: z.string().optional(),
+  proofReference: z.string().optional()
+});
+router.post('/:id/handoff', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = req.params.id;
+    if (!visitorId || typeof visitorId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    }
+    const body = handoffSchema.parse(req.body);
+    const userId = req.user!.userId;
+    const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!visitor || !(await verifyCommunityMembership(userId, visitor.communityId))) {
+      return res.status(404).json({ error: { message: 'Visitor not found' } });
+    }
+    if (visitor.handoffTimestamp) return res.status(400).json({ error: { message: 'Handoff already completed' } });
+    if (visitor.visitorType !== VisitorType.DELIVERY) return res.status(400).json({ error: { message: 'Only deliveries can be handed off' } });
+    if (visitor.status !== VisitorStatus.CHECKED_IN) return res.status(400).json({ error: { message: 'Delivery must be checked in first' } });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.update({
+        where: { id: visitor.id },
+        data: {
+          handoffRecipientType: body.recipientType,
+          handoffRecipientName: body.recipientName ? body.recipientName : null,
+          handoffTimestamp: new Date(),
+          handoffActorId: userId,
+          handoffProofReference: body.proofReference ? body.proofReference : null
+        },
+      });
+      await tx.auditLog.create({
+        data: { communityId: v.communityId!, actorId: userId, action: 'DELIVERY_HANDOFF', metadata: { visitorId: v.id, recipientType: body.recipientType } }
+      });
+      await tx.notification.create({
+        data: {
+          userId: v.createdById,
+          type: 'DELIVERY_HANDOFF',
+          title: 'Delivery Handed Off',
+          message: `Your delivery from ${v.provider || v.name} was handed off to ${body.recipientType}.`,
+          metadata: { visitorId: v.id, recipientType: body.recipientType }
+        }
+      });
+      return v;
+    });
+
+    const { otp: _, ...visitorData } = updated;
+    res.json({ success: true, visitor: visitorData });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
+export default router;
+

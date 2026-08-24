@@ -1,211 +1,217 @@
-import { EmptyState } from '../../src/components/ui/EmptyState';
 import { Feather } from '@expo/vector-icons';
-import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Modal, TextInput } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text } from '../../src/components/ui/Text';
-import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord } from '../../src/api/household';
 import { AppHeader } from '../../src/components/ui/AppHeader';
+import { Button } from '../../src/components/ui/Button';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
+import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { Text } from '../../src/components/ui/Text';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
+import { smartBack } from '../../src/navigation/history';
+import { useToast } from '../../src/store/toast';
 import { theme } from '../../src/theme';
+import { cardSystem } from '../../src/components/ui/cardSystem';
 
-const INITIAL_MEMBERS = [
-  { id: '1', name: 'Priya Mehta', rel: 'Spouse', status: 'Active' },
-  { id: '2', name: 'Diya Mehta', rel: 'Daughter', status: 'Active' },
+type RecordTab = 'members' | 'vehicles' | 'pets';
+type FormValues = Record<string, string>;
+
+const TABS: { id: RecordTab; label: string; icon: React.ComponentProps<typeof Feather>['name'] }[] = [
+  { id: 'members', label: 'Family', icon: 'users' },
+  { id: 'vehicles', label: 'Vehicles', icon: 'truck' },
+  { id: 'pets', label: 'Pets', icon: 'heart' },
 ];
+
+const EMPTY_FORMS: Record<RecordTab, FormValues> = {
+  members: { name: '', relationship: '', phone: '', email: '' },
+  vehicles: { registrationNumber: '', make: '', model: '', color: '' },
+  pets: { name: '', species: '', breed: '', color: '' },
+};
+
+const RECORD_ICONS: Record<RecordTab, React.ComponentProps<typeof Feather>['name']> = {
+  members: 'user', vehicles: 'truck', pets: 'heart',
+};
+
+const TAB_LABELS: Record<RecordTab, string> = {
+  members: 'family members', vehicles: 'vehicles', pets: 'pets',
+};
 
 export default function FamilyMembersScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  
-  const [members, setMembers] = useState(INITIAL_MEMBERS);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalMode, setModalMode] = useState<'add'|'edit'|'actions'>('add');
-  const [selectedMember, setSelectedMember] = useState<any>(null);
-  
-  const [formData, setFormData] = useState({ name: '', rel: '', phone: '', email: '' });
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<RecordTab>('members');
+  const [formVisible, setFormVisible] = useState(false);
+  const [form, setForm] = useState<FormValues>(EMPTY_FORMS.members);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: RecordTab; id: string; title: string } | null>(null);
+  const recordsQuery = useQuery({ queryKey: ['household-records'], queryFn: householdApi.getRecords });
+  const records = recordsQuery.data;
+  const canManage = records?.canManageAssets ?? false;
 
-  const openAdd = () => {
-    setFormData({ name: '', rel: '', phone: '', email: '' });
-    setModalMode('add');
-    setModalVisible(true);
-  };
+  const addMutation = useMutation({
+    mutationFn: async () => {
+      if (activeTab === 'members') return householdApi.addMember(form as Omit<HouseholdMemberRecord, 'id'>);
+      if (activeTab === 'vehicles') return householdApi.addVehicle(form as Omit<HouseholdVehicleRecord, 'id'>);
+      return householdApi.addPet(form as Omit<HouseholdPetRecord, 'id'>);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['household-records'] });
+      setFormVisible(false);
+      showToast({ title: 'Household record added', message: 'Security can now identify this entry for your home.', type: 'success' });
+    },
+    onError: () => showToast({ title: 'Could not save record', message: 'Please check the details and try again.', type: 'error' }),
+  });
 
-  const openActions = (member: any) => {
-    setSelectedMember(member);
-    setModalMode('actions');
-    setModalVisible(true);
-  };
+  const removeMutation = useMutation({
+    mutationFn: ({ type, id }: { type: RecordTab; id: string }) => {
+      if (type === 'members') return householdApi.removeMember(id);
+      if (type === 'vehicles') return householdApi.removeVehicle(id);
+      return householdApi.removePet(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['household-records'] });
+      setDeleteTarget(null);
+    },
+    onError: () => {
+      showToast({ title: 'Could not remove record', message: 'Please try again.', type: 'error' });
+      setDeleteTarget(null);
+    },
+  });
 
-  const handleSave = () => {
-    if (modalMode === 'add') {
-      setMembers([...members, { id: Date.now().toString(), name: formData.name, rel: formData.rel, status: 'Active' }]);
-    } else if (modalMode === 'edit' && selectedMember) {
-      setMembers(members.map(m => m.id === selectedMember.id ? { ...m, name: formData.name, rel: formData.rel } : m));
+  const itemCount = useMemo(() => records?.[activeTab]?.length ?? 0, [activeTab, records]);
+  const openForm = () => {
+    if (!canManage) {
+      showToast({ title: 'Owner access required', message: 'Only the active property owner can update household records.', type: 'error' });
+      return;
     }
-    setModalVisible(false);
+    setForm(EMPTY_FORMS[activeTab]);
+    setFormVisible(true);
+  };
+  const submit = () => {
+    const primary = activeTab === 'vehicles' ? form.registrationNumber : form.name;
+    const secondary = activeTab === 'members' ? form.relationship : activeTab === 'pets' ? form.species : activeTab === 'vehicles' ? form.make : '';
+    if (!primary?.trim() || !secondary?.trim()) {
+      showToast({ title: 'Add the required details', message: 'Complete the required household information to continue.', type: 'error' });
+      return;
+    }
+    addMutation.mutate();
   };
 
-  const handleBlock = () => {
-    setMembers(members.map(m => m.id === selectedMember.id ? { ...m, status: 'Blocked' } : m));
-    setModalVisible(false);
+  const detailFor = (item: HouseholdMemberRecord | HouseholdVehicleRecord | HouseholdPetRecord) => {
+    if (activeTab === 'members') return (item as HouseholdMemberRecord).relationship;
+    if (activeTab === 'vehicles') {
+      const vehicle = item as HouseholdVehicleRecord;
+      return [vehicle.make, vehicle.model, vehicle.color].filter(Boolean).join(' · ') || 'Vehicle enrolled for gate recognition';
+    }
+    const pet = item as HouseholdPetRecord;
+    return [pet.species, pet.breed, pet.color].filter(Boolean).join(' · ');
   };
-
-  const handleUnblock = () => {
-    setMembers(members.map(m => m.id === selectedMember.id ? { ...m, status: 'Active' } : m));
-    setModalVisible(false);
-  };
-
-  const handleRemove = () => {
-    setMembers(members.filter(m => m.id !== selectedMember.id));
-    setModalVisible(false);
-  };
+  const titleFor = (item: HouseholdMemberRecord | HouseholdVehicleRecord | HouseholdPetRecord) =>
+    activeTab === 'vehicles' ? (item as HouseholdVehicleRecord).registrationNumber : (item as HouseholdMemberRecord | HouseholdPetRecord).name;
 
   return (
     <View style={styles.container}>
-      <AppHeader
-        variant="subscreen"
-        title="Family Members"
-        onBackPress={() => router.canGoBack() ? router.back() : router.replace('/my-home')}
-        rightAction={
-          <PremiumPressable
-            style={styles.addBtn}
-            onPress={openAdd}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Feather name="plus" size={20} color={theme.colors.primary} />
-          </PremiumPressable>
-        }
-      />
+      <AppHeader title="Family records" variant="subscreen" onBackPress={() => smartBack(router, '/profile')} />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} showsVerticalScrollIndicator={false}>
+        <ScreenEntrance delay={40}>
+          <View style={styles.intro}>
+            <View style={styles.introIcon}><Feather name="shield" size={20} color={theme.colors.primary} /></View>
+            <View style={styles.introCopy}>
+              <Text style={styles.introTitle}>Your household, clearly recorded</Text>
+              <Text style={styles.introText}>Keep family members, registered vehicles, and pets ready for the gate team.</Text>
+            </View>
+          </View>
+        </ScreenEntrance>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}>
-        <Text style={styles.devNote}>Local fixture behavior only. Changes will reset.</Text>
-        
-        {members.length > 0 ? members.map((member, i) => (
-          <ScreenEntrance key={member.id} delay={i * 100}>
-            <View style={[styles.card, member.status === 'Blocked' && { opacity: 0.6 }]}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{member.name.charAt(0)}</Text>
-              </View>
-              <View style={styles.info}>
-                <Text style={styles.name}>{member.name}</Text>
-                <Text style={styles.rel}>{member.rel} • {member.status}</Text>
-              </View>
-              <PremiumPressable style={styles.moreBtn} onPress={() => openActions(member)}>
-                <Feather name="more-vertical" size={20} color={theme.colors.textSecondary} />
-              </PremiumPressable>
+        <ScreenEntrance delay={80}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar} style={styles.tabScroll}>
+            {TABS.map((tab) => {
+              const selected = activeTab === tab.id;
+              return (
+                <PremiumPressable key={tab.id} style={[styles.tab, selected && styles.tabSelected]} onPress={() => setActiveTab(tab.id)} accessibilityRole="tab" accessibilityState={{ selected }}>
+                  <Feather name={tab.icon} size={16} color={selected ? '#FFFFFF' : theme.colors.textSecondary} />
+                  <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{tab.label}</Text>
+                </PremiumPressable>
+              );
+            })}
+          </ScrollView>
+        </ScreenEntrance>
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>{activeTab === 'members' ? 'People at home' : activeTab === 'vehicles' ? 'Registered vehicles' : 'Registered pets'}</Text>
+            <Text style={styles.sectionMeta}>{itemCount} {itemCount === 1 ? 'record' : 'records'}</Text>
+          </View>
+          <PremiumPressable style={[styles.addButton, !canManage && styles.addButtonDisabled]} onPress={openForm} accessibilityRole="button" accessibilityLabel={`Add ${activeTab === 'members' ? 'family member' : activeTab.slice(0, -1)}`}>
+            <Feather name="plus" size={17} color={canManage ? '#FFFFFF' : theme.colors.textSecondary} />
+            <Text style={[styles.addButtonText, !canManage && styles.addButtonTextDisabled]}>Add</Text>
+          </PremiumPressable>
+        </View>
+
+        {recordsQuery.isLoading ? <View style={styles.loader}><ActivityIndicator color={theme.colors.primary} /></View> : null}
+        {recordsQuery.isError ? <EmptyState icon="alert-circle" title="Unable to load household records" description="Pull down to try again." /> : null}
+        {!recordsQuery.isLoading && !recordsQuery.isError && itemCount === 0 ? (
+          <EmptyState icon={RECORD_ICONS[activeTab]} title={`No ${TAB_LABELS[activeTab]} recorded yet`} description={canManage ? `Add ${activeTab === 'members' ? 'the people living with you' : activeTab === 'vehicles' ? 'a household vehicle for smooth gate entry' : 'a pet so the community has the right record'}.` : 'Your property owner can add and update household records.'} />
+        ) : null}
+        {!recordsQuery.isLoading && records?.[activeTab]?.map((item) => (
+          <ScreenEntrance key={item.id} delay={110}>
+            <View style={styles.recordRow}>
+              <View style={[styles.recordIcon, activeTab === 'vehicles' && styles.vehicleIcon, activeTab === 'pets' && styles.petIcon]}><Feather name={RECORD_ICONS[activeTab]} size={19} color={activeTab === 'vehicles' ? '#A16207' : activeTab === 'pets' ? '#BE185D' : theme.colors.primary} /></View>
+              <View style={styles.recordInfo}><Text style={styles.recordTitle}>{titleFor(item)}</Text><Text style={styles.recordDetail}>{detailFor(item)}</Text></View>
+              {canManage ? <PremiumPressable onPress={() => setDeleteTarget({ type: activeTab, id: item.id, title: titleFor(item) })} style={styles.removeButton} accessibilityLabel={`Remove ${titleFor(item)}`}><Feather name="trash-2" size={17} color={theme.colors.error} /></PremiumPressable> : null}
             </View>
           </ScreenEntrance>
-        )) : <EmptyState icon="users" title="No family members added" description="You have not added any family members yet." />}
+        ))}
       </ScrollView>
 
-      {/* Shared Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            
-            {modalMode === 'actions' && selectedMember && (
-              <>
-                <Text style={styles.modalTitle}>Manage {selectedMember.name}</Text>
-                <PremiumPressable style={styles.modalActionRow} onPress={() => { setFormData(selectedMember); setModalMode('edit'); }}>
-                  <Text style={styles.modalActionText}>Edit member</Text>
-                </PremiumPressable>
-                {selectedMember.status === 'Active' ? (
-                  <PremiumPressable style={styles.modalActionRow} onPress={handleBlock}>
-                    <Text style={[styles.modalActionText, { color: theme.colors.accent }]}>Block member</Text>
-                  </PremiumPressable>
-                ) : (
-                  <PremiumPressable style={styles.modalActionRow} onPress={handleUnblock}>
-                    <Text style={styles.modalActionText}>Unblock member</Text>
-                  </PremiumPressable>
-                )}
-                <PremiumPressable style={styles.modalActionRow} onPress={handleRemove}>
-                  <Text style={[styles.modalActionText, { color: theme.colors.error }]}>Remove member</Text>
-                </PremiumPressable>
-                <PremiumPressable style={[styles.modalActionRow, { borderBottomWidth: 0, marginTop: 12 }]} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </PremiumPressable>
-              </>
-            )}
+      <Modal visible={formVisible} transparent animationType="slide" onRequestClose={() => setFormVisible(false)}>
+        <View style={styles.overlay}><View style={styles.sheet}>
+          <View style={styles.handle} />
+          <Text style={styles.sheetTitle}>Add a {activeTab === 'members' ? 'family member' : activeTab.slice(0, -1)}</Text>
+          <Text style={styles.sheetSubtitle}>{activeTab === 'vehicles' ? 'This lets security recognise an authorised vehicle.' : activeTab === 'pets' ? 'A simple record helps the community support every member of your household.' : 'Record the people who are part of your household.'}</Text>
+          {Object.keys(EMPTY_FORMS[activeTab]).map((key) => <View key={key} style={styles.field}><Text style={styles.fieldLabel}>{fieldLabel(key)}</Text><TextInput style={styles.input} value={form[key]} onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))} placeholderTextColor={theme.colors.textSecondary} autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'} keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'} /></View>)}
+          <View style={styles.sheetActions}><Button label="Cancel" variant="outline" onPress={() => setFormVisible(false)} style={styles.cancelButton} /><Button label="Save record" onPress={submit} loading={addMutation.isPending} style={styles.saveButton} /></View>
+        </View></View>
+      </Modal>
 
-            {(modalMode === 'add' || modalMode === 'edit') && (
-              <>
-                <Text style={styles.modalTitle}>{modalMode === 'add' ? 'Add family member' : 'Edit member'}</Text>
-                
-                <TextInput style={styles.input} placeholder="Full name" value={formData.name} onChangeText={t => setFormData({...formData, name: t})} placeholderTextColor="rgba(0,0,0,0.3)" />
-                <TextInput style={styles.input} placeholder="Relationship" value={formData.rel} onChangeText={t => setFormData({...formData, rel: t})} placeholderTextColor="rgba(0,0,0,0.3)" />
-                <TextInput style={styles.input} placeholder="Mobile number" value={formData.phone} onChangeText={t => setFormData({...formData, phone: t})} keyboardType="phone-pad" placeholderTextColor="rgba(0,0,0,0.3)" />
-                <TextInput style={styles.input} placeholder="Email address" value={formData.email} onChangeText={t => setFormData({...formData, email: t})} keyboardType="email-address" placeholderTextColor="rgba(0,0,0,0.3)" />
-
-                <View style={styles.modalButtons}>
-                  <PremiumPressable style={styles.modalBtnOutline} onPress={() => setModalVisible(false)}>
-                    <Text style={styles.modalBtnOutlineText}>Cancel</Text>
-                  </PremiumPressable>
-                  <PremiumPressable style={styles.modalBtnSolid} onPress={handleSave}>
-                    <Text style={styles.modalBtnSolidText}>Save</Text>
-                  </PremiumPressable>
-                </View>
-              </>
-            )}
-            
+      <Modal visible={Boolean(deleteTarget)} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
+        <View style={styles.overlay}>
+          <View style={styles.deleteModal}>
+            <Text style={styles.deleteTitle}>Remove record?</Text>
+            <Text style={styles.deleteMessage}>Are you sure you want to remove "{deleteTarget?.title}"? This action cannot be undone.</Text>
+            <View style={styles.deleteActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setDeleteTarget(null)} style={styles.cancelButton} />
+              <Button
+                label={removeMutation.isPending ? 'Removing...' : 'Remove'}
+                onPress={() => { if (deleteTarget) removeMutation.mutate({ type: deleteTarget.type, id: deleteTarget.id }); }}
+                loading={removeMutation.isPending}
+                style={styles.deleteConfirmBtn}
+              />
+            </View>
           </View>
         </View>
       </Modal>
-
     </View>
   );
 }
 
+function fieldLabel(key: string) {
+  const labels: Record<string, string> = { name: 'Name *', relationship: 'Relationship *', phone: 'Phone number', email: 'Email address', registrationNumber: 'Registration number *', make: 'Make *', model: 'Model', color: 'Colour', species: 'Pet type *', breed: 'Breed' };
+  return labels[key];
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  addBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ECFDF5', borderRadius: 18 },
-  content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 },
-  devNote: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, marginBottom: 16, textAlign: 'center' },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  avatarText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: '#FFF' },
-  info: { flex: 1 },
-  name: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: theme.colors.textPrimary, marginBottom: 4 },
-  rel: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, color: theme.colors.textSecondary },
-  moreBtn: { padding: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFFFFF', width: '100%', borderRadius: 24, padding: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8 },
-  modalTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: -0.3, color: theme.colors.textPrimary, marginBottom: 20, textAlign: 'center' },
-  modalActionRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', alignItems: 'center' },
-  modalActionText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 16, color: theme.colors.textPrimary },
-  modalCancelText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 16, color: theme.colors.textSecondary },
-  input: { backgroundColor: '#F9F7F2', height: 52, borderRadius: 14, paddingHorizontal: 16, marginBottom: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 15, color: theme.colors.textPrimary },
-  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  modalBtnOutline: { flex: 1, height: 48, borderRadius: 100, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.12)', justifyContent: 'center', alignItems: 'center' },
-  modalBtnOutlineText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: theme.colors.textPrimary },
-  modalBtnSolid: { flex: 1, height: 48, borderRadius: 100, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
-  modalBtnSolidText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 15, color: '#FFF' },
+  container: { flex: 1, backgroundColor: theme.colors.background }, content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
+  intro: { flexDirection: 'row', backgroundColor: '#EDF6F0', padding: 16, borderRadius: 16, marginBottom: 22 }, introIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#D6EBDD', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, introCopy: { flex: 1 }, introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, introText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: '#52705F' },
+  tabScroll: { marginBottom: 28 },
+  tabBar: { paddingHorizontal: cardSystem.pagePadding, gap: 10, alignItems: 'center' },
+  tab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#ECECE5' }, tabSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary }, tabTextSelected: { color: '#FFFFFF' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary }, sectionMeta: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }, addButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 12, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4 }, addButtonDisabled: { backgroundColor: '#E7E7E1' }, addButtonText: { fontFamily: 'PlusJakartaSans_700Bold', color: '#FFFFFF', fontSize: 13 }, addButtonTextDisabled: { color: theme.colors.textSecondary }, loader: { paddingVertical: 48, alignItems: 'center' },
+  recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card }, recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, vehicleIcon: { backgroundColor: '#FFF3D6' }, petIcon: { backgroundColor: '#FCE7F3' }, recordInfo: { flex: 1 }, recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary }, removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' }, sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 }, handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 18 }, sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 21, color: theme.colors.textPrimary, marginBottom: 5 }, sheetSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 18 }, field: { marginBottom: 10 }, fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 6 }, cancelButton: { flex: 1 }, saveButton: { flex: 1.3 },
+  deleteModal: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 20, marginHorizontal: 20, marginTop: 'auto', marginBottom: 40, ...theme.shadows.floating }, deleteTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 6 }, deleteMessage: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 20, color: theme.colors.textSecondary, marginBottom: 18 }, deleteActions: { flexDirection: 'row', gap: 10 }, deleteConfirmBtn: { flex: 1, backgroundColor: '#DC2626' },
 });
