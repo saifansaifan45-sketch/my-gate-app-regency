@@ -13,6 +13,9 @@ export const homeLayout = {
   pagePadding: cardSystem.pagePadding,
   sectionSpacing: cardSystem.sectionSpacing,
   headingSpacing: cardSystem.headingSpacing,
+  headingSpacingSpacer: {
+    height: cardSystem.headingSpacing,
+  } as ViewStyle,
   cardRadius: cardSystem.radius,
   cardPadding: cardSystem.padding,
   cardPaddingLarge: cardSystem.padding,

@@ -16,29 +16,24 @@ import { theme } from '../../src/theme';
 import { homeLayout, homeSurface } from '../../src/components/home/homeSurface';
 import { cardSystem } from '../../src/components/ui/cardSystem';
 import { householdApi } from '../../src/api/household';
+import { propertiesApi, UnitResidencyRecord } from '../../src/api/properties';
 
 const RELATIONSHIP_COLORS: Record<string, { bg: string; text: string }> = {
   OWNER: { bg: '#ECFDF5', text: '#047857' },
   TENANT: { bg: '#EFF6FF', text: '#1D4ED8' },
   FAMILY_MEMBER: { bg: '#FEF3C7', text: '#92400E' },
-  SPOUSE: { bg: '#F3E8FF', text: '#6B21A8' },
-  PARENT: { bg: '#FDF2F8', text: '#9D174D' },
-  CHILD: { bg: '#E0F2FE', text: '#0369A1' },
-  SIBLING: { bg: '#F0FDF4', text: '#166534' },
 };
 
 function getRelationshipColor(rel: string) {
-  const key = rel?.toUpperCase().replace(/\s+/g, '_');
-  return RELATIONSHIP_COLORS[key] || { bg: '#F3F4F6', text: '#374151' };
+  return RELATIONSHIP_COLORS[rel] || { bg: '#F3F4F6', text: '#374151' };
 }
 
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .map((n) => n.charAt(0))
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+function getInitials(first: string, last?: string) {
+  return `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase() || '?';
+}
+
+function residentFullName(r: UnitResidencyRecord['user']) {
+  return `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Resident';
 }
 
 export default function MyHomeScreen() {
@@ -46,39 +41,34 @@ export default function MyHomeScreen() {
   const { bottomClearance } = useScreenInsets(false);
   const { user, primaryResidency, hasOwnership } = useSession() || {};
 
-  const displayName = `${user?.firstName || 'Resident'} ${user?.lastName || ''}`.trim();
   const unitNumber = primaryResidency?.unitNumber || user?.unitNumber || '9A';
-  const relationshipLabel = primaryResidency?.relationshipType
-    ? primaryResidency.relationshipType === 'OWNER'
-      ? 'Owner'
-      : primaryResidency.relationshipType === 'TENANT'
-      ? 'Tenant'
-      : 'Family Member'
-    : hasOwnership?.()
-    ? 'Owner'
-    : 'Resident';
+  const unitId = primaryResidency?.unitId;
 
-  const { data, isLoading, isRefetching, refetch } = useQuery({
+  const { data: residencyData, isLoading: residenciesLoading, isRefetching: residenciesRefetching, refetch: refetchResidencies } = useQuery({
+    queryKey: ['unit-residencies', unitId],
+    queryFn: () => propertiesApi.getUnitResidencies(unitId!),
+    enabled: !!unitId,
+    staleTime: 30_000,
+  });
+
+  const { data: householdData, isLoading: householdLoading, isRefetching: householdRefetching, refetch: refetchHousehold } = useQuery({
     queryKey: ['household-records'],
     queryFn: householdApi.getRecords,
     staleTime: 30_000,
   });
 
-  const allResidents = useMemo(() => {
-    const primary = {
-      id: user?.id || 'primary',
-      name: displayName,
-      relationship: relationshipLabel,
-      isPrimary: true,
-    };
-    const household = (data?.members || []).map((m) => ({
-      id: m.id,
-      name: m.name,
-      relationship: m.relationship,
-      isPrimary: false,
-    }));
-    return [primary, ...household];
-  }, [data?.members, displayName, relationshipLabel, user?.id]);
+  const isRefreshing = residenciesRefetching || householdRefetching;
+  const isLoading = residenciesLoading || householdLoading;
+
+  const verifiedResidents = residencyData?.residencies || [];
+  const householdMembers = householdData?.members || [];
+  const vehicles = householdData?.vehicles || [];
+  const pets = householdData?.pets || [];
+
+  const onRefresh = () => {
+    refetchResidencies();
+    refetchHousehold();
+  };
 
   return (
     <View style={styles.container}>
@@ -99,17 +89,17 @@ export default function MyHomeScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 20 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         {/* Hero */}
         <ScreenEntrance>
           <View style={styles.heroContainer}>
             <Image
-              source={require('../../assets/hero-image.png')}
+              source={require('../../assets/home-residential-hero.png')}
               style={styles.heroImage}
               resizeMode="cover"
             />
-            <View style={styles.heroOverlay} />
+            <View style={styles.heroGradient} />
             <View style={styles.heroContent}>
               <View style={styles.heroBadge}>
                 <Feather name="home" size={12} color="#FFFFFF" />
@@ -121,17 +111,18 @@ export default function MyHomeScreen() {
           </View>
         </ScreenEntrance>
 
-        {/* Registered Residents */}
-        <ScreenEntrance delay={80}>
+        {/* Verified Residents (from unit residencies) */}
+        <ScreenEntrance delay={60}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={homeLayout.sectionTitle}>Registered Residents</Text>
-              <Text style={styles.residentCount}>{allResidents.length}</Text>
+              {!isLoading && <Text style={styles.countBadge}>{verifiedResidents.length}</Text>}
             </View>
+            <View style={homeLayout.headingSpacingSpacer} />
 
             <View style={homeSurface}>
               {isLoading ? (
-                <View style={styles.skeletonWrap}>
+                <View style={styles.listPad}>
                   {[1, 2, 3].map((i) => (
                     <View key={i} style={styles.skeletonRow}>
                       <Skeleton width={42} height={42} style={{ borderRadius: 14 }} />
@@ -142,39 +133,44 @@ export default function MyHomeScreen() {
                     </View>
                   ))}
                 </View>
-              ) : allResidents.length === 0 ? (
-                <EmptyState icon="users" title="No residents" description="No residents registered for this unit." />
+              ) : verifiedResidents.length === 0 ? (
+                <EmptyState icon="users" title="No residents" description="No verified residents for this unit." />
               ) : (
-                allResidents.map((res, index) => {
-                  const relColor = getRelationshipColor(res.relationship);
+                verifiedResidents.map((res, index) => {
+                  const relColor = getRelationshipColor(res.relationshipType);
+                  const isMe = res.userId === user?.id;
                   return (
                     <React.Fragment key={res.id}>
                       <PremiumPressable
-                        style={styles.residentRow}
+                        style={styles.recordRow}
                         onPress={() => router.push('/family-members')}
                         scaleTo={0.98}
                       >
-                        <View style={[styles.avatar, res.isPrimary && styles.avatarPrimary]}>
-                          <Text style={[styles.avatarText, res.isPrimary && styles.avatarTextPrimary]}>
-                            {getInitials(res.name)}
+                        <View style={[styles.avatar, isMe && styles.avatarPrimary]}>
+                          <Text style={[styles.avatarText, isMe && styles.avatarTextPrimary]}>
+                            {getInitials(res.user.firstName, res.user.lastName)}
                           </Text>
                         </View>
-                        <View style={styles.residentInfo}>
+                        <View style={styles.recordInfo}>
                           <View style={styles.nameRow}>
-                            <Text style={styles.residentName} numberOfLines={1}>{res.name}</Text>
-                            {res.isPrimary && (
+                            <Text style={styles.recordTitle} numberOfLines={1}>
+                              {residentFullName(res.user)}
+                            </Text>
+                            {isMe && (
                               <View style={styles.youBadge}>
                                 <Text style={styles.youBadgeText}>You</Text>
                               </View>
                             )}
                           </View>
                           <View style={[styles.relPill, { backgroundColor: relColor.bg }]}>
-                            <Text style={[styles.relPillText, { color: relColor.text }]}>{res.relationship}</Text>
+                            <Text style={[styles.relPillText, { color: relColor.text }]}>
+                              {res.relationshipType.replace('_', ' ')}
+                            </Text>
                           </View>
                         </View>
                         <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />
                       </PremiumPressable>
-                      {index < allResidents.length - 1 && <View style={styles.divider} />}
+                      {index < verifiedResidents.length - 1 && <View style={styles.divider} />}
                     </React.Fragment>
                   );
                 })
@@ -193,8 +189,140 @@ export default function MyHomeScreen() {
           </View>
         </ScreenEntrance>
 
+        {/* Household Members (added by owner) */}
+        {householdMembers.length > 0 && (
+          <ScreenEntrance delay={80}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={homeLayout.sectionTitle}>Family & Dependents</Text>
+                <Text style={styles.countBadge}>{householdMembers.length}</Text>
+              </View>
+              <View style={homeLayout.headingSpacingSpacer} />
+
+              <View style={homeSurface}>
+                {householdMembers.map((m, index) => (
+                  <React.Fragment key={m.id}>
+                    <View style={styles.recordRow}>
+                      <View style={styles.recordIconBox}>
+                        <Feather name="user" size={18} color={theme.colors.primary} />
+                      </View>
+                      <View style={styles.recordInfo}>
+                        <Text style={styles.recordTitle}>{m.name}</Text>
+                        <Text style={styles.recordDetail}>{m.relationship}</Text>
+                      </View>
+                    </View>
+                    {index < householdMembers.length - 1 && <View style={styles.divider} />}
+                  </React.Fragment>
+                ))}
+              </View>
+            </View>
+          </ScreenEntrance>
+        )}
+
+        {/* Vehicles */}
+        <ScreenEntrance delay={100}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={homeLayout.sectionTitle}>Vehicles</Text>
+              {vehicles.length > 0 && <Text style={styles.countBadge}>{vehicles.length}</Text>}
+            </View>
+            <View style={homeLayout.headingSpacingSpacer} />
+
+            <View style={homeSurface}>
+              {isLoading ? (
+                <View style={styles.listPad}>
+                  {[1, 2].map((i) => (
+                    <View key={i} style={styles.skeletonRow}>
+                      <Skeleton width={42} height={42} style={{ borderRadius: 14 }} />
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <Skeleton width="50%" height={14} style={{ borderRadius: 4 }} />
+                        <Skeleton width="70%" height={11} style={{ borderRadius: 4 }} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : vehicles.length === 0 ? (
+                <View style={styles.emptyRow}>
+                  <View style={[styles.recordIconBox, { backgroundColor: '#FFF3D6' }]}>
+                    <Feather name="truck" size={18} color="#D97706" />
+                  </View>
+                  <Text style={styles.emptyText}>No vehicles registered</Text>
+                </View>
+              ) : (
+                vehicles.map((v, index) => (
+                  <React.Fragment key={v.id}>
+                    <View style={styles.recordRow}>
+                      <View style={[styles.recordIconBox, { backgroundColor: '#FFF3D6' }]}>
+                        <Feather name="truck" size={18} color="#D97706" />
+                      </View>
+                      <View style={styles.recordInfo}>
+                        <Text style={styles.recordTitle}>{v.registrationNumber}</Text>
+                        <Text style={styles.recordDetail}>
+                          {[v.make, v.model, v.color].filter(Boolean).join(' · ') || 'Vehicle'}
+                        </Text>
+                      </View>
+                    </View>
+                    {index < vehicles.length - 1 && <View style={styles.divider} />}
+                  </React.Fragment>
+                ))
+              )}
+            </View>
+          </View>
+        </ScreenEntrance>
+
+        {/* Pets */}
+        <ScreenEntrance delay={140}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={homeLayout.sectionTitle}>Pets</Text>
+              {pets.length > 0 && <Text style={styles.countBadge}>{pets.length}</Text>}
+            </View>
+            <View style={homeLayout.headingSpacingSpacer} />
+
+            <View style={homeSurface}>
+              {isLoading ? (
+                <View style={styles.listPad}>
+                  {[1, 2].map((i) => (
+                    <View key={i} style={styles.skeletonRow}>
+                      <Skeleton width={42} height={42} style={{ borderRadius: 14 }} />
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <Skeleton width="40%" height={14} style={{ borderRadius: 4 }} />
+                        <Skeleton width="60%" height={11} style={{ borderRadius: 4 }} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : pets.length === 0 ? (
+                <View style={styles.emptyRow}>
+                  <View style={[styles.recordIconBox, { backgroundColor: '#FCE7F3' }]}>
+                    <Feather name="heart" size={18} color="#BE185D" />
+                  </View>
+                  <Text style={styles.emptyText}>No pets registered</Text>
+                </View>
+              ) : (
+                pets.map((p, index) => (
+                  <React.Fragment key={p.id}>
+                    <View style={styles.recordRow}>
+                      <View style={[styles.recordIconBox, { backgroundColor: '#FCE7F3' }]}>
+                        <Feather name="heart" size={18} color="#BE185D" />
+                      </View>
+                      <View style={styles.recordInfo}>
+                        <Text style={styles.recordTitle}>{p.name}</Text>
+                        <Text style={styles.recordDetail}>
+                          {[p.species, p.breed, p.color].filter(Boolean).join(' · ') || 'Pet'}
+                        </Text>
+                      </View>
+                    </View>
+                    {index < pets.length - 1 && <View style={styles.divider} />}
+                  </React.Fragment>
+                ))
+              )}
+            </View>
+          </View>
+        </ScreenEntrance>
+
         {/* Unit Details */}
-        <ScreenEntrance delay={120}>
+        <ScreenEntrance delay={180}>
           <View style={styles.section}>
             <Text style={homeLayout.sectionTitle}>Unit Details</Text>
             <View style={[homeSurface, { marginTop: homeLayout.headingSpacing }]}>
@@ -234,7 +362,7 @@ const styles = StyleSheet.create({
   settingsBtn: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surface,
@@ -245,13 +373,13 @@ const styles = StyleSheet.create({
 
   /* Hero */
   heroContainer: {
-    height: 200,
+    height: 220,
     borderRadius: cardSystem.radius,
     overflow: 'hidden',
     marginBottom: cardSystem.sectionSpacing,
     position: 'relative',
     justifyContent: 'flex-end',
-    padding: 20,
+    padding: cardSystem.padding,
   },
   heroImage: {
     position: 'absolute',
@@ -262,7 +390,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  heroOverlay: {
+  heroGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -275,12 +403,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 98,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   heroBadgeText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -290,15 +418,15 @@ const styles = StyleSheet.create({
   },
   heroUnit: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 32,
+    fontSize: 36,
     color: '#FFF',
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
     marginBottom: 2,
   },
   heroAddress: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.8)',
   },
 
   /* Sections */
@@ -311,9 +439,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  residentCount: {
+  countBadge: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 13,
+    fontSize: 12,
     color: theme.colors.primary,
     backgroundColor: '#E8F5E9',
     paddingHorizontal: 10,
@@ -321,8 +449,8 @@ const styles = StyleSheet.create({
     borderRadius: 98,
   },
 
-  /* Residents */
-  residentRow: {
+  /* Record rows */
+  recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
@@ -347,7 +475,15 @@ const styles = StyleSheet.create({
   avatarTextPrimary: {
     color: '#FFFFFF',
   },
-  residentInfo: {
+  recordIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordInfo: {
     flex: 1,
     gap: 5,
   },
@@ -356,11 +492,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  residentName: {
+  recordTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 15,
     color: theme.colors.textPrimary,
     flex: 1,
+  },
+  recordDetail: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
   },
   youBadge: {
     backgroundColor: '#ECFDF5',
@@ -385,8 +526,22 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 0.2,
+    textTransform: 'capitalize',
   },
   divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginHorizontal: 15 },
+
+  /* Empty state */
+  emptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 15,
+  },
+  emptyText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
 
   /* Manage link */
   manageLink: {
@@ -435,7 +590,7 @@ const styles = StyleSheet.create({
   },
 
   /* Skeleton */
-  skeletonWrap: { padding: 15 },
+  listPad: { padding: 15 },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',
