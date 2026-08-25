@@ -32,12 +32,15 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   onAnnouncementPress,
   onCreateNotice,
 }) => {
-  const announcement = announcements[0];
+  const singleAnnouncement = announcements[0];
   const hasUnread = announcements.some((item) => !item.isRead);
-  const title = announcement ? announcement.title : 'Nothing new';
-  const description = announcement
-    ? `${hasUnread ? 'New' : announcement.category || announcement.priority} · ${relativeTime(announcement.createdAt)}`
+  const title = singleAnnouncement ? singleAnnouncement.title : 'Nothing new';
+  const description = singleAnnouncement
+    ? `${hasUnread ? 'New' : singleAnnouncement.category || singleAnnouncement.priority} · ${relativeTime(singleAnnouncement.createdAt)}`
     : 'No notices yet.';
+
+  // Check if this is a user-created announcement
+  const isUserCreated = singleAnnouncement && announcements.some(a => a.authorId === 'current-user');
 
   return (
     <View style={styles.container}>
@@ -49,8 +52,8 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
         </View>
       ) : (
         <PremiumPressable
-          style={styles.card}
-          onPress={() => announcement && onAnnouncementPress ? onAnnouncementPress(announcement) : onViewAllPress()}
+          style={[styles.card, isUserCreated && styles.userCreatedCard]}
+          onPress={() => singleAnnouncement && onAnnouncementPress ? onAnnouncementPress(singleAnnouncement) : onViewAllPress()}
           scaleTo={0.98}
           accessibilityRole="button"
           accessibilityLabel={`Community updates. ${title}. ${description}`}
@@ -60,25 +63,33 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
           </View>
 
           {onCreateNotice ? (
-            <PremiumPressable style={styles.createButton} onPress={onCreateNotice} scaleTo={0.94} accessibilityLabel="Create community notice">
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                onCreateNotice();
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="Create community notice"
+            >
               <Feather name="plus" size={14} color="#FFFFFF" />
               <Text style={styles.createButtonText}>Create</Text>
-            </PremiumPressable>
+            </TouchableOpacity>
           ) : null}
 
           <View style={styles.innerContent}>
             <View style={styles.iconContainer}>
-              <Feather name={announcement ? 'bell' : 'inbox'} size={26} color="#FFFFFF" />
+              <Feather name={isUserCreated ? 'edit-3' : singleAnnouncement ? 'bell' : 'inbox'} size={26} color="#FFFFFF" />
             </View>
 
             <View style={styles.textColumn}>
-              <Text style={styles.cardHeaderSmall}>Community updates</Text>
-              <Text style={styles.statusTitle}>{title}</Text>
-              <Text style={styles.statusDescription}>{description}</Text>
+              <Text style={[styles.cardHeaderSmall, isUserCreated && styles.userCreatedHeader]}>Community updates</Text>
+              <Text style={[styles.statusTitle, isUserCreated && styles.userCreatedTitle]}>{title}</Text>
+              <Text style={[styles.statusDescription, isUserCreated && styles.userCreatedDescription]}>{description}</Text>
             </View>
 
             <View style={styles.actionLinkWrap}>
-              <Text style={styles.actionLinkText}>View updates</Text>
+              <Text style={[styles.actionLinkText, isUserCreated && styles.userCreatedActionLink]}>View updates</Text>
               <Feather name="chevron-right" size={15} color="#FFFFFF" />
             </View>
           </View>
