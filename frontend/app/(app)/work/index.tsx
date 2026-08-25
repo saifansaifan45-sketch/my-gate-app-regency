@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../src/api/client';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSession } from '../../../src/store/auth';
 import { useToast } from '../../../src/store/toast';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
@@ -61,7 +61,7 @@ export default function WorkforceDashboard() {
   if (isError || (data && !data.personnelProfile)) {
     return (
       <View style={{ flex: 1, backgroundColor: '#F9FAFB', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Ionicons name="time-outline" size={64} color="#D1D5DB" />
+        <Feather name="clock" size={64} color="#D1D5DB" />
         <Text style={{ marginTop: 16, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: '#111827' }}>Awaiting Approval</Text>
         <Text style={{ marginTop: 8, fontFamily: 'PlusJakartaSans_400Regular', fontSize: 15, color: '#6B7280', textAlign: 'center' }}>
           Your workforce application is currently pending Manager approval.
@@ -128,6 +128,7 @@ export default function WorkforceDashboard() {
 
   return (
     <View style={styles.container}>
+      <ScreenEntrance animation="fade">
       <View style={[styles.hero, { paddingTop: Math.max(insets.top + 6, 26) }]}>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
@@ -144,7 +145,7 @@ export default function WorkforceDashboard() {
             accessibilityState={{ disabled: isLoggingOut }}
             hitSlop={8}
           >
-            {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Ionicons name="log-out-outline" size={20} color="#EF4444" />}
+            {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={20} color="#EF4444" />}
           </Pressable>
         </View>
         {!isSecurity && <View style={styles.heroStatus}>
@@ -169,6 +170,7 @@ export default function WorkforceDashboard() {
           </View>
         </View>}
       </View>
+      </ScreenEntrance>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -189,7 +191,7 @@ export default function WorkforceDashboard() {
             {isCheckedIn ? (
               <View style={styles.attendanceRow}>
                 <View style={styles.attendanceCopy}>
-                  <View style={styles.attendanceIcon}><Ionicons name="radio" size={18} color="#166534" /></View>
+                  <View style={styles.attendanceIcon}><Feather name="radio" size={18} color="#166534" /></View>
                   <View>
                   <Text style={styles.attendanceStatus}>Checked In</Text>
                   <Text style={styles.attendanceTime}>
@@ -204,7 +206,7 @@ export default function WorkforceDashboard() {
             ) : (
               <View style={styles.attendanceRow}>
                 <View style={styles.attendanceCopy}>
-                  <View style={[styles.attendanceIcon, styles.attendanceIconIdle]}><Ionicons name="time-outline" size={18} color="#9A6700" /></View>
+                  <View style={[styles.attendanceIcon, styles.attendanceIconIdle]}><Feather name="clock" size={18} color="#9A6700" /></View>
                   <View>
                   <Text style={styles.attendanceStatus}>Not Checked In</Text>
                   <Text style={styles.attendanceTime}>Start your day</Text>
@@ -228,12 +230,12 @@ export default function WorkforceDashboard() {
             </View>
             <Pressable onPress={() => router.push('/work/tasks')} hitSlop={8} style={styles.textButton}>
               <Text style={styles.textButtonText}>View all</Text>
-              <Ionicons name="arrow-forward" size={15} color={theme.colors.primary} />
+              <Feather name="arrow-right" size={15} color={theme.colors.primary} />
             </Pressable>
           </View>
           {activeTasks.length === 0 ? (
             <View style={styles.emptyCard}>
-              <View style={styles.emptyIcon}><Ionicons name="checkmark-done" size={22} color="#166534" /></View>
+              <View style={styles.emptyIcon}><Feather name="check-circle" size={22} color="#166534" /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.emptyTitle}>All clear for now</Text>
                 <Text style={styles.emptyCopy}>New assignments will appear here.</Text>
@@ -249,7 +251,7 @@ export default function WorkforceDashboard() {
                 <View style={[styles.taskAccent, task.ticket.priority === 'HIGH' && styles.taskAccentUrgent]} />
                 <View style={styles.taskHeader}>
                   <View style={styles.taskTitleRow}>
-                    <Ionicons name="construct-outline" size={18} color={theme.colors.primary} />
+                    <Feather name="tool" size={18} color={theme.colors.primary} />
                     <Text style={styles.taskTitle} numberOfLines={1}>{task.ticket.title}</Text>
                   </View>
                   <View style={[styles.badge, { backgroundColor: task.ticket.priority === 'HIGH' ? '#FEE2E2' : '#FEF3C7' }]}>
@@ -259,7 +261,7 @@ export default function WorkforceDashboard() {
                   </View>
                 </View>
                 <View style={styles.taskMetaRow}>
-                  <Text style={styles.taskLocation}><Ionicons name="location-outline" size={13} color="#6B7280" /> Unit {task.ticket.unitNumber}</Text>
+                  <Text style={styles.taskLocation}><Feather name="map-pin" size={13} color="#6B7280" /> Unit {task.ticket.unitNumber}</Text>
                   <Text style={styles.taskStatus}>{task.status.replace('_', ' ')}</Text>
                 </View>
               </Pressable>
@@ -273,37 +275,37 @@ export default function WorkforceDashboard() {
         <View style={styles.operationsGrid}>
         <Pressable style={styles.historyCard} onPress={() => router.push('/work/visitors')}>
           <View style={styles.historyIcon}>
-            <Ionicons name="shield-outline" size={20} color={theme.colors.primary} />
+            <Feather name="shield" size={20} color={theme.colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.historyTitle}>Gate Operations</Text>
             <Text style={styles.historyDesc}>Check in/out visitors, handle deliveries</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Feather name="chevron-right" size={20} color="#9CA3AF" />
         </Pressable>
 
                 {/* Gate Activity Log */}
         <Pressable style={styles.historyCard} onPress={() => router.push('/work/gate-activity')}>
           <View style={styles.historyIcon}>
-            <Ionicons name="list-outline" size={20} color={theme.colors.primary} />
+            <Feather name="list" size={20} color={theme.colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.historyTitle}>Gate Activity</Text>
             <Text style={styles.historyDesc}>View all recent gate operations & logs</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Feather name="chevron-right" size={20} color="#9CA3AF" />
         </Pressable>
 
         {/* Task History Link */}
         {!isSecurity && <Pressable style={styles.historyCard} onPress={() => router.push('/work/tasks/history')}>
           <View style={styles.historyIcon}>
-            <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+            <Feather name="clock" size={20} color={theme.colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.historyTitle}>Task History</Text>
             <Text style={styles.historyDesc}>View all tasks you have completed</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Feather name="chevron-right" size={20} color="#9CA3AF" />
         </Pressable>}
         </View>
         </ScreenEntrance>
@@ -551,15 +553,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E1E9E2',
-    gap: 12,
-    flex: 1,
-    minHeight: 92,
+    gap: 14,
+    minHeight: 80,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  operationsGrid: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  operationsGrid: { flexDirection: 'column', gap: 12, marginBottom: 14 },
   historyIcon: {
     width: 40,
     height: 40,

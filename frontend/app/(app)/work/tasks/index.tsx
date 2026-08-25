@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../../src/api/client';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSession } from '../../../../src/store/auth';
 
 export default function WorkTasksScreen() {
@@ -52,7 +52,7 @@ export default function WorkTasksScreen() {
           <Text style={styles.headerSubtitle}>{activeTasks.length ? `${activeTasks.length} open assignment${activeTasks.length === 1 ? '' : 's'}` : 'Your queue is clear'}</Text>
         </View>
         <Pressable style={styles.historyBtn} onPress={() => router.push('/work/tasks/history')} hitSlop={8}>
-          <Ionicons name="time-outline" size={17} color={theme.colors.primary} />
+          <Feather name="clock" size={17} color={theme.colors.primary} />
           <Text style={styles.historyBtnText}>History</Text>
         </Pressable>
       </View>
@@ -67,13 +67,13 @@ export default function WorkTasksScreen() {
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}>
         {isError ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cloud-offline-outline" size={42} color="#A15C4B" />
+            <Feather name="cloud-off" size={42} color="#A15C4B" />
             <Text style={styles.emptyText}>Tasks could not load</Text>
             <Pressable onPress={() => refetch()} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable>
           </View>
         ) : tasks.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done-circle-outline" size={48} color="#9CA3AF" />
+            <Feather name="check-circle" size={48} color="#9CA3AF" />
             <Text style={styles.emptyText}>All clear for today</Text>
             <Text style={styles.emptySubtext}>New assignments will appear here when they are sent to you.</Text>
           </View>
@@ -87,7 +87,7 @@ export default function WorkTasksScreen() {
               <View style={[styles.priorityRail, task.ticket.priority === 'HIGH' && styles.priorityRailHigh]} />
               <View style={styles.taskHeader}>
                 <View style={styles.titleLine}>
-                  <View style={styles.taskIcon}><Ionicons name="construct-outline" size={17} color={theme.colors.primary} /></View>
+                  <View style={styles.taskIcon}><Feather name="tool" size={17} color={theme.colors.primary} /></View>
                   <Text style={styles.taskTitle}>{task.ticket.title}</Text>
                 </View>
                 <View style={[styles.badge, { backgroundColor: task.ticket.priority === 'HIGH' ? '#FEE2E2' : '#FEF3C7' }]}>
@@ -97,10 +97,10 @@ export default function WorkTasksScreen() {
                 </View>
               </View>
               <View style={styles.taskMeta}>
-                <Text style={styles.taskLocation}><Ionicons name="location-outline" size={14} color="#6B7C70" /> Unit {task.ticket.unitNumber}</Text>
+                <Text style={styles.taskLocation}><Feather name="map-pin" size={14} color="#6B7C70" /> Unit {task.ticket.unitNumber}</Text>
                 <Text style={[styles.taskStatus, task.status === 'COMPLETED' && styles.taskStatusDone]}>{task.status.replace('_', ' ')}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#A2B0A5" style={styles.chevron} />
+              <Feather name="chevron-right" size={18} color="#A2B0A5" style={styles.chevron} />
             </Pressable>
           ))
         )}

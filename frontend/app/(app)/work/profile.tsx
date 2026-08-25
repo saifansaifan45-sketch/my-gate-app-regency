@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../src/api/client';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSession } from '../../../src/store/auth';
 import { getPersonnelRoleLabel } from '../../../src/utils/personnel';
 import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal';
@@ -91,7 +91,7 @@ export default function WorkProfileScreen() {
               <Text style={styles.email}>{user?.email || personnel?.phone || ''}</Text>
 
               <View style={styles.rolePill}>
-                <Ionicons name="briefcase-outline" size={13} color={theme.colors.primary} />
+                <Feather name="briefcase" size={13} color={theme.colors.primary} />
                 <Text style={styles.rolePillText}>
                   {getPersonnelRoleLabel(personnel)}
                 </Text>
@@ -144,13 +144,13 @@ export default function WorkProfileScreen() {
               <View style={styles.linksCard}>
                 <Pressable style={styles.linkRow} onPress={() => router.push('/work/tasks/history')}>
                   <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                    <Feather name="clock" size={20} color={theme.colors.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.linkTitle}>Task History</Text>
                     <Text style={styles.linkDesc}>Completed tasks & work notes</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  <Feather name="chevron-right" size={18} color="#9CA3AF" />
                 </Pressable>
               </View>
             </View>}
@@ -166,7 +166,7 @@ export default function WorkProfileScreen() {
                 accessibilityLabel="Log out"
                 accessibilityState={{ disabled: isLoggingOut }}
               >
-                {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Ionicons name="log-out-outline" size={22} color="#EF4444" />}
+                {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={22} color="#EF4444" />}
                 <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out…' : 'Log Out'}</Text>
               </Pressable>
             </View>

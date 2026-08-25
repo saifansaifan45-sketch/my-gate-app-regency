@@ -12,7 +12,8 @@ import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
 import { useSession } from '../../../src/store/auth';
 import { leadershipApi, LeadershipOverviewResponse, PendingManagerItem } from '../../../src/api/leadership';
-import { cardSystem } from '../../../src/components/ui/cardSystem';
+import { cardSystem, cardSurface } from '../../../src/components/ui/cardSystem';
+import { homeLayout } from '../../../src/components/home/homeSurface';
 
 export default function LeadershipOverviewScreen() {
   const router = useRouter();
@@ -69,12 +70,19 @@ export default function LeadershipOverviewScreen() {
     loadData();
   };
 
-  const displayName = `${user?.firstName || 'President'} ${user?.lastName || ''}`.trim();
+  const displayName = `${user?.firstName || 'Leader'} ${user?.lastName || ''}`.trim();
   const stats = data?.stats;
   const pendingManagersCount = pendingList.length || stats?.pendingManagers || 0;
-  
-  // Check if user has full leadership access or view-only
-  const isFullLeadership = hasLeadershipAccess() && hasApprovedMembership('LEADERSHIP');
+
+  const handleLeaveLeadership = () => {
+    if (hasResidentAccess() || hasOwnerAccess()) {
+      router.replace('/(app)/home');
+      return;
+    }
+    router.back();
+  };
+
+  // Check if user has view-only access
   const isViewOnly = hasLeadershipAccess() && !hasApprovedMembership('LEADERSHIP');
 
   return (
@@ -82,11 +90,15 @@ export default function LeadershipOverviewScreen() {
       <AppHeader
         variant="tabroot"
         title="Leadership Governance"
+        showBack
+        onBackPress={handleLeaveLeadership}
         rightAction={
           <PremiumPressable
             onPress={() => router.push('/notifications')}
             style={styles.notifBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Notifications"
+            accessibilityRole="button"
           >
             <Feather name="bell" size={20} color={theme.colors.textPrimary} />
             {pendingManagersCount > 0 && <View style={styles.notifDot} />}
@@ -101,12 +113,17 @@ export default function LeadershipOverviewScreen() {
       >
         {loadError && (
           <View style={styles.errorCard}>
-            <Feather name="wifi-off" size={22} color="#B45309" />
-            <View style={{ flex: 1 }}>
+            <Feather name="wifi-off" size={22} color={theme.status.warning.foreground} />
+            <View style={styles.errorCardBody}>
               <Text style={styles.errorTitle}>Governance data is unavailable</Text>
               <Text style={styles.errorDescription}>Check your connection and try again.</Text>
             </View>
-            <PremiumPressable style={styles.retryBtn} onPress={loadData}>
+            <PremiumPressable
+              style={styles.retryBtn}
+              onPress={loadData}
+              accessibilityLabel="Retry loading governance data"
+              accessibilityRole="button"
+            >
               <Text style={styles.retryText}>Retry</Text>
             </PremiumPressable>
           </View>
@@ -116,12 +133,12 @@ export default function LeadershipOverviewScreen() {
         <ScreenEntrance delay={40}>
           <View style={styles.heroCard}>
             <View style={styles.heroBadge}>
-              <Feather name="shield" size={13} color="#FFFFFF" />
+              <Feather name="shield" size={13} color={theme.colors.onPrimary} />
               <Text style={styles.heroBadgeText}>TOWNSHIP LEADERSHIP</Text>
             </View>
             <Text style={styles.heroTitle}>Good day, {displayName}</Text>
             <Text style={styles.heroSub}>
-              Regency Salma Governance & Operational Oversight
+              Regency Salma Governance &amp; Operational Oversight
             </Text>
           </View>
         </ScreenEntrance>
@@ -130,7 +147,7 @@ export default function LeadershipOverviewScreen() {
         {isViewOnly && (
           <ScreenEntrance delay={60} animation="rise" distance={10}>
             <View style={styles.infoCard}>
-              <Feather name="info" size={16} color="#6B7280" />
+              <Feather name="info" size={16} color={theme.colors.textTertiary} />
               <Text style={styles.infoText}>
                 You have view-only access. Contact leadership for full administrative privileges.
               </Text>
@@ -144,11 +161,13 @@ export default function LeadershipOverviewScreen() {
             <PremiumPressable
               style={styles.pendingActionCard}
               onPress={() => router.push('/leadership/approvals')}
+              accessibilityLabel={`${pendingManagersCount} manager applications pending review`}
+              accessibilityRole="button"
             >
               <View style={styles.pendingIconBox}>
-                <Feather name="alert-circle" size={24} color="#B45309" />
+                <Feather name="alert-circle" size={24} color={theme.status.warning.foreground} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.pendingCardBody}>
                 <Text style={styles.pendingCardTitle}>
                   {pendingManagersCount} Manager Application{pendingManagersCount > 1 ? 's' : ''} Pending
                 </Text>
@@ -158,12 +177,12 @@ export default function LeadershipOverviewScreen() {
               </View>
               <View style={styles.reviewBtnPill}>
                 <Text style={styles.reviewBtnText}>Review</Text>
-                <Feather name="chevron-right" size={16} color="#FFFFFF" />
+                <Feather name="chevron-right" size={16} color={theme.colors.onPrimary} />
               </View>
             </PremiumPressable>
           ) : (
             <View style={styles.upToDateCard}>
-              <Feather name="check-circle" size={18} color="#047857" />
+              <Feather name="check-circle" size={18} color={theme.status.success.foreground} />
               <Text style={styles.upToDateText}>All manager applications are up to date</Text>
             </View>
           )}
@@ -173,46 +192,88 @@ export default function LeadershipOverviewScreen() {
         <ScreenEntrance delay={120}>
           <Text style={styles.sectionTitle}>Community Overview</Text>
           {loading && !data ? (
-            <View style={styles.metricsGrid}>
-              <Skeleton width="48%" height={100} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={100} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={100} style={{ borderRadius: 14 }} />
-              <Skeleton width="48%" height={100} style={{ borderRadius: 14 }} />
-            </View>
+            <>
+              <View style={styles.metricsRow}>
+                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
+                <View style={styles.metricsRowGap} />
+                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
+              </View>
+              <View style={styles.metricsRow}>
+                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
+                <View style={styles.metricsRowGap} />
+                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
+              </View>
+            </>
           ) : (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
-                  <Feather name="user-check" size={20} color="#047857" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.activeManagers ?? 0}</Text>
-                <Text style={styles.metricLabel}>Active Managers</Text>
+            <>
+              {/* Row 1 */}
+              <View style={styles.metricsRow}>
+                <PremiumPressable
+                  style={[styles.metricCard, { flex: 1 }]}
+                  onPress={() => router.push('/leadership/approvals')}
+                  accessibilityLabel={`${stats?.pendingWorkforce ?? 0} pending workforce`}
+                  accessibilityRole="button"
+                  scaleTo={0.96}
+                >
+                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.success.background }]}>
+                    <Feather name="user-plus" size={18} color={theme.status.success.foreground} />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.pendingWorkforce ?? 0}</Text>
+                  <Text style={styles.metricLabel}>Pending Workforce</Text>
+                </PremiumPressable>
+
+                <View style={styles.metricsRowGap} />
+
+                <PremiumPressable
+                  style={[styles.metricCard, { flex: 1 }]}
+                  onPress={() => router.push('/leadership/approvals')}
+                  accessibilityLabel={`${pendingManagersCount} pending approvals`}
+                  accessibilityRole="button"
+                  scaleTo={0.96}
+                >
+                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.warning.background }]}>
+                    <Feather name="clock" size={18} color={theme.status.warning.foreground} />
+                  </View>
+                  <Text style={[styles.metricValue, { color: theme.status.warning.foreground }]}>{pendingManagersCount}</Text>
+                  <Text style={styles.metricLabel}>Pending Approvals</Text>
+                </PremiumPressable>
               </View>
 
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Feather name="clock" size={20} color="#B45309" />
-                </View>
-                <Text style={[styles.metricValue, { color: '#B45309' }]}>{pendingManagersCount}</Text>
-                <Text style={styles.metricLabel}>Pending Approvals</Text>
-              </View>
+              <View style={styles.metricsRowGap} />
 
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <Feather name="users" size={20} color="#1D4ED8" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.totalPersonnel ?? 0}</Text>
-                <Text style={styles.metricLabel}>Active Workforce</Text>
-              </View>
+              {/* Row 2 */}
+              <View style={styles.metricsRow}>
+                <PremiumPressable
+                  style={[styles.metricCard, { flex: 1 }]}
+                  onPress={() => router.push('/leadership/approvals')}
+                  accessibilityLabel={`${stats?.totalPersonnel ?? 0} active workforce members`}
+                  accessibilityRole="button"
+                  scaleTo={0.96}
+                >
+                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.info.background }]}>
+                    <Feather name="users" size={18} color={theme.status.info.foreground} />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.totalPersonnel ?? 0}</Text>
+                  <Text style={styles.metricLabel}>Active Workforce</Text>
+                </PremiumPressable>
 
-              <View style={styles.metricCard}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#FDF2F8' }]}>
-                  <Feather name="tool" size={20} color="#BE185D" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.activeTickets ?? 0}</Text>
-                <Text style={styles.metricLabel}>Active Issues</Text>
+                <View style={styles.metricsRowGap} />
+
+                <PremiumPressable
+                  style={[styles.metricCard, { flex: 1 }]}
+                  onPress={() => router.push('/leadership/tickets')}
+                  accessibilityLabel={`${stats?.activeTickets ?? 0} active issues`}
+                  accessibilityRole="button"
+                  scaleTo={0.96}
+                >
+                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.danger.background }]}>
+                    <Feather name="tool" size={18} color={theme.status.danger.foreground} />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.activeTickets ?? 0}</Text>
+                  <Text style={styles.metricLabel}>Active Issues</Text>
+                </PremiumPressable>
               </View>
-            </View>
+            </>
           )}
         </ScreenEntrance>
 
@@ -222,7 +283,9 @@ export default function LeadershipOverviewScreen() {
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryInfo}>
-                <View style={[styles.dotIcon, { backgroundColor: '#10B981' }]} />
+                <View style={[styles.summaryIconBox, { backgroundColor: theme.status.success.background }]}>
+                  <Feather name="shield" size={14} color={theme.status.success.foreground} />
+                </View>
                 <Text style={styles.summaryLabel}>Security Staff</Text>
               </View>
               <Text style={styles.summaryCount}>{stats?.workforceBreakdown?.security ?? 0}</Text>
@@ -231,7 +294,9 @@ export default function LeadershipOverviewScreen() {
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryInfo}>
-                <View style={[styles.dotIcon, { backgroundColor: '#3B82F6' }]} />
+                <View style={[styles.summaryIconBox, { backgroundColor: theme.status.info.background }]}>
+                  <Feather name="tool" size={14} color={theme.status.info.foreground} />
+                </View>
                 <Text style={styles.summaryLabel}>Maintenance / Technical</Text>
               </View>
               <Text style={styles.summaryCount}>{stats?.workforceBreakdown?.maintenance ?? 0}</Text>
@@ -240,7 +305,9 @@ export default function LeadershipOverviewScreen() {
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryInfo}>
-                <View style={[styles.dotIcon, { backgroundColor: '#8B5CF6' }]} />
+                <View style={[styles.summaryIconBox, { backgroundColor: theme.status.warning.background }]}>
+                  <Feather name="home" size={14} color={theme.status.warning.foreground} />
+                </View>
                 <Text style={styles.summaryLabel}>Housekeeping / Cleaning</Text>
               </View>
               <Text style={styles.summaryCount}>{stats?.workforceBreakdown?.housekeeping ?? 0}</Text>
@@ -249,7 +316,9 @@ export default function LeadershipOverviewScreen() {
 
             <View style={styles.summaryRow}>
               <View style={styles.summaryInfo}>
-                <View style={[styles.dotIcon, { backgroundColor: '#6B7280' }]} />
+                <View style={[styles.summaryIconBox, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Feather name="users" size={14} color={theme.colors.textTertiary} />
+                </View>
                 <Text style={styles.summaryLabel}>Other Township Staff</Text>
               </View>
               <Text style={styles.summaryCount}>{stats?.workforceBreakdown?.other ?? 0}</Text>
@@ -264,6 +333,8 @@ export default function LeadershipOverviewScreen() {
             <PremiumPressable
               onPress={() => router.push('/leadership/create-announcement')}
               style={styles.actionLinkBtn}
+              accessibilityLabel="Create new announcement"
+              accessibilityRole="button"
             >
               <Feather name="plus-circle" size={15} color={theme.colors.primary} />
               <Text style={styles.actionLinkText}>New Notice</Text>
@@ -274,14 +345,14 @@ export default function LeadershipOverviewScreen() {
             data.recentAnnouncements.map((ann) => (
               <View key={ann.id} style={styles.announcementCard}>
                 <View style={styles.announcementIconBox}>
-                  <Feather name="volume-2" size={18} color="#143D2A" />
+                  <Feather name="volume-2" size={18} color={theme.colors.primary} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={styles.announcementCardBody}>
                   <Text style={styles.announcementCardTitle}>{ann.title}</Text>
                   <Text style={styles.announcementCardMeta}>
                     By {ann.authorName} · {new Date(ann.createdAt).toLocaleDateString()}
                   </Text>
-                  <Text style={styles.announcementCardBody} numberOfLines={2}>
+                  <Text style={styles.announcementCardText} numberOfLines={2}>
                     {ann.content}
                   </Text>
                 </View>
@@ -304,8 +375,8 @@ export default function LeadershipOverviewScreen() {
               {data.recentApprovals.map((appr, idx) => (
                 <View key={appr.id}>
                   <View style={styles.activityItem}>
-                    <View style={[styles.activityDot, { backgroundColor: appr.role === 'MANAGER' ? '#047857' : '#1D4ED8' }]} />
-                    <View style={{ flex: 1 }}>
+                    <View style={[styles.activityDot, { backgroundColor: appr.role === 'MANAGER' ? theme.status.success.foreground : theme.status.info.foreground }]} />
+                    <View style={styles.activityInfo}>
                       <Text style={styles.activityName}>{appr.userName}</Text>
                       <Text style={styles.activitySub}>
                         {appr.role} · {appr.email}
@@ -351,15 +422,15 @@ const styles = StyleSheet.create({
     right: 4,
     width: 8,
     height: 8,
-    borderRadius: 2,
-    backgroundColor: '#EF4444',
+    borderRadius: 4,
+    backgroundColor: theme.colors.error,
   },
   heroCard: {
-    backgroundColor: '#143D2A',
+    backgroundColor: theme.colors.primary,
     borderRadius: 18,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#143D2A',
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -373,19 +444,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 98,
+    borderRadius: theme.radii.pill,
     marginBottom: 10,
   },
   heroBadgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 11,
     letterSpacing: 0.8,
-    color: '#FFFFFF',
+    color: theme.colors.onPrimary,
   },
   heroTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 22,
-    color: '#FFFFFF',
+    color: theme.colors.onPrimary,
     marginBottom: 4,
     letterSpacing: -0.3,
   },
@@ -398,11 +469,11 @@ const styles = StyleSheet.create({
   pendingActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: theme.status.warning.background,
+    borderColor: theme.status.warning.border,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: cardSystem.radius,
+    padding: cardSystem.padding + 4,
     marginBottom: 20,
     gap: 12,
   },
@@ -410,44 +481,47 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 20,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: theme.status.warning.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  pendingCardBody: {
+    flex: 1,
   },
   pendingCardTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 15,
-    color: '#92400E',
+    color: theme.status.warning.foreground,
     marginBottom: 2,
   },
   pendingCardDesc: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 12,
-    color: '#B45309',
+    color: theme.status.warning.foreground,
     lineHeight: 16,
   },
   reviewBtnPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#B45309',
+    backgroundColor: theme.status.warning.foreground,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 98,
+    borderRadius: theme.radii.pill,
   },
   reviewBtnText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 12,
-    color: '#FFFFFF',
+    color: theme.colors.onPrimary,
   },
   upToDateCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: theme.status.success.background,
+    borderColor: theme.status.success.border,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: cardSystem.radius,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 20,
@@ -455,14 +529,11 @@ const styles = StyleSheet.create({
   upToDateText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 13,
-    color: '#047857',
+    color: theme.status.success.foreground,
   },
   sectionTitle: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
-    color: theme.colors.textPrimary,
+    ...homeLayout.sectionTitle,
     marginBottom: 12,
-    letterSpacing: -0.2,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -474,29 +545,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: theme.status.success.background,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 98,
+    borderRadius: theme.radii.pill,
   },
   actionLinkText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 12,
     color: theme.colors.primary,
   },
-  metricsGrid: {
+  metricsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    marginBottom: 12,
+  },
+  metricsRowGap: {
+    width: 12,
+  },
+  metricSkeletonCell: {
+    flex: 1,
+  },
+  skeletonRadius: {
+    borderRadius: 14,
   },
   metricCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -504,8 +581,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   metricIconBox: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -514,7 +591,6 @@ const styles = StyleSheet.create({
   metricValue: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 24,
-    color: theme.colors.textPrimary,
     letterSpacing: -0.5,
     marginBottom: 2,
   },
@@ -524,28 +600,27 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    ...cardSurface,
+    padding: cardSystem.padding + 4,
     marginBottom: 24,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   summaryInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  dotIcon: {
-    width: 10,
-    height: 10,
-    borderRadius: 3,
+  summaryIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   summaryLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -559,17 +634,14 @@ const styles = StyleSheet.create({
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.colors.surfaceMuted,
     marginVertical: 4,
   },
   announcementCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    ...cardSurface,
+    padding: cardSystem.padding + 4,
     marginBottom: 12,
     gap: 12,
   },
@@ -577,9 +649,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 18,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: theme.status.success.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  announcementCardBody: {
+    flex: 1,
   },
   announcementCardTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -593,18 +668,15 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginBottom: 6,
   },
-  announcementCardBody: {
+  announcementCardText: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
-    color: '#374151',
+    color: theme.colors.textSecondary,
     lineHeight: 18,
   },
   activityListCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    ...cardSurface,
+    padding: cardSystem.padding + 4,
     marginBottom: 20,
   },
   activityItem: {
@@ -616,7 +688,10 @@ const styles = StyleSheet.create({
   activityDot: {
     width: 8,
     height: 8,
-    borderRadius: 2,
+    borderRadius: 4,
+  },
+  activityInfo: {
+    flex: 1,
   },
   activityName: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
@@ -631,13 +706,59 @@ const styles = StyleSheet.create({
   activityTime: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 11.5,
-    color: '#9CA3AF',
+    color: theme.colors.textTertiary,
   },
-  errorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 16 },
-  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: '#92400E' },
-  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: '#B45309', marginTop: 2 },
-  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 },
-  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: '#FFFFFF' },
-  infoCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 16 },
-  infoText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: '#1D4ED8', flex: 1 },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.status.warning.background,
+    borderColor: theme.status.warning.border,
+    borderWidth: 1,
+    borderRadius: cardSystem.radius,
+    padding: 14,
+    marginBottom: 16,
+  },
+  errorCardBody: {
+    flex: 1,
+  },
+  errorTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 13,
+    color: theme.status.warning.foreground,
+  },
+  errorDescription: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11,
+    color: theme.status.warning.foreground,
+    marginTop: 2,
+  },
+  retryBtn: {
+    backgroundColor: theme.status.warning.foreground,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  retryText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 11,
+    color: theme.colors.onPrimary,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.status.info.background,
+    borderColor: theme.status.info.border,
+    borderWidth: 1,
+    borderRadius: cardSystem.radius,
+    padding: 14,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
+    color: theme.status.info.foreground,
+    flex: 1,
+  },
 });

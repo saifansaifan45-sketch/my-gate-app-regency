@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '../../src/components/ui/Text';
@@ -174,7 +174,7 @@ export default function ProfileScreen() {
               <View style={styles.card}>
                 <PremiumPressable style={styles.menuRow} onPress={() => router.push('/manager')}>
                   <View style={[styles.iconBox, { backgroundColor: '#143D2A' }]}>
-                    <MaterialCommunityIcons name="shield-account" size={22} color="#FFFFFF" />
+                     <Feather name="shield" size={22} color="#FFFFFF" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Manager Operations Module</Text>

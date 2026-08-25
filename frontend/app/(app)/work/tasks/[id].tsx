@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { smartBack } from '../../../../src/navigation/history';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../../src/api/client';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { homeDashboardQueryKey } from '../../../../src/api/home-dashboard';
 import { useSession } from '../../../../src/store/auth';
 
@@ -70,7 +70,7 @@ export default function WorkTaskDetailScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 20) }]}>
       <View style={styles.header}>
         <Pressable onPress={() => smartBack(router, '/work/tasks')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#111827" />
+          <Feather name="arrow-left" size={24} color="#111827" />
         </Pressable>
         <Text style={styles.headerTitle}>Task Detail</Text>
         <View style={{ width: 40 }} />
@@ -79,7 +79,7 @@ export default function WorkTaskDetailScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.infoCard}>
           <View style={styles.detailTopline}>
-            <View style={styles.detailIcon}><Ionicons name="construct-outline" size={22} color={theme.colors.primary} /></View>
+            <View style={styles.detailIcon}><Feather name="tool" size={22} color={theme.colors.primary} /></View>
             <View style={styles.detailStatus}><Text style={styles.detailStatusText}>{task.status.replace('_', ' ')}</Text></View>
           </View>
           <Text style={styles.title}>{task.ticket.title}</Text>
@@ -122,7 +122,7 @@ export default function WorkTaskDetailScreen() {
         ) : (
           <View style={styles.completionSection}>
              <View style={styles.successBanner}>
-               <Ionicons name="checkmark-circle" size={24} color="#166534" />
+               <Feather name="check-circle" size={24} color="#166534" />
                <Text style={styles.successText}>This task is marked as completed.</Text>
              </View>
              <Text style={styles.inputLabel}>Your Notes:</Text>

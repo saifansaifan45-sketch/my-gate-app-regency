@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Tabs } from 'expo-router';
 import { theme } from '../../src/theme';
@@ -12,8 +12,8 @@ import { api } from '../../src/api/client';
 import { QuickActionsRadial } from '../../src/components/ui/QuickActionsRadial';
 
 interface BouncyTabProps {
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  inactiveIcon: keyof typeof Ionicons.glyphMap;
+  activeIcon: keyof typeof Feather.glyphMap;
+  inactiveIcon: keyof typeof Feather.glyphMap;
   label: string;
   isFocused: boolean;
   onPress: () => void;
@@ -117,7 +117,7 @@ function BouncyTabItem({ activeIcon, inactiveIcon, label, isFocused, onPress }: 
         ]}
       />
       <Animated.View style={[styles.tabContent, { transform: [{ scale: scaleAnim }] }]}>
-        <Ionicons
+        <Feather
           name={isFocused ? activeIcon : inactiveIcon}
           size={23}
           color={isFocused ? activeColor : inactiveColor}
@@ -142,8 +142,18 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasApprovedMembership } = useSession();
 
-  const isLeadershipMode = false; // Leadership always gets full resident access
-  const isManagerMode = hasManagerAccess() && !hasResidentAccess() && !hasOwnerAccess();
+  const currentRoute = state.routes[state.index]?.name as string | undefined;
+  const isOnLeadershipRoute =
+    (currentRoute?.startsWith('leadership/') ?? false) ||
+    currentRoute === 'announcements';
+  const isOnManagerRoute = currentRoute?.startsWith('manager/') ?? false;
+  const isLeadershipMember = hasApprovedMembership('LEADERSHIP');
+  const isManagerMember = hasManagerAccess();
+
+  // Hybrid accounts keep the resident bar on resident screens, but must get
+  // their operations bar as soon as they enter a management section.
+  const isLeadershipMode = isLeadershipMember && (isOnLeadershipRoute || (!hasResidentAccess() && !hasOwnerAccess()));
+  const isManagerMode = !isLeadershipMode && isManagerMember && (isOnManagerRoute || (!hasResidentAccess() && !hasOwnerAccess()));
   const isWorkforceMode = hasApprovedMembership('WORKFORCE') && !hasManagerAccess() && !hasLeadershipAccess() && !hasResidentAccess() && !hasOwnerAccess();
   const { data: workforceData } = useQuery({
     queryKey: ['workforce-dashboard'],
@@ -174,13 +184,12 @@ function CustomTabBar({ state, navigation }: any) {
     ]).start();
   }, []);
 
-  const currentRoute = state.routes[state.index]?.name;
-  
   // Routes where the tab bar should be visible
-  const isResidentTab = ['home', 'community', 'services', 'profile'].includes(currentRoute);
-  const isManagerTab = ['manager/index', 'manager/tickets/index', 'manager/personnel/index', 'manager/approvals', 'manager/attendance', 'profile'].includes(currentRoute);
-  const isLeadershipTab = ['leadership/index', 'leadership/approvals', 'community', 'announcements', 'profile'].includes(currentRoute);
-  const isWorkforceTab = ['work/index', 'work/tasks/index', 'work/attendance', 'work/profile'].includes(currentRoute);
+  const visibleRoute = currentRoute ?? '';
+  const isResidentTab = ['home', 'community', 'services', 'profile'].includes(visibleRoute);
+  const isManagerTab = ['manager/index', 'manager/tickets/index', 'manager/personnel/index', 'manager/visitors', 'profile'].includes(visibleRoute);
+  const isLeadershipTab = ['leadership/index', 'leadership/approvals', 'leadership/tickets', 'announcements'].includes(visibleRoute);
+  const isWorkforceTab = ['work/index', 'work/tasks/index', 'work/attendance', 'work/profile'].includes(visibleRoute);
 
   if (isWorkforceMode && !isWorkforceTab) {
     return null;
@@ -236,28 +245,28 @@ function CustomTabBar({ state, navigation }: any) {
           <>
             <BouncyTabItem
               activeIcon="home"
-              inactiveIcon="home-outline"
+              inactiveIcon="home"
               label="Dashboard"
               isFocused={getIsFocused('work/index')}
               onPress={() => handleTabPress('work/index')}
             />
             {!isSecurity && <BouncyTabItem
-              activeIcon="construct"
-              inactiveIcon="construct-outline"
+              activeIcon="tool"
+              inactiveIcon="tool"
               label="Tasks"
               isFocused={getIsFocused('work/tasks/index')}
               onPress={() => handleTabPress('work/tasks/index')}
             />}
             <BouncyTabItem
               activeIcon="calendar"
-              inactiveIcon="calendar-outline"
+              inactiveIcon="calendar"
               label="Attendance"
               isFocused={getIsFocused('work/attendance')}
               onPress={() => handleTabPress('work/attendance')}
             />
             <BouncyTabItem
-              activeIcon="person"
-              inactiveIcon="person-outline"
+              activeIcon="user"
+              inactiveIcon="user"
               label="Profile"
               isFocused={getIsFocused('work/profile')}
               onPress={() => handleTabPress('work/profile')}
@@ -267,80 +276,66 @@ function CustomTabBar({ state, navigation }: any) {
           <>
             <BouncyTabItem
               activeIcon="shield"
-              inactiveIcon="shield-outline"
+              inactiveIcon="shield"
               label="Overview"
               isFocused={getIsFocused('leadership/index')}
               onPress={() => handleTabPress('leadership/index')}
             />
             <BouncyTabItem
-              activeIcon="checkmark-circle"
-              inactiveIcon="checkmark-circle-outline"
+              activeIcon="check-circle"
+              inactiveIcon="check-circle"
               label="Approvals"
               isFocused={getIsFocused('leadership/approvals')}
               onPress={() => handleTabPress('leadership/approvals')}
             />
             <BouncyTabItem
-              activeIcon="people"
-              inactiveIcon="people-outline"
-              label="Community"
-              isFocused={getIsFocused('community')}
-              onPress={() => handleTabPress('community')}
+              activeIcon="file-text"
+              inactiveIcon="file-text"
+              label="Tickets"
+              isFocused={getIsFocused('leadership/tickets')}
+              onPress={() => handleTabPress('leadership/tickets')}
             />
             <BouncyTabItem
-              activeIcon="megaphone"
-              inactiveIcon="megaphone-outline"
+              activeIcon="volume-2"
+              inactiveIcon="volume-2"
               label="Notices"
               isFocused={getIsFocused('announcements')}
               onPress={() => handleTabPress('announcements')}
-            />
-            <BouncyTabItem
-              activeIcon="person"
-              inactiveIcon="person-outline"
-              label="Profile"
-              isFocused={getIsFocused('profile')}
-              onPress={() => handleTabPress('profile')}
             />
           </>
         ) : isManagerMode ? (
           <>
             <BouncyTabItem
-              activeIcon="speedometer"
-              inactiveIcon="speedometer-outline"
-              label="Dashboard"
+              activeIcon="activity"
+              inactiveIcon="activity"
+              label="Overview"
               isFocused={getIsFocused('manager/index')}
               onPress={() => handleTabPress('manager/index')}
             />
             <BouncyTabItem
-              activeIcon="construct"
-              inactiveIcon="construct-outline"
-              label="Tickets"
+              activeIcon="file-text"
+              inactiveIcon="file-text"
+              label="Requests"
               isFocused={getIsFocused('manager/tickets/index')}
               onPress={() => handleTabPress('manager/tickets/index')}
             />
             <BouncyTabItem
-              activeIcon="people"
-              inactiveIcon="people-outline"
-              label="Personnel"
+              activeIcon="users"
+              inactiveIcon="users"
+              label="Staff"
               isFocused={getIsFocused('manager/personnel/index')}
               onPress={() => handleTabPress('manager/personnel/index')}
             />
             <BouncyTabItem
-              activeIcon="checkmark-circle"
-              inactiveIcon="checkmark-circle-outline"
-              label="Approvals"
-              isFocused={getIsFocused('manager/approvals')}
-              onPress={() => handleTabPress('manager/approvals')}
+              activeIcon="shield"
+              inactiveIcon="shield"
+              label="Gate"
+              isFocused={getIsFocused('manager/visitors')}
+              onPress={() => handleTabPress('manager/visitors')}
             />
             <BouncyTabItem
-              activeIcon="calendar"
-              inactiveIcon="calendar-outline"
-              label="Attendance"
-              isFocused={getIsFocused('manager/attendance')}
-              onPress={() => handleTabPress('manager/attendance')}
-            />
-            <BouncyTabItem
-              activeIcon="person"
-              inactiveIcon="person-outline"
+              activeIcon="user"
+              inactiveIcon="user"
               label="Profile"
               isFocused={getIsFocused('profile')}
               onPress={() => handleTabPress('profile')}
@@ -350,14 +345,14 @@ function CustomTabBar({ state, navigation }: any) {
           <>
             <BouncyTabItem
               activeIcon="home"
-              inactiveIcon="home-outline"
+              inactiveIcon="home"
               label="Home"
               isFocused={getIsFocused('home')}
               onPress={() => handleTabPress('home')}
             />
             <BouncyTabItem
-              activeIcon="people"
-              inactiveIcon="people-outline"
+              activeIcon="users"
+              inactiveIcon="users"
               label="Community"
               isFocused={getIsFocused('community')}
               onPress={() => handleTabPress('community')}
@@ -367,14 +362,14 @@ function CustomTabBar({ state, navigation }: any) {
 
             <BouncyTabItem
               activeIcon="grid"
-              inactiveIcon="grid-outline"
+              inactiveIcon="grid"
               label="Services"
               isFocused={getIsFocused('services')}
               onPress={() => handleTabPress('services')}
             />
             <BouncyTabItem
-              activeIcon="person"
-              inactiveIcon="person-outline"
+              activeIcon="user"
+              inactiveIcon="user"
               label="Profile"
               isFocused={getIsFocused('profile')}
               onPress={() => handleTabPress('profile')}
@@ -521,6 +516,7 @@ export default function AppLayout() {
         <Tabs.Screen name="manager/tasks" options={{ href: null }} />
         <Tabs.Screen name="leadership/index" options={{ href: null }} />
         <Tabs.Screen name="leadership/approvals" options={{ href: null }} />
+        <Tabs.Screen name="leadership/tickets" options={{ href: null }} />
         <Tabs.Screen name="leadership/create-announcement" options={{ href: null }} />
         <Tabs.Screen name="work/index" options={{ href: null }} />
         <Tabs.Screen name="work/tasks/index" options={{ href: null }} />

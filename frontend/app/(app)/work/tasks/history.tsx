@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../../src/api/client';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../../src/navigation/history';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSession } from '../../../../src/store/auth';
 
 export default function WorkTaskHistoryScreen() {
@@ -40,7 +40,7 @@ export default function WorkTaskHistoryScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work')} hitSlop={8}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
+          <Feather name="arrow-left" size={22} color="#111827" />
         </Pressable>
         <Text style={styles.headerTitle}>Task History</Text>
         <View style={styles.headerSpacer} />
@@ -54,7 +54,7 @@ export default function WorkTaskHistoryScreen() {
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 40 }} />
         ) : history.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="time-outline" size={48} color="#9CA3AF" />
+            <Feather name="clock" size={48} color="#9CA3AF" />
             <Text style={styles.emptyText}>No completed tasks yet.</Text>
             <Text style={styles.emptySub}>Tasks you complete will appear here.</Text>
           </View>
@@ -70,15 +70,15 @@ export default function WorkTaskHistoryScreen() {
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Ionicons name="location-outline" size={14} color="#6B7280" />
+                  <Feather name="map-pin" size={14} color="#6B7280" />
                   <Text style={styles.metaText}>Unit {task.ticket.unitNumber}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Ionicons name="flag-outline" size={14} color="#6B7280" />
+                  <Feather name="flag" size={14} color="#6B7280" />
                   <Text style={styles.metaText}>{task.ticket.priority}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                  <Feather name="calendar" size={14} color="#6B7280" />
                   <Text style={styles.metaText}>{formatDate(task.completedAt)}</Text>
                 </View>
               </View>

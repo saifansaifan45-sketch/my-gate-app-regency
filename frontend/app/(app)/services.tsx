@@ -3,7 +3,7 @@ import { View, ScrollView, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { ActionCard } from '../../src/components/ui/ActionCard';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { EmergencySOSModal } from '../../src/components/emergency-sos-modal';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { useSession } from '../../src/store/auth';
@@ -39,7 +39,7 @@ export default function ServicesScreen() {
              <ActionCard
                 style={{ backgroundColor: theme.colors.surfaceGreen, borderColor: theme.status.success.border, marginBottom: 12 }}
                 onPress={() => router.push('/manager')}
-                icon={<MaterialCommunityIcons name="shield-account" size={24} color={theme.colors.onPrimary} />}
+                icon={<Feather name="shield" size={24} color={theme.colors.onPrimary} />}
                 iconBackground={theme.colors.primary}
                 title="Manager Dashboard"
                 description="Tickets, personnel assignments & staff attendance"
