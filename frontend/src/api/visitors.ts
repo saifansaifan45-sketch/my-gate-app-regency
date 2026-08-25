@@ -12,6 +12,7 @@ export interface VisitorItem {
   visitorType: VisitorType;
   status: VisitorStatus;
   otp?: string | null;
+  otpFailedAttempts?: number;
   /** Indicates that this pass needs manual OTP verification; never contains the OTP itself. */
   requiresOtp?: boolean;
   isPreApproved: boolean;
@@ -32,6 +33,8 @@ export interface VisitorItem {
   handoffTimestamp?: string | null;
   handoffActorId?: string | null;
   handoffProofReference?: string | null;
+  handoffSuggestionType?: string | null;
+  handoffSuggestionName?: string | null;
 
   createdAt: string;
   updatedAt: string;
@@ -79,7 +82,10 @@ export const isVisitorToday = (visitor: VisitorItem, now = new Date()) => {
 };
 
 export const isGuestVisitor = (visitor: VisitorItem) =>
-  visitor.visitorType === 'GUEST' || visitor.visitorType === 'SERVICE' || visitor.visitorType === 'OTHER';
+  visitor.visitorType === 'GUEST';
+
+export const requiresOtpCheck = (visitor: VisitorItem) =>
+  visitor.visitorType === 'GUEST';
 
 export interface GateSummary {
   totalToday: number;
@@ -92,7 +98,8 @@ export interface GateSummary {
 
 export interface GateVisitorsResponse {
   summary: GateSummary;
-  visitors: VisitorItem[];
+  /** Legacy queue consumers may still read the aggregate list; Gate Operations uses the grouped lists below. */
+  visitors?: VisitorItem[];
   pending: VisitorItem[];
   approved: VisitorItem[];
   checkedIn: VisitorItem[];
@@ -151,6 +158,11 @@ export const visitorsApi = {
 
   handoffDelivery: async (id: string, payload: { recipientType: string; recipientName?: string; proofReference?: string }): Promise<{ success: boolean; visitor: VisitorItem }> => {
     const res = await api.post<{ success: boolean; visitor: VisitorItem }>(`/visitors/${id}/handoff`, payload);
+    return res.data;
+  },
+
+  reconcileVisitors: async (communityId?: string): Promise<{ success: boolean; expired: number; autoCheckedOut: number }> => {
+    const res = await api.post<{ success: boolean; expired: number; autoCheckedOut: number }>('/visitors/reconcile', { communityId });
     return res.data;
   },
 };

@@ -13,13 +13,16 @@ import { useToast } from '../store/toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COMMON_PROVIDERS = [
-  'Uber', 'Rapido', 'Ola', 'Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Porter', 'Custom'
+  'Uber', 'Rapido', 'Ola', 'Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Porter', 'Blinkit', 'Zepto', 'Dunzo', 'Custom'
 ];
 
 const DURATIONS = [
   { label: '15 min', minutes: 15 },
-  { label: '20 min', minutes: 20 },
+  { label: '30 min', minutes: 30 },
   { label: '1 hour', minutes: 60 },
+  { label: '2 hours', minutes: 120 },
+  { label: '4 hours', minutes: 240 },
+  { label: '8 hours', minutes: 480 },
   { label: '1 day', minutes: 1440 },
 ];
 
@@ -62,6 +65,30 @@ export function AddVisitorModal({
   
   const [submitting, setSubmitting] = useState(false);
   const [generatedPass, setGeneratedPass] = useState<any>(null);
+  const [customDuration, setCustomDuration] = useState<string>('');
+  const [phoneError, setPhoneError] = useState<string>('');
+  const [vehicleError, setVehicleError] = useState<string>('');
+
+  // Validation functions
+  const validatePhone = (value: string): string => {
+    if (!value.trim()) return '';
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    const indianMobileRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(value.replace(/\s|-/g, '')) && !indianMobileRegex.test(value.replace(/\s|-/g, ''))) {
+      return 'Enter a valid phone number (e.g. +91 9876543210 or 9876543210)';
+    }
+    return '';
+  };
+
+  const validateVehicle = (value: string): string => {
+    if (!value.trim()) return '';
+    // Indian vehicle format: XX##XX#### (e.g., MH12AB1234)
+    const vehicleRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{1,4}$/i;
+    if (!vehicleRegex.test(value.toUpperCase().replace(/\s/g, ''))) {
+      return 'Enter valid vehicle number (e.g. MH12AB1234)';
+    }
+    return '';
+  };
 
   useEffect(() => {
     if (visible) {
@@ -88,6 +115,8 @@ export function AddVisitorModal({
     if (isExternal && !activeProvider.trim()) return false;
     if (!isExternal && !name.trim()) return false;
     if (visitorType === 'SERVICE' && !purpose.trim()) return false;
+    if (phoneError || vehicleError) return false;
+    if (customDuration && (parseInt(customDuration) < 5 || parseInt(customDuration) > 10080)) return false;
     return true;
   };
 
@@ -97,13 +126,15 @@ export function AddVisitorModal({
     
     try {
       const now = new Date();
-      const validUntil = new Date(now.getTime() + durationPreset * 60000);
+      // Use custom duration if provided, otherwise use preset
+      const durationMinutes = customDuration ? parseInt(customDuration) : durationPreset;
+      const validUntil = new Date(now.getTime() + durationMinutes * 60000);
       
       const payload: CreateVisitorPayload = {
         name: isExternal ? name || activeProvider : name,
         phone: phone || undefined,
         purpose: purpose || undefined,
-        vehicleNumber: vehicleNumber || undefined,
+        vehicleNumber: vehicleNumber ? vehicleNumber.toUpperCase().replace(/\s/g, '') : undefined,
         visitorType,
         provider: isExternal ? activeProvider : undefined,
         orderReference: orderReference || undefined,
@@ -241,12 +272,20 @@ export function AddVisitorModal({
                         <PremiumPressable
                           key={d.minutes}
                           style={[styles.chip, durationPreset === d.minutes && styles.chipSelected]}
-                          onPress={() => setDurationPreset(d.minutes)}
+                          onPress={() => { setDurationPreset(d.minutes); setCustomDuration(''); }}
                         >
                           <Text style={[styles.chipText, durationPreset === d.minutes && styles.chipTextSelected]}>{d.label}</Text>
                         </PremiumPressable>
                       ))}
                     </View>
+                    <RNTextInput
+                      style={[styles.input, { marginTop: 8 }]}
+                      placeholder="Custom duration (minutes, 5-10080)"
+                      value={customDuration}
+                      onChangeText={(v) => { setCustomDuration(v.replace(/\D/g, '')); setDurationPreset(0); }}
+                      placeholderTextColor={theme.colors.textSecondary}
+                      keyboardType="number-pad"
+                    />
                   </>
                 )}
 
@@ -275,22 +314,24 @@ export function AddVisitorModal({
                 )}
                 
                 <RNTextInput
-                  style={styles.input}
+                  style={[styles.input, vehicleError && styles.inputError]}
                   placeholder="Vehicle number (optional)"
                   value={vehicleNumber}
-                  onChangeText={setVehicleNumber}
+                  onChangeText={(v) => { setVehicleNumber(v.toUpperCase()); setVehicleError(validateVehicle(v)); }}
                   autoCapitalize="characters"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
+                {vehicleError && <Text style={styles.errorText}>{vehicleError}</Text>}
                 
                 <RNTextInput
-                  style={styles.input}
+                  style={[styles.input, phoneError && styles.inputError]}
                   placeholder="Mobile number (optional)"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(v) => { setPhone(v); setPhoneError(validatePhone(v)); }}
                   keyboardType="phone-pad"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
+                {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
 
                 <View style={styles.infoCard}>
                   <View style={styles.infoIcon}>
@@ -347,6 +388,8 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: '#4B5563' },
   chipTextSelected: { color: theme.colors.primary, fontFamily: 'PlusJakartaSans_600SemiBold' },
   input: { height: 46, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13.5, color: theme.colors.textPrimary, backgroundColor: '#FFFFFF', marginBottom: 10 },
+  inputError: { borderColor: '#DC2626', borderWidth: 2 },
+  errorText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: '#DC2626', marginTop: -8, marginBottom: 8, marginLeft: 2 },
   infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F3F8F5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 6, marginBottom: 16, gap: 10 },
   infoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
   infoText: { flex: 1 },

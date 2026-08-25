@@ -55,21 +55,24 @@ export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = fals
           accessibilityRole="button"
           accessibilityLabel={`My requests. ${title}. ${description}`}
         >
-          <View style={styles.backgroundIcon} pointerEvents="none">
-            <Feather name="tool" size={136} color="rgba(255, 255, 255, 0.07)" />
+          <View style={styles.bgIllustrationContainer} pointerEvents="none">
+            <Feather name="file-text" size={140} color="rgba(255, 255, 255, 0.07)" style={styles.bgIcon} />
           </View>
-          <View style={styles.content}>
-            <View style={styles.iconBox}>
-              <Feather name={error ? 'alert-circle' : latestRequest ? 'tool' : 'check-circle'} size={24} color={theme.colors.onPrimary} />
+
+          <View style={styles.innerContent}>
+            <View style={styles.iconContainer}>
+              <Feather name={error ? 'alert-circle' : latestRequest ? 'file-text' : 'check-circle'} size={26} color="#FFFFFF" />
             </View>
-            <View style={styles.copy}>
-              <Text style={styles.eyebrow}>My requests</Text>
-              <Text style={styles.title} numberOfLines={1}>{title}</Text>
-              <Text style={styles.description} numberOfLines={1}>{description}</Text>
+
+            <View style={styles.textColumn}>
+              <Text style={styles.cardHeaderSmall}>My requests</Text>
+              <Text style={styles.statusTitle}>{title}</Text>
+              <Text style={styles.statusDescription}>{description}</Text>
             </View>
-            <View style={styles.action}>
-              <Text style={styles.actionText}>View requests</Text>
-              <Feather name="chevron-right" size={15} color={theme.colors.onPrimary} />
+
+            <View style={styles.actionLinkWrap}>
+              <Text style={styles.actionLinkText}>View requests</Text>
+              <Feather name="chevron-right" size={15} color="#FFFFFF" />
             </View>
           </View>
         </PremiumPressable>
@@ -79,7 +82,10 @@ export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = fals
 };
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: homeLayout.pagePadding, marginBottom: homeLayout.sectionSpacing },
+  container: {
+    paddingHorizontal: homeLayout.pagePadding,
+    marginBottom: homeLayout.sectionSpacing,
+  },
   card: {
     backgroundColor: theme.colors.primary,
     borderRadius: 16,
@@ -102,9 +108,19 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   loadingTitle: { opacity: 0.76 },
-  backgroundIcon: { position: 'absolute', right: -18, bottom: -36 },
-  content: { flexDirection: 'row', alignItems: 'center' },
-  iconBox: {
+  bgIllustrationContainer: {
+    position: 'absolute',
+    right: -20,
+    bottom: -35,
+  },
+  bgIcon: {
+    opacity: 0.8,
+  },
+  innerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 18,
@@ -113,8 +129,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  copy: { flex: 1, minWidth: 0 },
-  eyebrow: {
+  textColumn: {
+    flex: 1,
+  },
+  cardHeaderSmall: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 11,
     lineHeight: 16,
@@ -123,8 +141,30 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 3,
   },
-  title: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 20, lineHeight: 26, color: theme.colors.onPrimary, letterSpacing: -0.4, marginBottom: 3 },
-  description: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: 'rgba(255, 255, 255, 0.75)' },
-  action: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 6 },
-  actionText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: 'rgba(255, 255, 255, 0.9)' },
+  statusTitle: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
+    marginBottom: 3,
+  },
+  statusDescription: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: 'rgba(255, 255, 255, 0.75)',
+  },
+  actionLinkWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 2,
+    paddingLeft: 6,
+  },
+  actionLinkText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12.5,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
 });

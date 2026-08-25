@@ -5,13 +5,14 @@ import { requireAuth, requireVerifiedResidence, requireWorkforceOrManager, requi
 import rateLimit from 'express-rate-limit';
 import { VisitorStatus, VisitorType, ResidencyStatus, OwnershipStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 
 const router = Router();
 
 async function verifySecurityMembership(userId: string, communityId: string | null): Promise<boolean> {
   if (!communityId) return false;
   const mem = await prisma.membership.findFirst({
-    where: { userId, communityId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'WORKFORCE'] } }
+    where: { userId, communityId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } }
   });
   if (!mem) return false;
   if (mem.role === 'WORKFORCE') {
@@ -24,20 +25,52 @@ async function verifySecurityMembership(userId: string, communityId: string | nu
 router.use(requireAuth);
 
 const createVisitorSchema = z.object({
-  name: z.string().optional(),
-  phone: z.string().optional(),
-  purpose: z.string().optional(),
-  vehicleNumber: z.string().optional(),
+  name: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(40).optional(),
+  purpose: z.string().trim().max(240).optional(),
+  vehicleNumber: z.string().trim().max(40).optional(),
   visitorType: z.nativeEnum(VisitorType).default(VisitorType.GUEST),
-  validFrom: z.string().optional(),
-  validUntil: z.string().optional(),
-  provider: z.string().optional(),
-  orderReference: z.string().optional(),
+  validFrom: z.string().trim().max(80).optional(),
+  validUntil: z.string().trim().max(80).optional(),
+  provider: z.string().trim().max(120).optional(),
+  orderReference: z.string().trim().max(120).optional(),
   packageCount: z.number().int().optional(),
 });
 
 function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
+}
+
+function sanitizeVisitor<T extends { otp?: unknown }>(visitor: T): Omit<T, 'otp'> {
+  const { otp: _otp, ...safeVisitor } = visitor;
+  return safeVisitor;
+}
+
+const MAX_OTP_ATTEMPTS = 5;
+
+async function getOtpFailedAttempts(visitorId: string) {
+  const rows = await prisma.$queryRaw<Array<{ otpFailedAttempts: number }>>`
+    SELECT "otpFailedAttempts" FROM "Visitor" WHERE "id" = ${visitorId} LIMIT 1
+  `;
+  return Number(rows[0]?.otpFailedAttempts || 0);
+}
+
+async function incrementOtpFailedAttempts(visitorId: string) {
+  const rows = await prisma.$queryRaw<Array<{ otpFailedAttempts: number }>>`
+    UPDATE "Visitor"
+    SET "otpFailedAttempts" = "otpFailedAttempts" + 1, "updatedAt" = NOW()
+    WHERE "id" = ${visitorId}
+    RETURNING "otpFailedAttempts"
+  `;
+  return Number(rows[0]?.otpFailedAttempts || 0);
+}
+
+async function resetOtpFailedAttempts(visitorId: string) {
+  await prisma.$executeRaw`
+    UPDATE "Visitor"
+    SET "otpFailedAttempts" = 0, "updatedAt" = NOW()
+    WHERE "id" = ${visitorId}
+  `;
 }
 
 /** Only GUEST visitors require OTP verification. CAB, DELIVERY, SERVICE never need OTP. */
@@ -71,6 +104,123 @@ async function getResidentVisitor(visitorId: string, userId: string) {
   return visitor;
 }
 
+/**
+ * Reconcile time-bound passes before they are shown or acted on at the gate.
+ * Pending/approved passes expire; visitors already inside are auto-checked out.
+ * This function is exported for use by cron jobs (recommended: run every 5 minutes).
+ * It should NOT be called on every GET request for performance.
+ */
+export async function reconcileVisitorLifecycle(communityId?: string) {
+  const now = new Date();
+  const scope = communityId ? { communityId } : { communityId: { not: null } };
+  const [passesToExpire, visitorsToCheckOut] = await Promise.all([
+    prisma.visitor.findMany({
+      where: {
+        ...scope,
+        status: { in: [VisitorStatus.PENDING, VisitorStatus.APPROVED] },
+        validUntil: { not: null, lte: now },
+      },
+      select: { id: true, communityId: true, createdById: true, unitId: true },
+    }),
+    prisma.visitor.findMany({
+      where: {
+        ...scope,
+        status: VisitorStatus.CHECKED_IN,
+        validUntil: { not: null, lte: now },
+      },
+      select: { id: true, communityId: true, createdById: true, visitorType: true },
+    }),
+  ]);
+
+  if (passesToExpire.length === 0 && visitorsToCheckOut.length === 0) {
+    return { expired: 0, autoCheckedOut: 0 };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let expired = 0;
+    let autoCheckedOut = 0;
+
+    for (const pass of passesToExpire) {
+      const result = await tx.visitor.updateMany({
+        where: { id: pass.id, status: { in: [VisitorStatus.PENDING, VisitorStatus.APPROVED] } },
+        data: { status: VisitorStatus.EXPIRED },
+      });
+      if (result.count === 0 || !pass.communityId) continue;
+
+      expired += 1;
+      await tx.auditLog.create({
+        data: {
+          communityId: pass.communityId,
+          actorId: pass.createdById,
+          action: 'VISITOR_EXPIRED',
+          metadata: { visitorId: pass.id, reason: 'VALID_UNTIL_REACHED' },
+        },
+      });
+    }
+
+    for (const visitor of visitorsToCheckOut) {
+      const result = await tx.visitor.updateMany({
+        where: { id: visitor.id, status: VisitorStatus.CHECKED_IN },
+        data: { status: VisitorStatus.CHECKED_OUT, checkOutTime: now },
+      });
+      if (result.count === 0 || !visitor.communityId) continue;
+
+      autoCheckedOut += 1;
+      await tx.auditLog.create({
+        data: {
+          communityId: visitor.communityId,
+          actorId: visitor.createdById,
+          action: 'VISITOR_AUTO_CHECK_OUT',
+          metadata: { visitorId: visitor.id, reason: 'VALID_UNTIL_REACHED' },
+        },
+      });
+
+      if (visitor.visitorType === VisitorType.DELIVERY) {
+        await tx.auditLog.create({
+          data: {
+            communityId: visitor.communityId,
+            actorId: visitor.createdById,
+            action: 'DELIVERY_CHECKOUT_EXCEPTION',
+            metadata: { visitorId: visitor.id, reason: 'Auto checked out before handoff was recorded' },
+          },
+        });
+      }
+    }
+
+    return { expired, autoCheckedOut };
+  });
+}
+
+
+
+// ----------------------------------------------------
+// POST /visitors/reconcile (Cron job endpoint - requires auth)
+// ----------------------------------------------------
+router.post('/reconcile', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const { communityId } = req.body;
+
+    const membership = await prisma.membership.findFirst({
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } }
+    });
+    const targetCommunityId = communityId || membership?.communityId;
+    if (!targetCommunityId) {
+      return res.status(403).json({ error: { message: 'Community ID required' } });
+    }
+
+    const hasAccess = await verifySecurityMembership(userId, targetCommunityId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: { message: 'Unauthorized for this community.' } });
+    }
+
+    const result = await reconcileVisitorLifecycle(targetCommunityId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 // ----------------------------------------------------
 // POST /visitors/unannounced (Gate Security)
@@ -79,10 +229,8 @@ router.post('/unannounced', requireSecurityOrLeadership, async (req: AuthRequest
   try {
     if (!req.user) return res.status(401).json({ error: { message: 'Unauthorized' } });
     const userId = req.user!.userId;
-    const body = createVisitorSchema.parse(req.body);
-    // require target unit
-    const unitId = req.body.unitId;
-    if (!unitId) return res.status(400).json({ error: { message: 'unitId is required for unannounced arrivals' } });
+    const body = createVisitorSchema.extend({ unitId: z.string().uuid() }).parse(req.body);
+    const { unitId } = body;
     
     const unit = await prisma.unit.findUnique({ where: { id: unitId } });
     if (!unit || !(await verifySecurityMembership(userId, unit.communityId))) {
@@ -101,7 +249,7 @@ router.post('/unannounced', requireSecurityOrLeadership, async (req: AuthRequest
     });
 
     if (existing) {
-      return res.json({ success: true, visitor: existing });
+      return res.json({ success: true, deduped: true, visitor: sanitizeVisitor(existing) });
     }
 
     const visitor = await prisma.$transaction(async (tx) => {
@@ -138,19 +286,19 @@ router.post('/unannounced', requireSecurityOrLeadership, async (req: AuthRequest
       }
     });
 
-    for (const resident of residents) {
-      await prisma.notification.create({
-        data: {
+    if (residents.length > 0) {
+      await prisma.notification.createMany({
+        data: residents.map((resident) => ({
           userId: resident.id,
           type: 'UNANNOUNCED_ARRIVAL',
           title: `${body.visitorType} at the Gate`,
-          message: `${body.name} is waiting at the gate. Please approve or deny entry.`,
+          message: `${visitor.name} is waiting at the gate. Please approve or deny entry.`,
           metadata: { visitorId: visitor.id }
-        }
+        }))
       });
     }
 
-    res.status(201).json({ success: true, visitor });
+    res.status(201).json({ success: true, deduped: false, visitor: sanitizeVisitor(visitor) });
   } catch(error) {
     next(error);
   }
@@ -184,6 +332,12 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
     const validUntilDate = body.validUntil
       ? new Date(body.validUntil)
       : new Date(validFromDate.getTime() + 24 * 60 * 60 * 1000);
+    if (Number.isNaN(validFromDate.getTime()) || Number.isNaN(validUntilDate.getTime())) {
+      return res.status(400).json({ error: { message: 'Validity dates must be valid dates.' } });
+    }
+    if (validUntilDate <= validFromDate) {
+      return res.status(400).json({ error: { message: 'Valid until must be after valid from.' } });
+    }
 
     const visitor = await prisma.visitor.create({
       data: {
@@ -321,21 +475,26 @@ router.get('/history', requireWorkforceOrManager, async (req: AuthRequest, res: 
 router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-    const { unitLabel } = req.query; // optional lookup
+    const unitLabel = typeof req.query.unitLabel === 'string' ? req.query.unitLabel.trim().toUpperCase() : '';
     
     const membership = await prisma.membership.findFirst({
-      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'WORKFORCE'] } }
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } }
     });
     const communityId = ((req.query.communityId as string)) || membership?.communityId;
     if (!communityId) {
       return res.status(403).json({ error: { message: 'Unauthorized.' } });
     }
-    
-    // Verify explicitly
+
+    // Verify explicitly before performing any community-scoped reconciliation work.
     const hasAccess = await verifySecurityMembership(userId, communityId);
     if (!hasAccess) {
       return res.status(403).json({ error: { message: 'Unauthorized for this community.' } });
     }
+
+    await reconcileVisitorLifecycle(communityId);
+
+    // Determine if requester is a security guard (WORKFORCE + SECURITY category)
+    const isSecurityGuard = membership?.role === 'WORKFORCE';
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -343,7 +502,7 @@ router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: R
     const visitors = await prisma.visitor.findMany({
       where: {
         communityId,
-        ...(unitLabel && typeof unitLabel === 'string' ? { unit: { unitNumber: unitLabel.toUpperCase() } } : {}),
+        ...(unitLabel ? { unit: { unitNumber: { startsWith: unitLabel } } } : {}),
         OR: [
           { status: { in: ['PENDING', 'APPROVED', 'CHECKED_IN'] } },
           { updatedAt: { gte: startOfToday } },
@@ -357,9 +516,13 @@ router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: R
     });
     
     const sanitized = visitors.map(v => {
-      const { otp: _otp, ...rest } = v;
+      const { otp: _otp, phone: _phone, ...rest } = v;
+      // Security guards only get unit number, not full unit details
+      const unit = isSecurityGuard && v.unit
+        ? { unitNumber: v.unit.unitNumber }
+        : v.unit;
       // The hash never leaves the server. The gate only needs to know whether to request a code.
-      return { ...rest, requiresOtp: visitorRequiresOtp(v) };
+      return { ...rest, unit, requiresOtp: visitorRequiresOtp(v) };
     });
 
     const pending = sanitized.filter((v) => v.status === VisitorStatus.PENDING);
@@ -377,7 +540,6 @@ router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: R
         checkedOut: checkedOut.length,
         expired: expired.length,
       },
-      visitors: sanitized,
       pending,
       approved,
       checkedIn,
@@ -445,6 +607,13 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
     }
     const visitor = await getResidentVisitor(visitorId, req.user!.userId);
     if (visitor.status === VisitorStatus.APPROVED) {
+      if (shouldGenerateOtp(visitor.visitorType) && await getOtpFailedAttempts(visitor.id) >= MAX_OTP_ATTEMPTS) {
+        const plaintextOtp = generateOtp();
+        const hashedOtp = await bcrypt.hash(plaintextOtp, 10);
+        const regenerated = await prisma.visitor.update({ where: { id: visitor.id }, data: { otp: hashedOtp } });
+        await resetOtpFailedAttempts(visitor.id);
+        return res.json({ success: true, visitor: { ...sanitizeVisitor(regenerated), otp: plaintextOtp } });
+      }
       return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(visitor) });
     }
     if (visitor.status !== VisitorStatus.PENDING) {
@@ -488,10 +657,10 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
             ]
           }
         });
-        for (const resident of residents) {
-          if (resident.id === req.user!.userId) continue;
-          await tx.notification.create({
-            data: {
+        const otherResidents = residents.filter((resident) => resident.id !== req.user!.userId);
+        if (otherResidents.length > 0) {
+          await tx.notification.createMany({
+            data: otherResidents.map((resident) => ({
               userId: resident.id,
               type: 'VISITOR_APPROVED',
               title: `${v.visitorType} Approved`,
@@ -499,7 +668,7 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
                 ? `${v.name}'s entry approved. OTP: ${plaintextOtp}`
                 : `${v.name}'s entry approved. No OTP required.`,
               metadata: { visitorId: v.id }
-            }
+            }))
           });
         }
       }
@@ -542,13 +711,13 @@ router.post('/:id/reject', requireVerifiedResidence, async (req: AuthRequest, re
       await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REJECTED', metadata: { visitorId: v.id, reason } } });
       return v;
     });
-    res.json({ success: true, visitor: updated });
+    res.json({ success: true, visitor: sanitizeVisitor(updated) });
   } catch (error: any) {
     if (error.message === 'CONCURRENCY_ERROR') {
        const current = typeof req.params.id === 'string'
          ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
          : null;
-       if (current?.status === 'APPROVED') return res.json({ success: true, visitor: current });
+       if (current?.status === 'APPROVED') return res.json({ success: true, visitor: sanitizeVisitor(current) });
        return res.status(409).json({ error: { message: `Conflict: visitor is ${current?.status}` } });
     }
     if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
@@ -579,7 +748,7 @@ router.post('/:id/revoke', requireVerifiedResidence, async (req: AuthRequest, re
       await tx.auditLog.create({ data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_REVOKED', metadata: { visitorId: v.id } } });
       return v;
     });
-    res.json({ success: true, visitor: updated });
+    res.json({ success: true, visitor: sanitizeVisitor(updated) });
   } catch (error: any) {
     if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
     next(error);
@@ -607,16 +776,16 @@ router.post('/:id/suggest-handoff', requireVerifiedResidence, async (req: AuthRe
     if (visitor.visitorType !== 'DELIVERY') {
       return res.status(400).json({ error: { message: 'Only deliveries can have handoff suggestions' } });
     }
+    if (visitor.handoffTimestamp) {
+      return res.status(400).json({ error: { message: 'Delivery handoff has already been completed' } });
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       const updateResult = await tx.visitor.updateMany({
         where: { id: visitor.id, handoffTimestamp: null },
         data: {
-          handoffRecipientType: body.recipientType,
-          handoffRecipientName: body.recipientName ? body.recipientName : null,
-          handoffTimestamp: new Date(),
-          handoffActorId: req.user!.userId,
-          handoffProofReference: null,
+          handoffSuggestionType: body.recipientType,
+          handoffSuggestionName: body.recipientName ? body.recipientName : null,
         }
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
@@ -624,7 +793,7 @@ router.post('/:id/suggest-handoff', requireVerifiedResidence, async (req: AuthRe
       const v = (await tx.visitor.findUnique({ where: { id: visitorId } }))!;
 
       await tx.auditLog.create({
-        data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'DELIVERY_HANDOFF', metadata: { visitorId: v.id, recipientType: body.recipientType } }
+        data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_HANDOFF_SUGGESTED', metadata: { visitorId: v.id, recipientType: body.recipientType } }
       });
       if (v.otp === null && v.unitId) {
         // Unannounced arrival: notify all residents
@@ -636,15 +805,15 @@ router.post('/:id/suggest-handoff', requireVerifiedResidence, async (req: AuthRe
             ]
           }
         });
-        for (const resident of residents) {
-          await tx.notification.create({
-            data: {
+        if (residents.length > 0) {
+          await tx.notification.createMany({
+            data: residents.map((resident) => ({
               userId: resident.id,
               type: 'DELIVERY_HANDOFF',
-              title: 'Delivery Handed Off',
-              message: `Your delivery from ${v.provider || v.name} was handed off to ${body.recipientType}.`,
+              title: 'Delivery handoff preference saved',
+              message: `Your delivery preference is ${body.recipientType}.`,
               metadata: { visitorId: v.id, recipientType: body.recipientType }
-            }
+            }))
           });
         }
       } else {
@@ -694,22 +863,43 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
     if (!visitor || !(await verifySecurityMembership(userId, visitor.communityId))) {
       return res.status(404).json({ error: { message: 'Visitor not found' } });
     }
-    if (visitor.status === VisitorStatus.CHECKED_IN) return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(visitor) });
-    if (visitor.status !== VisitorStatus.APPROVED) return res.status(400).json({ error: { message: 'Visitor is not approved for entry' } });
-    if (visitor.validUntil && new Date() > new Date(visitor.validUntil)) return res.status(400).json({ error: { message: 'Pass expired' } });
+    await reconcileVisitorLifecycle(visitor.communityId || undefined);
+    const currentVisitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!currentVisitor) return res.status(404).json({ error: { message: 'Visitor not found' } });
+    const visitorForCheckIn = currentVisitor;
+    if (visitorForCheckIn.status === VisitorStatus.CHECKED_IN) return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(visitorForCheckIn) });
+    if (visitorForCheckIn.status !== VisitorStatus.APPROVED) return res.status(400).json({ error: { message: 'Visitor is not approved for entry' } });
+    if (visitorForCheckIn.validFrom && new Date() < new Date(visitorForCheckIn.validFrom)) {
+      return res.status(400).json({ error: { message: 'This pass is not active yet' } });
+    }
+    if (visitorForCheckIn.validUntil && new Date() > new Date(visitorForCheckIn.validUntil)) return res.status(400).json({ error: { message: 'Pass expired' } });
 
-    if (visitorRequiresOtp(visitor) && visitor.otp) {
+    if (visitorRequiresOtp(visitorForCheckIn) && visitorForCheckIn.otp) {
+      const failedAttempts = await getOtpFailedAttempts(visitorForCheckIn.id);
+      if (failedAttempts >= MAX_OTP_ATTEMPTS) {
+        return res.status(429).json({ error: { message: 'Too many incorrect OTP attempts. Ask the resident to approve the pass again.' } });
+      }
       if (!otp) return res.status(400).json({ error: { message: 'OTP is required' } });
       if (!/^\d{6}$/.test(otp)) {
+        await incrementOtpFailedAttempts(visitorForCheckIn.id);
         return res.status(400).json({ error: { message: 'Enter the six-digit OTP for this pass' } });
       }
-      const isValid = await bcrypt.compare(otp, visitor.otp);
-      if (!isValid) return res.status(400).json({ error: { message: 'Invalid OTP' } });
+      const isValid = await bcrypt.compare(otp, visitorForCheckIn.otp);
+      if (!isValid) {
+        const nextFailedAttempts = await incrementOtpFailedAttempts(visitorForCheckIn.id);
+        return res.status(nextFailedAttempts >= MAX_OTP_ATTEMPTS ? 429 : 400).json({
+          error: {
+            message: nextFailedAttempts >= MAX_OTP_ATTEMPTS
+              ? 'Too many incorrect OTP attempts. Ask the resident to approve the pass again.'
+              : 'Invalid OTP',
+          },
+        });
+      }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
       const updateResult = await tx.visitor.updateMany({
-        where: { id: visitor.id, status: 'APPROVED' },
+        where: { id: visitorForCheckIn.id, status: 'APPROVED' },
         data: { status: 'CHECKED_IN', checkInTime: new Date() }
       });
       if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
@@ -729,15 +919,15 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
             ]
           }
         });
-        for (const resident of residents) {
-          await tx.notification.create({
-            data: {
+        if (residents.length > 0) {
+          await tx.notification.createMany({
+            data: residents.map((resident) => ({
               userId: resident.id,
               type: 'VISITOR_ARRIVAL',
               title: `${v.visitorType === 'DELIVERY' ? 'Delivery' : v.visitorType === 'CAB' ? 'Cab' : 'Visitor'} Arrived`,
               message: `${v.name} has arrived at the gate and checked in.`,
               metadata: { visitorId: v.id }
-            }
+            }))
           });
         }
       } else {
@@ -754,6 +944,8 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
       return v;
     });
 
+    await resetOtpFailedAttempts(visitorForCheckIn.id);
+
     const { otp: _, ...visitorData } = updated;
     res.json({ success: true, visitor: visitorData });
   } catch (error) {
@@ -761,7 +953,7 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
        const current = typeof req.params.id === 'string'
          ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
          : null;
-       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
+       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current ? sanitizeVisitor(current) : null } });
     }
     console.error(error);
     next(error);
@@ -782,8 +974,11 @@ router.post('/:id/check-out', requireSecurityOrLeadership, async (req: AuthReque
     if (!visitor || !(await verifySecurityMembership(userId, visitor.communityId))) {
       return res.status(404).json({ error: { message: 'Visitor not found' } });
     }
-    if (visitor.status === VisitorStatus.CHECKED_OUT) return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(visitor) });
-    if (visitor.status !== VisitorStatus.CHECKED_IN) return res.status(400).json({ error: { message: 'Visitor is not checked in' } });
+    await reconcileVisitorLifecycle(visitor.communityId || undefined);
+    const currentVisitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!currentVisitor) return res.status(404).json({ error: { message: 'Visitor not found' } });
+    if (currentVisitor.status === VisitorStatus.CHECKED_OUT) return res.json({ success: true, visitor: (({ otp: _, ...v }) => v)(currentVisitor) });
+    if (currentVisitor.status !== VisitorStatus.CHECKED_IN) return res.status(400).json({ error: { message: 'Visitor is not checked in' } });
 
     const updated = await prisma.$transaction(async (tx) => {
       const updateResult = await tx.visitor.updateMany({
@@ -812,7 +1007,7 @@ router.post('/:id/check-out', requireSecurityOrLeadership, async (req: AuthReque
        const current = typeof req.params.id === 'string'
          ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
          : null;
-       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
+       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current ? sanitizeVisitor(current) : null } });
     }
     console.error(error);
     next(error);
@@ -870,15 +1065,15 @@ router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest
             ]
           }
         });
-        for (const resident of residents) {
-          await tx.notification.create({
-            data: {
+        if (residents.length > 0) {
+          await tx.notification.createMany({
+            data: residents.map((resident) => ({
               userId: resident.id,
               type: 'DELIVERY_HANDOFF',
               title: 'Delivery Handed Off',
               message: `Your delivery from ${v.provider || v.name} was handed off to ${body.recipientType}.`,
               metadata: { visitorId: v.id, recipientType: body.recipientType }
-            }
+            }))
           });
         }
       } else {
@@ -903,7 +1098,7 @@ router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest
        const current = typeof req.params.id === 'string'
          ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
          : null;
-       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current } });
+       return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current ? sanitizeVisitor(current) : null } });
     }
     console.error(error);
     next(error);
@@ -927,6 +1122,8 @@ router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthReques
       return res.status(403).json({ error: { message: 'Unauthorized.' } });
     }
 
+    await reconcileVisitorLifecycle(communityId);
+
     const whereClause: any = {
       communityId,
       action: {
@@ -936,6 +1133,8 @@ router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthReques
           'VISITOR_REJECTED',
           'VISITOR_CHECK_IN',
           'VISITOR_CHECK_OUT',
+          'VISITOR_AUTO_CHECK_OUT',
+          'VISITOR_EXPIRED',
           'VISITOR_HANDOFF_SUGGESTED',
           'VISITOR_REVOKED',
           'DELIVERY_HANDOFF',
@@ -980,6 +1179,7 @@ router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthReques
           visitorName: visitor.name,
           provider: visitor.provider,
           type: visitor.visitorType,
+          status: visitor.status,
           unitNumber: visitor.unit?.unitNumber
         } : null
       };
@@ -988,8 +1188,8 @@ router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthReques
     // Filter by unit if requested
     let finalLogs = enrichedLogs;
     if (unitLabel && typeof unitLabel === 'string') {
-      const normalizedUnit = unitLabel.toUpperCase();
-      finalLogs = finalLogs.filter(l => l.visitor?.unitNumber === normalizedUnit);
+      const normalizedUnit = unitLabel.trim().toUpperCase();
+      finalLogs = finalLogs.filter(l => l.visitor?.unitNumber?.toUpperCase().startsWith(normalizedUnit));
     }
 
     res.json({ success: true, logs: finalLogs });
