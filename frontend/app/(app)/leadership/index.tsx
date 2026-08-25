@@ -17,12 +17,13 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 export default function LeadershipOverviewScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  const { user, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess } = useSession();
+  const { user, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasManagerAccess, hasWorkforceAccess, hasApprovedMembership } = useSession();
 
   const [data, setData] = useState<LeadershipOverviewResponse | null>(null);
   const [pendingList, setPendingList] = useState<PendingManagerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // Security guard: If user does not have approved leadership membership, redirect away
   useEffect(() => {
@@ -33,10 +34,11 @@ export default function LeadershipOverviewScreen() {
         router.replace('/(app)/manager');
       }
     }
-  }, [hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, router]);
+  }, [hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasManagerAccess, hasWorkforceAccess, router]);
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(false);
       const [overviewRes, pendingRes] = await Promise.allSettled([
         leadershipApi.getOverview(),
         leadershipApi.getPendingManagers(),
@@ -48,7 +50,9 @@ export default function LeadershipOverviewScreen() {
       if (pendingRes.status === 'fulfilled') {
         setPendingList(pendingRes.value.pendingManagers || []);
       }
+      setLoadError(overviewRes.status === 'rejected' && pendingRes.status === 'rejected');
     } catch (err) {
+      setLoadError(true);
       console.warn('Failed to load leadership overview:', err);
     } finally {
       setLoading(false);
@@ -68,6 +72,10 @@ export default function LeadershipOverviewScreen() {
   const displayName = `${user?.firstName || 'President'} ${user?.lastName || ''}`.trim();
   const stats = data?.stats;
   const pendingManagersCount = pendingList.length || stats?.pendingManagers || 0;
+  
+  // Check if user has full leadership access or view-only
+  const isFullLeadership = hasLeadershipAccess() && hasApprovedMembership('LEADERSHIP');
+  const isViewOnly = hasLeadershipAccess() && !hasApprovedMembership('LEADERSHIP');
 
   return (
     <View style={styles.container}>
@@ -91,6 +99,19 @@ export default function LeadershipOverviewScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
+        {loadError && (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={22} color="#B45309" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorTitle}>Governance data is unavailable</Text>
+              <Text style={styles.errorDescription}>Check your connection and try again.</Text>
+            </View>
+            <PremiumPressable style={styles.retryBtn} onPress={loadData}>
+              <Text style={styles.retryText}>Retry</Text>
+            </PremiumPressable>
+          </View>
+        )}
+
         {/* Governance Greeting Header */}
         <ScreenEntrance delay={40}>
           <View style={styles.heroCard}>
@@ -104,6 +125,18 @@ export default function LeadershipOverviewScreen() {
             </Text>
           </View>
         </ScreenEntrance>
+
+        {/* View-Only Access Notice */}
+        {isViewOnly && (
+          <ScreenEntrance delay={60} animation="rise" distance={10}>
+            <View style={styles.infoCard}>
+              <Feather name="info" size={16} color="#6B7280" />
+              <Text style={styles.infoText}>
+                You have view-only access. Contact leadership for full administrative privileges.
+              </Text>
+            </View>
+          </ScreenEntrance>
+        )}
 
         {/* Pending Actions / Approvals Card */}
         <ScreenEntrance delay={80}>
@@ -600,4 +633,11 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#9CA3AF',
   },
+  errorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 16 },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: '#92400E' },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: '#B45309', marginTop: 2 },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: '#FFFFFF' },
+  infoCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 16 },
+  infoText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13, color: '#1D4ED8', flex: 1 },
 });

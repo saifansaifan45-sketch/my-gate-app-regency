@@ -34,6 +34,15 @@ export default function LeadershipCreateAnnouncementScreen() {
       .catch((err) => console.warn('Could not fetch spaces:', err));
   }, []);
 
+  const getTargetSpaceFromAudience = (audience: string): string => {
+    const audienceToTypeMap: Record<string, string> = {
+      'RESIDENTS': 'RESIDENT_COMMUNITY',
+      'OWNERS': 'OWNER_COMMUNITY',
+      'LEADERSHIP': 'LEADERSHIP_OPERATIONS'
+    };
+    return audienceToTypeMap[audience] || 'RESIDENT_COMMUNITY';
+  };
+
   const handlePublish = async () => {
     if (!title.trim()) {
       showToast({ title: 'Missing Title', message: 'Please enter a title for the announcement.', type: 'error' });
@@ -46,11 +55,7 @@ export default function LeadershipCreateAnnouncementScreen() {
 
     setLoading(true);
     try {
-      const targetType = selectedAudience === 'OWNERS'
-        ? 'OWNER_COMMUNITY'
-        : selectedAudience === 'LEADERSHIP'
-        ? 'LEADERSHIP_OPERATIONS'
-        : 'RESIDENT_COMMUNITY';
+      const targetType = getTargetSpaceFromAudience(selectedAudience);
       const targetSpaceId = spaces.find((space) => space.type === targetType)?.id;
 
       if (!targetSpaceId) {

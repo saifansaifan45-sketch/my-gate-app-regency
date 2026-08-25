@@ -1,7 +1,8 @@
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../prisma';
-import { requireAuth, requireLeadership, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireLeadership, AuthRequest, getApprovedCommunityIds } from '../middleware/auth';
 import { Role } from '@prisma/client';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -9,13 +10,23 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireLeadership);
 
+async function getLeadershipCommunityIds(userId: string) {
+  return getApprovedCommunityIds(userId, [Role.LEADERSHIP]);
+}
+
+const managerDecisionSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+
 // ----------------------------------------------------
 // 1. GET /leadership/managers/pending
 // ----------------------------------------------------
-router.get('/managers/pending', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/managers/pending', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
     const pendingManagers = await prisma.membership.findMany({
       where: {
+        communityId: { in: communityIds },
         role: Role.MANAGER,
         status: 'PENDING',
       },
@@ -51,13 +62,15 @@ router.get('/managers/pending', async (_req: AuthRequest, res: Response, next: N
 // ----------------------------------------------------
 router.post('/managers/:id/approve', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
+    const { note } = managerDecisionSchema.parse(req.body || {});
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing membership id' } });
     }
 
-    const membership = await prisma.membership.findUnique({
-      where: { id },
+    const membership = await prisma.membership.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: { user: true },
     });
 
@@ -92,6 +105,16 @@ router.post('/managers/:id/approve', async (req: AuthRequest, res: Response, nex
       },
     });
 
+    await prisma.auditLog.create({
+      data: {
+        communityId: membership.communityId,
+        actorId: req.user!.userId,
+        targetId: membership.userId,
+        action: 'MANAGER_APPLICATION_APPROVED',
+        metadata: { membershipId: membership.id, note: note || null },
+      },
+    });
+
     res.json({
       success: true,
       message: `Approved ${membership.user.firstName || 'User'} as Operations Manager.`,
@@ -107,13 +130,15 @@ router.post('/managers/:id/approve', async (req: AuthRequest, res: Response, nex
 // ----------------------------------------------------
 router.post('/managers/:id/reject', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
+    const { note } = managerDecisionSchema.parse(req.body || {});
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing membership id' } });
     }
 
-    const membership = await prisma.membership.findUnique({
-      where: { id },
+    const membership = await prisma.membership.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: { user: true },
     });
 
@@ -135,6 +160,16 @@ router.post('/managers/:id/reject', async (req: AuthRequest, res: Response, next
       },
     });
 
+    await prisma.auditLog.create({
+      data: {
+        communityId: membership.communityId,
+        actorId: req.user!.userId,
+        targetId: membership.userId,
+        action: 'MANAGER_APPLICATION_REJECTED',
+        metadata: { membershipId: membership.id, note: note || null },
+      },
+    });
+
     res.json({
       success: true,
       message: 'Manager application rejected.',
@@ -145,11 +180,55 @@ router.post('/managers/:id/reject', async (req: AuthRequest, res: Response, next
   }
 });
 
+router.post('/managers/:id/block', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
+    const { note } = managerDecisionSchema.parse(req.body || {});
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) return res.status(400).json({ error: { message: 'Missing membership id' } });
+
+    const membership = await prisma.membership.findFirst({
+      where: { id, communityId: { in: communityIds }, role: Role.MANAGER },
+      include: { user: true },
+    });
+    if (!membership) return res.status(404).json({ error: { message: 'Manager application not found' } });
+
+    const updatedMembership = await prisma.membership.update({
+      where: { id },
+      data: { status: 'BLOCKED' },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: membership.userId,
+        type: 'MANAGER_BLOCKED',
+        title: 'Manager Application Blocked',
+        message: 'Your application for Manager access has been blocked by leadership.',
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        communityId: membership.communityId,
+        actorId: req.user!.userId,
+        targetId: membership.userId,
+        action: 'MANAGER_APPLICATION_BLOCKED',
+        metadata: { membershipId: membership.id, note: note || null },
+      },
+    });
+
+    res.json({ success: true, message: 'Manager application blocked.', membership: updatedMembership });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ----------------------------------------------------
 // 4. GET /leadership/overview
 // ----------------------------------------------------
-router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/overview', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
     const [
       activeManagersCount,
       activeWorkforceCount,
@@ -157,25 +236,23 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       pendingWorkforceCount,
       totalPersonnelCount,
       activeTicketsCount,
-      securityCount,
-      maintenanceCount,
-      housekeepingCount,
-      otherCount,
+      personnelByCategory,
       recentApprovals,
       recentAnnouncements,
     ] = await Promise.all([
-      prisma.membership.count({ where: { role: Role.MANAGER, status: 'APPROVED' } }),
-      prisma.membership.count({ where: { role: Role.WORKFORCE, status: 'APPROVED' } }),
-      prisma.membership.count({ where: { role: Role.MANAGER, status: 'PENDING' } }),
-      prisma.membership.count({ where: { role: Role.WORKFORCE, status: 'PENDING' } }),
-      prisma.personnel.count({ where: { employmentStatus: 'ACTIVE' } }),
-      prisma.ticket.count({ where: { status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] } } }),
-      prisma.personnel.count({ where: { category: 'SECURITY', employmentStatus: 'ACTIVE' } }),
-      prisma.personnel.count({ where: { category: 'MAINTENANCE', employmentStatus: 'ACTIVE' } }),
-      prisma.personnel.count({ where: { category: 'CLEANER', employmentStatus: 'ACTIVE' } }),
-      prisma.personnel.count({ where: { category: 'OTHER', employmentStatus: 'ACTIVE' } }),
+      prisma.membership.count({ where: { communityId: { in: communityIds }, role: Role.MANAGER, status: 'APPROVED' } }),
+      prisma.membership.count({ where: { communityId: { in: communityIds }, role: Role.WORKFORCE, status: 'APPROVED' } }),
+      prisma.membership.count({ where: { communityId: { in: communityIds }, role: Role.MANAGER, status: 'PENDING' } }),
+      prisma.membership.count({ where: { communityId: { in: communityIds }, role: Role.WORKFORCE, status: 'PENDING' } }),
+      prisma.personnel.count({ where: { communityId: { in: communityIds }, employmentStatus: 'ACTIVE' } }),
+      prisma.ticket.count({ where: { communityId: { in: communityIds }, status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] } } }),
+      prisma.personnel.groupBy({
+        by: ['category'],
+        where: { communityId: { in: communityIds }, employmentStatus: 'ACTIVE' },
+        _count: { id: true },
+      }),
       prisma.membership.findMany({
-        where: { status: 'APPROVED', role: { in: [Role.MANAGER, Role.WORKFORCE] } },
+        where: { communityId: { in: communityIds }, status: 'APPROVED', role: { in: [Role.MANAGER, Role.WORKFORCE] } },
         take: 5,
         orderBy: { updatedAt: 'desc' },
         include: {
@@ -185,6 +262,7 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
         },
       }),
       prisma.announcement.findMany({
+        where: { communityId: { in: communityIds } },
         take: 4,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -195,6 +273,11 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
       }),
     ]);
 
+    const categoryCounts: Record<string, number> = {};
+    for (const row of personnelByCategory) {
+      categoryCounts[row.category] = row._count.id;
+    }
+
     res.json({
       stats: {
         activeManagers: activeManagersCount,
@@ -204,10 +287,10 @@ router.get('/overview', async (_req: AuthRequest, res: Response, next: NextFunct
         totalPersonnel: totalPersonnelCount,
         activeTickets: activeTicketsCount,
         workforceBreakdown: {
-          security: securityCount,
-          maintenance: maintenanceCount,
-          housekeeping: housekeepingCount,
-          other: otherCount,
+          security: categoryCounts['SECURITY'] || 0,
+          maintenance: categoryCounts['MAINTENANCE'] || 0,
+          housekeeping: categoryCounts['CLEANER'] || 0,
+          other: categoryCounts['OTHER'] || 0,
         },
       },
       recentApprovals: recentApprovals.map((a) => ({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
@@ -14,6 +14,7 @@ interface CommunityUpdatesProps {
   onViewAllPress: () => void;
   onAnnouncementPress?: (announcement: CommunityAnnouncement) => void;
   onCreateNotice?: () => void;
+  currentUserId?: string;
 }
 
 function relativeTime(iso: string) {
@@ -31,6 +32,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   onViewAllPress,
   onAnnouncementPress,
   onCreateNotice,
+  currentUserId,
 }) => {
   const singleAnnouncement = announcements[0];
   const hasUnread = announcements.some((item) => !item.isRead);
@@ -40,7 +42,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
     : 'No notices yet.';
 
   // Check if this is a user-created announcement
-  const isUserCreated = singleAnnouncement && announcements.some(a => a.authorId === 'current-user');
+  const isUserCreated = Boolean(singleAnnouncement?.author?.id && currentUserId && singleAnnouncement.author.id === currentUserId);
 
   return (
     <View style={styles.container}>
@@ -117,6 +119,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 3,
   },
+  userCreatedCard: {
+    backgroundColor: theme.colors.accent,
+  },
   loadingCard: {
     backgroundColor: theme.colors.community,
     borderRadius: 16,
@@ -159,6 +164,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 3,
   },
+  userCreatedHeader: {
+    color: 'rgba(255, 255, 255, 0.78)',
+  },
   statusTitle: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 20,
@@ -167,11 +175,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     marginBottom: 3,
   },
+  userCreatedTitle: {
+    color: '#FFFFFF',
+  },
   statusDescription: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 12.5,
     lineHeight: 18,
     color: 'rgba(255, 255, 255, 0.75)',
+  },
+  userCreatedDescription: {
+    color: 'rgba(255, 255, 255, 0.82)',
   },
   actionLinkWrap: {
     flexDirection: 'row',
@@ -184,6 +198,9 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 12.5,
     color: 'rgba(255, 255, 255, 0.9)',
+  },
+  userCreatedActionLink: {
+    color: '#FFFFFF',
   },
   createButton: {
     position: 'absolute',

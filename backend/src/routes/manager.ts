@@ -1,8 +1,9 @@
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../prisma';
-import { requireAuth, requireManager, requireLeadership, requireWorkforceOrManager, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireManager, requireLeadership, requireWorkforceOrManager, AuthRequest, getApprovedCommunityIds } from '../middleware/auth';
 import * as XLSX from 'xlsx';
+import { generateAttendanceExportToken, verifyAttendanceExportToken } from '../utils/jwt';
 import {
   TicketPriority,
   TicketStatus,
@@ -15,8 +16,20 @@ import {
 
 const router = Router();
 
-// Apply auth to all manager routes
-router.use(requireAuth);
+// Apply auth to all manager routes. Attendance downloads may be opened by the
+// native share sheet, so they use a short-lived, purpose-bound token instead.
+router.use((req, res, next) => {
+  if (req.path === '/attendance/export' && typeof req.query.downloadToken === 'string') return next();
+  return requireAuth(req, res, next);
+});
+
+async function getManagerCommunityIds(userId: string) {
+  return getApprovedCommunityIds(userId, [Role.MANAGER, Role.LEADERSHIP]);
+}
+
+async function getOperationalCommunityIds(userId: string) {
+  return getApprovedCommunityIds(userId, [Role.MANAGER, Role.LEADERSHIP, Role.WORKFORCE]);
+}
 
 function normalizeWorkCategory(value: string): string {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
@@ -31,10 +44,10 @@ function isPersonnelCompatibleWithTicket(personnelCategory: PersonnelCategory, t
   if (personnel === 'SECURITY') return isSecurityTicket;
   if (isSecurityTicket) return personnel === 'SECURITY';
 
-  if (ticket.includes('PLUMB')) return personnel === 'PLUMBER';
-  if (ticket.includes('ELECTRIC')) return personnel === 'ELECTRICIAN';
-  if (ticket.includes('CLEAN') || ticket.includes('HOUSEKEEP')) return personnel === 'CLEANER';
-  if (ticket.includes('GARDEN') || ticket.includes('LANDSCAP')) return personnel === 'GARDENER';
+  if (ticket.includes('PLUMB')) return personnel === 'PLUMBER' || personnel === 'MAINTENANCE';
+  if (ticket.includes('ELECTRIC')) return personnel === 'ELECTRICIAN' || personnel === 'MAINTENANCE';
+  if (ticket.includes('CLEAN') || ticket.includes('HOUSEKEEP')) return personnel === 'CLEANER' || personnel === 'MAINTENANCE';
+  if (ticket.includes('GARDEN') || ticket.includes('LANDSCAP')) return personnel === 'GARDENER' || personnel === 'MAINTENANCE';
 
   // General maintenance may be handled by a maintenance worker or an
   // appropriately trained trade worker, but never by Security.
@@ -43,7 +56,9 @@ function isPersonnelCompatibleWithTicket(personnelCategory: PersonnelCategory, t
 
 // Helper to get start and end of a given date (default today)
 function getDateRange(dateStr?: string) {
-  const date = dateStr ? new Date(dateStr) : new Date();
+  const date = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? new Date(`${dateStr}T12:00:00`)
+    : dateStr ? new Date(dateStr) : new Date();
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
   const end = new Date(date);
@@ -56,28 +71,35 @@ function getDateRange(dateStr?: string) {
 // ----------------------------------------------------
 router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) {
+      return res.status(403).json({ error: { message: 'No approved management community found.' } });
+    }
     const todayRange = getDateRange();
 
     // 1. Ticket counts
     const [pendingTickets, assignedTasks, inProgressTasks, completedTasks] = await Promise.all([
-      prisma.ticket.count({ where: { status: TicketStatus.OPEN } }),
-      prisma.task.count({ where: { status: TaskStatus.ASSIGNED } }),
-      prisma.task.count({ where: { status: TaskStatus.IN_PROGRESS } }),
-      prisma.task.count({ where: { status: { in: [TaskStatus.COMPLETED, TaskStatus.VERIFIED] } } }),
+      prisma.ticket.count({ where: { communityId: { in: communityIds }, status: TicketStatus.OPEN } }),
+      prisma.task.count({ where: { ticket: { communityId: { in: communityIds } }, status: TaskStatus.ASSIGNED } }),
+      prisma.task.count({ where: { ticket: { communityId: { in: communityIds } }, status: TaskStatus.IN_PROGRESS } }),
+      prisma.task.count({ where: { ticket: { communityId: { in: communityIds } }, status: { in: [TaskStatus.COMPLETED, TaskStatus.VERIFIED] } } }),
     ]);
 
     // 2. Personnel counts
-    const personnelAggregation = await prisma.personnel.groupBy({
-      by: ['availabilityStatus'],
-      _count: { _all: true },
+    const personnelForStats = await prisma.personnel.findMany({
+      where: { communityId: { in: communityIds } },
+      select: { availabilityStatus: true },
     });
-
-    const activeStaff = personnelAggregation.find((a) => a.availabilityStatus !== 'OFF_DUTY')?._count._all || 0;
-    const totalPersonnel = await prisma.personnel.count();
+    const availablePersonnel = personnelForStats.filter((person) => person.availabilityStatus === AvailabilityStatus.AVAILABLE).length;
+    const busyPersonnel = personnelForStats.filter((person) => person.availabilityStatus === AvailabilityStatus.BUSY).length;
+    const offDutyPersonnel = personnelForStats.filter((person) => person.availabilityStatus === AvailabilityStatus.OFF_DUTY).length;
+    const onLeavePersonnel = personnelForStats.filter((person) => person.availabilityStatus === AvailabilityStatus.LEAVE).length;
+    const totalPersonnel = personnelForStats.length;
+    const activeStaff = availablePersonnel + busyPersonnel;
 
     // 3. Today's Attendance summary
     const todayAttendance = await prisma.attendance.findMany({
-      where: { date: { gte: todayRange.start, lte: todayRange.end } },
+      where: { personnel: { communityId: { in: communityIds } }, date: { gte: todayRange.start, lte: todayRange.end } },
     });
 
     const attendanceStats = {
@@ -90,7 +112,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
 
     // 4. Pending Tickets list for quick action
     const pendingTicketsList = await prisma.ticket.findMany({
-      where: { status: TicketStatus.OPEN },
+      where: { communityId: { in: communityIds }, status: TicketStatus.OPEN },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       take: 5,
       include: {
@@ -103,11 +125,13 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
     // 5. Recent Activities
     const [recentTickets, recentTasks, recentAttendance] = await Promise.all([
       prisma.ticket.findMany({
+        where: { communityId: { in: communityIds } },
         take: 4,
         orderBy: { createdAt: 'desc' },
         include: { resident: { select: { firstName: true, unitNumber: true } } },
       }),
       prisma.task.findMany({
+        where: { ticket: { communityId: { in: communityIds } } },
         take: 4,
         orderBy: { updatedAt: 'desc' },
         include: {
@@ -116,6 +140,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
         },
       }),
       prisma.attendance.findMany({
+        where: { personnel: { communityId: { in: communityIds } } },
         take: 3,
         orderBy: { updatedAt: 'desc' },
         include: { personnel: { select: { name: true, category: true } } },
@@ -128,7 +153,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
       activities.push({
         id: `ticket-${t.id}`,
         type: 'COMPLAINT',
-        title: `New complaint from Unit ${t.resident.unitNumber || '9A'}`,
+        title: `New complaint from Unit ${t.resident?.unitNumber || 'Unknown'}`,
         description: `${t.title} (${t.category})`,
         time: t.createdAt,
         status: t.status,
@@ -139,7 +164,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
       activities.push({
         id: `task-${tsk.id}`,
         type: 'TASK',
-        title: `Task ${tsk.status.toLowerCase().replace('_', ' ')}: ${tsk.assignedPersonnel.name}`,
+        title: `Task ${tsk.status.toLowerCase().replace('_', ' ')}: ${tsk.assignedPersonnel?.name || 'Unassigned'}`,
         description: tsk.ticket?.title || 'Operational Task',
         time: tsk.updatedAt,
         status: tsk.status,
@@ -150,7 +175,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
       activities.push({
         id: `att-${att.id}`,
         type: 'ATTENDANCE',
-        title: `Attendance updated: ${att.personnel.name}`,
+        title: `Attendance updated: ${att.personnel?.name || 'Personnel'}`,
         description: `Marked as ${att.status}`,
         time: att.updatedAt,
         status: att.status,
@@ -161,6 +186,7 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
 
     // 6. Category breakdown of personnel
     const personnelByCategory = await prisma.personnel.findMany({
+      where: { communityId: { in: communityIds } },
       select: {
         id: true,
         name: true,
@@ -179,6 +205,10 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
       inProgressTasks,
       completedTasks,
       activeStaff,
+      availablePersonnel,
+      busyPersonnel,
+      offDutyPersonnel,
+      onLeavePersonnel,
       totalPersonnel,
     };
 
@@ -190,6 +220,10 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
       inProgressTasks,
       completedTasks,
       activeStaff,
+      availablePersonnel,
+      busyPersonnel,
+      offDutyPersonnel,
+      onLeavePersonnel,
       totalPersonnel,
       attendanceStats,
       pendingTicketsList,
@@ -206,12 +240,14 @@ router.get('/dashboard', requireManager, async (req: AuthRequest, res: Response,
 // ----------------------------------------------------
 router.get('/tickets', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const statusQuery = typeof req.query.status === 'string' ? req.query.status : undefined;
     const categoryQuery = typeof req.query.category === 'string' ? req.query.category : undefined;
     const priorityQuery = typeof req.query.priority === 'string' ? req.query.priority : undefined;
     const searchQuery = typeof req.query.search === 'string' ? req.query.search : undefined;
 
-    const where: any = {};
+    const where: any = { communityId: { in: communityIds } };
     if (statusQuery && statusQuery !== 'ALL') {
       where.status = statusQuery as TicketStatus;
     }
@@ -272,13 +308,15 @@ router.get('/tickets', requireManager, async (req: AuthRequest, res: Response, n
 // ----------------------------------------------------
 router.get('/tickets/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing ticket id' } });
     }
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: {
         resident: {
           select: {
@@ -355,8 +393,21 @@ const updateTicketSchema = z.object({
   remarks: z.string().optional(),
 });
 
+const ALLOWED_TICKET_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> = {
+  OPEN: [TicketStatus.ASSIGNED, TicketStatus.CANCELLED],
+  ASSIGNED: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED],
+  IN_PROGRESS: [TicketStatus.ASSIGNED, TicketStatus.COMPLETED_BY_WORKER, TicketStatus.CANCELLED],
+  COMPLETED_BY_WORKER: [TicketStatus.IN_PROGRESS, TicketStatus.PENDING_RESIDENT_CONFIRMATION],
+  PENDING_RESIDENT_CONFIRMATION: [TicketStatus.CLOSED, TicketStatus.REOPENED],
+  CLOSED: [TicketStatus.REOPENED],
+  REOPENED: [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED],
+  CANCELLED: [TicketStatus.REOPENED],
+};
+
 router.patch('/tickets/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing ticket id' } });
@@ -364,9 +415,16 @@ router.patch('/tickets/:id', requireManager, async (req: AuthRequest, res: Respo
 
     const data = updateTicketSchema.parse(req.body);
 
-    const existing = await prisma.ticket.findUnique({ where: { id }, include: { resident: true } });
+    const existing = await prisma.ticket.findFirst({ where: { id, communityId: { in: communityIds } }, include: { resident: true } });
     if (!existing) {
       return res.status(404).json({ error: { message: 'Ticket not found' } });
+    }
+
+    if (data.status && data.status !== existing.status) {
+      const allowed = ALLOWED_TICKET_TRANSITIONS[existing.status] || [];
+      if (!allowed.includes(data.status as TicketStatus)) {
+        return res.status(400).json({ error: { message: `Cannot move a ${existing.status.replaceAll('_', ' ').toLowerCase()} ticket directly to ${data.status.replaceAll('_', ' ').toLowerCase()}.` } });
+      }
     }
 
     const updated = await prisma.ticket.update({
@@ -420,18 +478,20 @@ const assignTaskSchema = z.object({
 
 router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const { ticketId, personnelId, remarks } = assignTaskSchema.parse(req.body);
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, communityId: { in: communityIds } },
       include: { resident: true },
     });
     if (!ticket) {
       return res.status(404).json({ error: { message: 'Ticket not found' } });
     }
 
-    const personnel = await prisma.personnel.findUnique({
-      where: { id: personnelId },
+    const personnel = await prisma.personnel.findFirst({
+      where: { id: personnelId, communityId: { in: communityIds } },
     });
     if (!personnel) {
       return res.status(404).json({ error: { message: 'Personnel not found' } });
@@ -457,11 +517,36 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
       });
     }
 
+    if (personnel.availabilityStatus !== AvailabilityStatus.AVAILABLE) {
+      return res.status(409).json({
+        error: {
+          code: 'PERSONNEL_NOT_AVAILABLE',
+          message: `${personnel.name} is no longer available for assignment. Refresh the list and choose another available team member.`,
+        },
+      });
+    }
+
     if (!isPersonnelCompatibleWithTicket(personnel.category, ticket.category)) {
       return res.status(400).json({
         error: {
           code: 'PERSONNEL_CATEGORY_MISMATCH',
           message: `${personnel.name} (${personnel.category}) cannot be assigned to a ${ticket.category} task. Assign a worker with the matching trade or department.`,
+        },
+      });
+    }
+
+    const existingActiveTask = await prisma.task.findFirst({
+      where: {
+        ticketId,
+        status: { in: [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS] },
+      },
+      include: { assignedPersonnel: { select: { name: true } } },
+    });
+    if (existingActiveTask) {
+      return res.status(409).json({
+        error: {
+          code: 'TICKET_ALREADY_ASSIGNED',
+          message: `This ticket is already assigned to ${existingActiveTask.assignedPersonnel.name}.`,
         },
       });
     }
@@ -534,11 +619,17 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
 // ----------------------------------------------------
 router.get('/tasks', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getOperationalCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved operational community found.' } });
     const statusQuery = typeof req.query.status === 'string' ? req.query.status : undefined;
     const personnelIdQuery = typeof req.query.personnelId === 'string' ? req.query.personnelId : undefined;
     const ticketIdQuery = typeof req.query.ticketId === 'string' ? req.query.ticketId : undefined;
 
-    const where: any = {};
+    const where: any = { ticket: { communityId: { in: communityIds } } };
+    const isManager = req.user?.role === Role.MANAGER || req.user?.role === Role.LEADERSHIP;
+    if (!isManager) {
+      where.assignedPersonnel = { userId: req.user!.userId };
+    }
     if (statusQuery && statusQuery !== 'ALL') {
       where.status = statusQuery as TaskStatus;
     }
@@ -579,6 +670,8 @@ const updateTaskSchema = z.object({
 
 const handleTaskStatusUpdate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getOperationalCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved operational community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing task id' } });
@@ -586,8 +679,13 @@ const handleTaskStatusUpdate = async (req: AuthRequest, res: Response, next: Nex
 
     const { status, remarks } = updateTaskSchema.parse(req.body);
 
-    const task = await prisma.task.findUnique({
-      where: { id },
+    const managerCommunityIds = await getManagerCommunityIds(req.user!.userId);
+    const task = await prisma.task.findFirst({
+      where: {
+        id,
+        ticket: { communityId: { in: communityIds } },
+        ...(managerCommunityIds.length === 0 ? { assignedPersonnel: { userId: req.user!.userId } } : {}),
+      },
       include: { ticket: { include: { resident: true } }, assignedPersonnel: true },
     });
 
@@ -686,14 +784,19 @@ router.patch('/tasks/:id/status', requireWorkforceOrManager, handleTaskStatusUpd
 // ----------------------------------------------------
 router.get('/personnel', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const categoryQuery = typeof req.query.category === 'string' ? req.query.category : undefined;
     const availabilityQuery = typeof req.query.availability === 'string' ? req.query.availability : undefined;
     const onlyAvailable = req.query.available === 'true' || availabilityQuery === 'AVAILABLE';
     const searchQuery = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const page = Math.max(1, parseInt(typeof req.query.page === 'string' ? req.query.page : '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(typeof req.query.limit === 'string' ? req.query.limit : '50')));
+    const skip = (page - 1) * limit;
 
     const todayRange = getDateRange();
 
-    const where: any = {};
+    const where: any = { communityId: { in: communityIds } };
     if (categoryQuery && categoryQuery !== 'ALL') {
       where.category = categoryQuery as PersonnelCategory;
     }
@@ -709,20 +812,25 @@ router.get('/personnel', requireManager, async (req: AuthRequest, res: Response,
       ];
     }
 
-    const personnelList = await prisma.personnel.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      include: {
-        attendances: {
-          where: { date: { gte: todayRange.start, lte: todayRange.end } },
-          take: 1,
+    const [personnelList, total] = await Promise.all([
+      prisma.personnel.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+        include: {
+          attendances: {
+            where: { date: { gte: todayRange.start, lte: todayRange.end } },
+            take: 1,
+          },
+          tasks: {
+            where: { status: { in: [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS] } },
+            select: { id: true, status: true, ticket: { select: { title: true, priority: true } } },
+          },
         },
-        tasks: {
-          where: { status: { in: [TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS] } },
-          select: { id: true, status: true, ticket: { select: { title: true, priority: true } } },
-        },
-      },
-    });
+      }),
+      prisma.personnel.count({ where }),
+    ]);
 
     const formatted = personnelList.map((p) => ({
       id: p.id,
@@ -739,7 +847,7 @@ router.get('/personnel', requireManager, async (req: AuthRequest, res: Response,
       createdAt: p.createdAt,
     }));
 
-    res.json({ personnel: formatted });
+    res.json({ personnel: formatted, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (error) {
     next(error);
   }
@@ -753,31 +861,27 @@ const createPersonnelSchema = z.object({
   phone: z.string().min(8),
   category: z.enum(['ELECTRICIAN', 'PLUMBER', 'CLEANER', 'SECURITY', 'GARDENER', 'MAINTENANCE', 'OTHER']),
   availabilityStatus: z.enum(['AVAILABLE', 'BUSY', 'OFF_DUTY', 'LEAVE']).optional(),
+  communityId: z.string().uuid().optional(),
 });
 
 router.post('/personnel', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const data = createPersonnelSchema.parse(req.body);
+    const communityId = data.communityId ?? communityIds[0];
+    if (!communityId) return res.status(403).json({ error: { message: 'No management community found.' } });
+    if (!communityIds.includes(communityId)) {
+      return res.status(403).json({ error: { message: 'You are not authorized for this community.' } });
+    }
 
     const personnel = await prisma.personnel.create({
       data: {
         name: data.name,
         phone: data.phone,
         category: data.category as PersonnelCategory,
-        availabilityStatus: (data.availabilityStatus as AvailabilityStatus) || AvailabilityStatus.AVAILABLE,
-      },
-    });
-
-    // Auto-mark present for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    await prisma.attendance.create({
-      data: {
-        personnelId: personnel.id,
-        date: today,
-        status: AttendanceStatus.PRESENT,
-        checkIn: new Date(),
-        remarks: 'Auto-enrolled today',
+        communityId,
+        availabilityStatus: (data.availabilityStatus as AvailabilityStatus) || AvailabilityStatus.OFF_DUTY,
       },
     });
 
@@ -792,13 +896,15 @@ router.post('/personnel', requireManager, async (req: AuthRequest, res: Response
 // ----------------------------------------------------
 router.get('/personnel/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing personnel id' } });
     }
 
-    const personnel = await prisma.personnel.findUnique({
-      where: { id },
+    const personnel = await prisma.personnel.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: {
         attendances: {
           orderBy: { date: 'desc' },
@@ -844,6 +950,8 @@ const updatePersonnelSchema = z.object({
 
 router.patch('/personnel/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing personnel id' } });
@@ -851,8 +959,11 @@ router.patch('/personnel/:id', requireManager, async (req: AuthRequest, res: Res
 
     const data = updatePersonnelSchema.parse(req.body);
 
+    const existing = await prisma.personnel.findFirst({ where: { id, communityId: { in: communityIds } } });
+    if (!existing) return res.status(404).json({ error: { message: 'Personnel not found' } });
+
     const updated = await prisma.personnel.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         ...(data.name ? { name: data.name } : {}),
         ...(data.phone ? { phone: data.phone } : {}),
@@ -872,10 +983,13 @@ router.patch('/personnel/:id', requireManager, async (req: AuthRequest, res: Res
 // ----------------------------------------------------
 router.get('/attendance', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const dateQuery = typeof req.query.date === 'string' ? req.query.date : undefined;
     const range = getDateRange(dateQuery);
 
     const personnel = await prisma.personnel.findMany({
+      where: { communityId: { in: communityIds } },
       orderBy: { name: 'asc' },
       include: {
         attendances: {
@@ -894,7 +1008,7 @@ router.get('/attendance', requireManager, async (req: AuthRequest, res: Response
         category: p.category,
         availabilityStatus: p.availabilityStatus,
         attendanceId: att?.id || null,
-        status: att?.status || 'ABSENT',
+        status: att?.status || null,
         checkIn: att?.checkIn || null,
         checkOut: att?.checkOut || null,
         remarks: att?.remarks || '',
@@ -918,13 +1032,35 @@ router.get('/attendance', requireManager, async (req: AuthRequest, res: Response
 // ----------------------------------------------------
 // 12a. GET /manager/attendance/export (Export XLSX)
 // ----------------------------------------------------
-router.get('/attendance/export', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/attendance/export-token', requireManager, async (req: AuthRequest, res: Response) => {
+  res.json({ token: generateAttendanceExportToken(req.user!.userId) });
+});
+
+router.get('/attendance/export', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    if (!req.user && typeof req.query.downloadToken === 'string') {
+      let payload: ReturnType<typeof verifyAttendanceExportToken>;
+      try {
+        payload = verifyAttendanceExportToken(req.query.downloadToken);
+      } catch {
+        return res.status(401).json({ error: { message: 'Invalid or expired attendance download token.' } });
+      }
+      if (payload.purpose !== 'attendance-export') {
+        return res.status(401).json({ error: { message: 'Invalid attendance download token.' } });
+      }
+      const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { id: true, email: true, role: true } });
+      if (!user) return res.status(401).json({ error: { message: 'Invalid attendance download token.' } });
+      req.user = { userId: user.id, email: user.email, role: user.role || Role.RESIDENT };
+    }
+    if (!req.user) return res.status(401).json({ error: { message: 'Authentication required.' } });
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const dateQuery = typeof req.query.date === 'string' ? req.query.date : undefined;
     const range = getDateRange(dateQuery);
     const dateStr = range.start.toISOString().split('T')[0];
 
     const personnel = await prisma.personnel.findMany({
+      where: { communityId: { in: communityIds } },
       orderBy: { name: 'asc' },
       include: {
         attendances: {
@@ -943,7 +1079,7 @@ router.get('/attendance/export', requireManager, async (req: AuthRequest, res: R
         'Trade / Category': p.category,
         'Phone Number': p.phone,
         Date: dateStr,
-        Status: att?.status || 'ABSENT',
+        Status: att?.status || 'NOT_MARKED',
         'Check-In': att?.checkIn ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
         'Check-Out': att?.checkOut ? new Date(att.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
         Remarks: att?.remarks || '',
@@ -981,6 +1117,8 @@ const importPayloadSchema = z.object({
 
 router.post('/attendance/import', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const { records } = importPayloadSchema.parse(req.body);
     let updatedCount = 0;
 
@@ -989,12 +1127,14 @@ router.post('/attendance/import', requireManager, async (req: AuthRequest, res: 
 
       if (!targetPersonnelId && row.name) {
         const found = await prisma.personnel.findFirst({
-          where: { name: { equals: row.name, mode: 'insensitive' } },
+          where: { communityId: { in: communityIds }, name: { equals: row.name, mode: 'insensitive' } },
         });
         if (found) targetPersonnelId = found.id;
       }
 
       if (targetPersonnelId) {
+        const target = await prisma.personnel.findFirst({ where: { id: targetPersonnelId, communityId: { in: communityIds } } });
+        if (!target) continue;
         await saveAttendance(targetPersonnelId, {
           personnelId: targetPersonnelId,
           date: row.date,
@@ -1086,11 +1226,15 @@ async function saveAttendance(personnelId: string, data: z.infer<typeof markAtte
 
 router.post('/attendance', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const data = markAttendanceSchema.parse(req.body);
     if (!data.personnelId) {
       return res.status(400).json({ error: { message: 'Missing personnelId in request body' } });
     }
 
+    const personnel = await prisma.personnel.findFirst({ where: { id: data.personnelId, communityId: { in: communityIds } } });
+    if (!personnel) return res.status(404).json({ error: { message: 'Personnel not found' } });
     const attRecord = await saveAttendance(data.personnelId, data);
     res.json({ success: true, attendance: attRecord });
   } catch (error) {
@@ -1100,11 +1244,15 @@ router.post('/attendance', requireManager, async (req: AuthRequest, res: Respons
 
 router.patch('/personnel/:id/attendance', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing personnel id' } });
     }
 
+    const personnel = await prisma.personnel.findFirst({ where: { id, communityId: { in: communityIds } } });
+    if (!personnel) return res.status(404).json({ error: { message: 'Personnel not found' } });
     const data = markAttendanceSchema.parse(req.body);
     const attRecord = await saveAttendance(id, data);
     res.json({ success: true, attendance: attRecord });
@@ -1124,6 +1272,11 @@ const managerRoleSchema = z.object({
 router.post('/roles/assign-manager', requireLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId, communityId } = managerRoleSchema.parse(req.body);
+    const leadershipCommunityIds = await getApprovedCommunityIds(req.user!.userId, [Role.LEADERSHIP]);
+    const targetCommunityId = communityId || leadershipCommunityIds[0];
+    if (!targetCommunityId || !leadershipCommunityIds.includes(targetCommunityId)) {
+      return res.status(403).json({ error: { message: 'You are not authorized for this community.' } });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -1136,24 +1289,11 @@ router.post('/roles/assign-manager', requireLeadership, async (req: AuthRequest,
       data: { role: Role.MANAGER },
     });
 
-    if (communityId) {
-      await prisma.membership.upsert({
-        where: {
-          userId_communityId_role: {
-            userId,
-            communityId,
-            role: Role.MANAGER,
-          },
-        },
-        update: { status: 'APPROVED' },
-        create: {
-          userId,
-          communityId,
-          role: Role.MANAGER,
-          status: 'APPROVED',
-        },
-      });
-    }
+    await prisma.membership.upsert({
+      where: { userId_communityId_role: { userId, communityId: targetCommunityId, role: Role.MANAGER } },
+      update: { status: 'APPROVED' },
+      create: { userId, communityId: targetCommunityId, role: Role.MANAGER, status: 'APPROVED' },
+    });
 
     await prisma.notification.create({
       data: {
@@ -1173,19 +1313,21 @@ router.post('/roles/assign-manager', requireLeadership, async (req: AuthRequest,
 router.post('/roles/remove-manager', requireLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { userId, communityId } = managerRoleSchema.parse(req.body);
+    const leadershipCommunityIds = await getApprovedCommunityIds(req.user!.userId, [Role.LEADERSHIP]);
+    const targetCommunityId = communityId || leadershipCommunityIds[0];
+    if (!targetCommunityId || !leadershipCommunityIds.includes(targetCommunityId)) {
+      return res.status(403).json({ error: { message: 'You are not authorized for this community.' } });
+    }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role: Role.RESIDENT },
+    await prisma.membership.updateMany({
+      where: { userId, role: Role.MANAGER, communityId: targetCommunityId, status: 'APPROVED' },
+      data: { status: 'REJECTED' },
     });
 
-    await prisma.membership.deleteMany({
-      where: {
-        userId,
-        role: Role.MANAGER,
-        ...(communityId ? { communityId } : {}),
-      },
-    });
+    const remainingManagerMembership = await prisma.membership.count({ where: { userId, role: Role.MANAGER, status: 'APPROVED' } });
+    if (remainingManagerMembership === 0) {
+      await prisma.user.update({ where: { id: userId }, data: { role: Role.RESIDENT } });
+    }
 
     await prisma.notification.create({
       data: {
@@ -1205,10 +1347,12 @@ router.post('/roles/remove-manager', requireLeadership, async (req: AuthRequest,
 // ----------------------------------------------------
 // 19. GET /manager/workforce/pending
 // ----------------------------------------------------
-router.get('/workforce/pending', requireManager, async (_req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/workforce/pending', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
     const pendingWorkforce = await prisma.membership.findMany({
       where: {
+        communityId: { in: communityIds },
         role: Role.WORKFORCE,
         status: 'PENDING',
       },
@@ -1241,13 +1385,14 @@ router.get('/workforce/pending', requireManager, async (_req: AuthRequest, res: 
 // ----------------------------------------------------
 router.post('/workforce/:id/approve', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing membership id' } });
     }
 
-    const membership = await prisma.membership.findUnique({
-      where: { id },
+    const membership = await prisma.membership.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: { user: true },
     });
 
@@ -1331,13 +1476,14 @@ router.post('/workforce/:id/approve', requireManager, async (req: AuthRequest, r
 // ----------------------------------------------------
 router.post('/workforce/:id/reject', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing membership id' } });
     }
 
-    const membership = await prisma.membership.findUnique({
-      where: { id },
+    const membership = await prisma.membership.findFirst({
+      where: { id, communityId: { in: communityIds } },
       include: { user: true },
     });
 
@@ -1381,6 +1527,8 @@ const updatePersonnelStatusSchema = z.object({
 
 router.patch('/personnel/:id/status', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
+    if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing personnel id' } });
@@ -1388,7 +1536,7 @@ router.patch('/personnel/:id/status', requireManager, async (req: AuthRequest, r
 
     const data = updatePersonnelStatusSchema.parse(req.body);
 
-    const personnel = await prisma.personnel.findUnique({ where: { id } });
+    const personnel = await prisma.personnel.findFirst({ where: { id, communityId: { in: communityIds } } });
     if (!personnel) {
       return res.status(404).json({ error: { message: 'Personnel not found' } });
     }
@@ -1447,13 +1595,14 @@ router.patch('/personnel/:id/status', requireManager, async (req: AuthRequest, r
 // ----------------------------------------------------
 router.get('/personnel/:id/activities', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!id) {
       return res.status(400).json({ error: { message: 'Missing personnel id' } });
     }
 
     const activities = await prisma.personnelActivity.findMany({
-      where: { personnelId: id },
+      where: { personnelId: id, personnel: { communityId: { in: communityIds } } },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -1469,13 +1618,14 @@ router.get('/personnel/:id/activities', requireManager, async (req: AuthRequest,
 // ----------------------------------------------------
 router.post('/tickets/:id/approve-work-completion', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const communityIds = await getManagerCommunityIds(req.user!.userId);
     const ticketId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!ticketId) {
       return res.status(400).json({ error: { message: 'Missing ticket id' } });
     }
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, communityId: { in: communityIds } },
       include: { tasks: { orderBy: { createdAt: 'desc' }, take: 1 } },
     });
 

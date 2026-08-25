@@ -138,6 +138,9 @@ export interface DashboardData {
     completedTasks?: number;
     resolvedTickets?: number;
     availablePersonnel?: number;
+    busyPersonnel?: number;
+    offDutyPersonnel?: number;
+    onLeavePersonnel?: number;
     totalPersonnel?: number;
   };
   attendanceStats?: AttendanceSummary;
@@ -152,7 +155,7 @@ export interface AttendanceRecord {
   name: string;
   category: PersonnelCategory;
   department: string;
-  status: AttendanceStatus;
+  status: AttendanceStatus | null;
   checkIn: string | null;
   checkOut: string | null;
   remarks: string | null;
@@ -188,6 +191,15 @@ export const managerApi = {
     const res = await api.get<{ tickets: TicketItem[] }>('/manager/tickets', {
       params: filters,
     });
+    return res.data;
+  },
+
+  getTasks: async (filters?: {
+    status?: string;
+    personnelId?: string;
+    ticketId?: string;
+  }): Promise<{ tasks: TaskItem[] }> => {
+    const res = await api.get<{ tasks: TaskItem[] }>('/manager/tasks', { params: filters });
     return res.data;
   },
 
@@ -228,8 +240,10 @@ export const managerApi = {
     category?: string;
     availability?: string;
     search?: string;
-  }): Promise<{ personnel: PersonnelItem[] }> => {
-    const res = await api.get<{ personnel: PersonnelItem[] }>('/manager/personnel', {
+    page?: number;
+    limit?: number;
+  }): Promise<{ personnel: PersonnelItem[]; pagination?: { page: number; limit: number; total: number; totalPages: number } }> => {
+    const res = await api.get<{ personnel: PersonnelItem[]; pagination?: { page: number; limit: number; total: number; totalPages: number } }>('/manager/personnel', {
       params: filters,
     });
     return res.data;
@@ -289,7 +303,10 @@ export const managerApi = {
 
   exportAttendance: async (date?: string): Promise<{ url: string }> => {
     const baseURL = api.defaults.baseURL || 'http://localhost:3000';
-    const downloadUrl = `${baseURL}/manager/attendance/export${date ? `?date=${date}` : ''}`;
+    const tokenRes = await api.get<{ token: string }>('/manager/attendance/export-token');
+    const params = new URLSearchParams({ downloadToken: tokenRes.data.token });
+    if (date) params.set('date', date);
+    const downloadUrl = `${baseURL}/manager/attendance/export?${params.toString()}`;
     return { url: downloadUrl };
   },
 
