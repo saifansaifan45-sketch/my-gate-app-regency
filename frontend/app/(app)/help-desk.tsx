@@ -15,7 +15,7 @@ import { cardSystem } from '../../src/components/ui/cardSystem';
 
 export default function HelpDeskScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { data, isLoading } = useQuery({ queryKey: ['help-desk-contact'], queryFn: householdApi.getHelpDeskContact });
   const manager = data?.manager;
   const callManager = () => {
@@ -23,7 +23,7 @@ export default function HelpDeskScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Help Desk" onBackPress={() => smartBack(router, '/home')} />
       <View style={[styles.content, { paddingBottom: bottomClearance + 24 }]}>
         <View style={styles.heroIcon}><Feather name="headphones" size={28} color="#FFFFFF" /></View>

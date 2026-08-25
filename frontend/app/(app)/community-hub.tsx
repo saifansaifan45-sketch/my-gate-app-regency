@@ -10,9 +10,11 @@ import { cardSystem } from '../../src/components/ui/cardSystem';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../src/api/client';
 import { smartBack } from '../../src/navigation/history';
+import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 
 export default function CommunityHubScreen() {
   const router = useRouter();
+  const { top } = useScreenInsets(false);
 
   const { data: hubData, isLoading: hubLoading } = useQuery({
     queryKey: ['communityHub'],
@@ -26,7 +28,7 @@ export default function CommunityHubScreen() {
   
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: top }]}>
         <AppHeader variant="subscreen" title="Community Hub" onBackPress={() => smartBack(router, '/profile-settings')} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator color={theme.colors.primary} />
@@ -37,7 +39,7 @@ export default function CommunityHubScreen() {
 
   if (!hubData?.community) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: top }]}>
         <AppHeader variant="subscreen" title="Community Hub" onBackPress={() => smartBack(router, '/profile-settings')} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <Feather name="alert-circle" size={40} color={theme.colors.textSecondary} style={{ marginBottom: 12 }} />
@@ -73,7 +75,7 @@ export default function CommunityHubScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Community Hub" onBackPress={() => smartBack(router, '/profile-settings')} />
       <ScrollView contentContainerStyle={styles.content}>
         

@@ -12,7 +12,9 @@ import { Button } from '../../../src/components/ui/Button';
 import { theme } from '../../../src/theme';
 import { smartBack } from '../../../src/navigation/history';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
+import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { GateVisitorCard } from '../../../src/components/gate/GateVisitorCard';
+import { AddVisitorModal } from '../../../src/components/add-visitor-modal';
 
 const STATUS_META: Record<VisitorStatus, { bg: string; text: string; label: string; dot: string }> = {
   PENDING: { bg: '#FFF7ED', text: '#C2410C', label: 'Pending Auth', dot: '#F97316' },
@@ -42,6 +44,8 @@ export default function GateOperationsScreen() {
   const [selectedVisitor, setSelectedVisitor] = useState<VisitorItem | null>(null);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpInput, setOtpInput] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [hostActionPending, setHostActionPending] = useState<string | null>(null);
 
   // Queue fetching (Live operational API)
   const { data: queueData, isLoading: isLoadingQueue, isRefetching: isRefetchingQueue, isError: queueError, refetch: refetchQueue } = useQuery({
@@ -68,6 +72,18 @@ export default function GateOperationsScreen() {
   const checkOutMut = useMutation({
     mutationFn: (id: string) => visitorsApi.checkOutVisitor(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['gate-visitors'] }) },
+  });
+
+  const hostedArrivalMut = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'approve' | 'reject' }) =>
+      action === 'approve' ? visitorsApi.approveHostedArrival(id) : visitorsApi.rejectHostedArrival(id),
+    onMutate: ({ id }) => setHostActionPending(id),
+    onSettled: () => setHostActionPending(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gate-visitors'] });
+      queryClient.invalidateQueries({ queryKey: ['gate-history'] });
+    },
+    onError: (err: any) => Alert.alert('Could not update arrival', err?.response?.data?.error?.message || 'Please try again.'),
   });
 
   // Filtering for QUEUE view
@@ -139,11 +155,14 @@ export default function GateOperationsScreen() {
         }}
         onHandoff={() => router.push(`/manager/visitors/audit/${v.id}` as any)}
         onRecordArrival={() => {}}
+        onApprove={(visitor) => hostedArrivalMut.mutate({ id: visitor.id, action: 'approve' })}
+        onReject={(visitor) => hostedArrivalMut.mutate({ id: visitor.id, action: 'reject' })}
+        hostActionPending={hostActionPending}
         checkInPending={checkInMut.isPending && checkInMut.variables?.id === v.id ? v.id : null}
         checkOutPending={checkOutMut.isPending && checkOutMut.variables === v.id ? v.id : null}
       />
     );
-  }, [rawQueue, checkInMut, checkOutMut]);
+  }, [rawQueue, checkInMut, checkOutMut, hostedArrivalMut, hostActionPending, router]);
 
   const renderHistoryCard = useCallback((v: VisitorItem) => {
     const meta = STATUS_META[v.status] || STATUS_META.PENDING;
@@ -190,9 +209,21 @@ export default function GateOperationsScreen() {
     );
   }, []);
 
+  const { top } = useScreenInsets(false);
+
   return (
-    <View style={styles.container}>
-      <AppHeader variant="subscreen" title="Gate Operations" onBackPress={() => smartBack(router, '/manager')} />
+    <View style={[styles.container, { paddingTop: top }]}>
+      <AppHeader
+        variant="subscreen"
+        title="Gate Operations"
+        onBackPress={() => smartBack(router, '/manager')}
+        rightAction={(
+          <PremiumPressable style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
+            <Feather name="plus" size={15} color="#FFFFFF" />
+            <Text style={styles.inviteButtonText}>Invite</Text>
+          </PremiumPressable>
+        )}
+      />
 
       {/* View Mode Tabs - Only QUEUE and HISTORY */}
       <View style={styles.viewModeTabs}>
@@ -301,12 +332,25 @@ export default function GateOperationsScreen() {
           </View>
         </View>
       )}
+
+      <AddVisitorModal
+        visible={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        title="Invite a visitor"
+        managerMode
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['gate-visitors'] });
+          queryClient.invalidateQueries({ queryKey: ['gate-history'] });
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
+  inviteButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8 },
+  inviteButtonText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
   metricsGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: cardSystem.pagePadding, paddingTop: 16, paddingBottom: 4 },
   metricItem: { flex: 1, alignItems: 'center', backgroundColor: '#F9FAFB', marginHorizontal: 4, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   metricVal: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 2 },

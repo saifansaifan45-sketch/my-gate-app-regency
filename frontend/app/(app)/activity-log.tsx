@@ -76,7 +76,7 @@ function getRoleBadgeColor(role: string): string {
 const SKELETON_COUNT = 6;
 
 export default function ActivityLogScreen() {
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [filter, setFilter] = useState<FilterType>('ALL');
   const scrollViewRef = useRef<ScrollView>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -171,7 +171,7 @@ export default function ActivityLogScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Activity Log" />
 
       <ScrollView

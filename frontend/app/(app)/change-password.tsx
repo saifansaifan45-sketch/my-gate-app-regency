@@ -11,11 +11,13 @@ import { api } from '../../src/api/client';
 import { smartBack } from '../../src/navigation/history';
 import { useToast } from '../../src/store/toast';
 import { useSession } from '../../src/store/auth';
+import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const { logout } = useSession();
+  const { top } = useScreenInsets(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -52,7 +54,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Change Password" onBackPress={() => smartBack(router, '/profile-settings')} />
       <ScrollView contentContainerStyle={styles.content}>
         

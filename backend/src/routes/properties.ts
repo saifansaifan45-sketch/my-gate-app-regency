@@ -272,6 +272,31 @@ router.post('/units/:unitId/residencies/:residencyId/approve', async (req: AuthR
       include: { user: true, unit: true },
     });
 
+    // Auto-populate family records if the resident is an owner
+    if (residency.relationshipType === ResidencyType.OWNER) {
+      const existingMember = await prisma.householdMember.findFirst({
+        where: {
+          unitId,
+          email: residency.user.email,
+          relationship: 'OWNER',
+        },
+      });
+
+      if (!existingMember) {
+        const ownerName = [residency.user.firstName, residency.user.lastName].filter(Boolean).join(' ') || 'Property Owner';
+        await prisma.householdMember.create({
+          data: {
+            name: ownerName,
+            relationship: 'OWNER',
+            phone: residency.user.phoneNumber || null,
+            email: residency.user.email,
+            unitId,
+            createdById: userId,
+          },
+        });
+      }
+    }
+
     // Update user's unitNumber on profile
     await prisma.user.update({
       where: { id: residency.userId },

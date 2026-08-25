@@ -104,6 +104,9 @@ export default function LeadershipTicketsScreen() {
           return (
             <PremiumPressable
               key={filter.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter tickets by ${filter.label}`}
+              accessibilityState={{ selected }}
               style={[styles.filterChip, selected && styles.filterChipSelected]}
               onPress={() => setActiveFilter(filter.id)}
             >
@@ -173,8 +176,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   summaryRow: {
     paddingHorizontal: cardSystem.pagePadding,
-    paddingTop: 4,
-    paddingBottom: 14,
+    paddingTop: 2,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
@@ -184,8 +187,8 @@ const styles = StyleSheet.create({
   summaryMetric: { alignItems: 'flex-end' },
   summaryValue: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: theme.colors.textPrimary },
   summaryLabel: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: theme.colors.textSecondary },
-  filterRow: { paddingHorizontal: cardSystem.pagePadding, gap: 8, paddingBottom: 14 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+  filterRow: { paddingHorizontal: cardSystem.pagePadding, gap: 8, paddingBottom: 12 },
+  filterChip: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
   filterChipSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   filterTextSelected: { color: '#FFFFFF' },

@@ -24,7 +24,7 @@ export default function AssignPersonnelScreen() {
   const ticketId = Array.isArray(rawTicketId) ? rawTicketId[0] : rawTicketId;
   const category = Array.isArray(rawCategory) ? rawCategory[0] : rawCategory;
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [ticket, setTicket] = useState<TicketItem | null>(null);
@@ -119,7 +119,7 @@ export default function AssignPersonnelScreen() {
 
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Assign Personnel"

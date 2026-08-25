@@ -28,7 +28,7 @@ import { useToast } from '../../../src/store/toast';
 
 export default function AttendanceScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const formatLocalDate = (value: Date) => {
@@ -207,7 +207,7 @@ export default function AttendanceScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Workforce Attendance"

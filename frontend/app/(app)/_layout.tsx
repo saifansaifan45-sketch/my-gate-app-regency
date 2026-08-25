@@ -163,23 +163,28 @@ function CustomTabBar({ state, navigation }: any) {
   });
   const isSecurity = workforceData?.personnelProfile?.category?.toUpperCase() === 'SECURITY';
 
-  const entranceOpacity = useRef(new Animated.Value(0)).current;
-  const entranceTranslateY = useRef(new Animated.Value(18)).current;
+  // React Native Web marks an opacity-0 navigation subtree as aria-hidden. If
+  // a tab button still owns focus during that frame, Chrome reports a blocked
+  // aria-hidden warning. Keep the tab bar immediately available on web while
+  // preserving the entrance motion on native platforms.
+  const entranceOpacity = useRef(new Animated.Value(Platform.OS === 'web' ? 1 : 0)).current;
+  const entranceTranslateY = useRef(new Animated.Value(Platform.OS === 'web' ? 0 : 18)).current;
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     Animated.parallel([
       Animated.timing(entranceOpacity, {
         toValue: 1,
         duration: 360,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: true,
       }),
       Animated.spring(entranceTranslateY, {
         toValue: 0,
         damping: 18,
         stiffness: 140,
         mass: 0.8,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: true,
       }),
     ]).start();
   }, []);
@@ -479,7 +484,7 @@ export default function AppLayout() {
           tabBar={(props) => <CustomTabBar {...props} />}
           screenOptions={{
             headerShown: false,
-            animation: 'shift',
+            animation: Platform.OS === 'web' ? 'none' : 'shift',
             tabBarStyle: { display: showWelcome ? 'none' : 'flex' },
           }}
         >

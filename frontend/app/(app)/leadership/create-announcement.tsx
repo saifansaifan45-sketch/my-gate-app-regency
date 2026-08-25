@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
 import { Text } from '../../../src/components/ui/Text';
@@ -8,7 +9,7 @@ import { AppHeader } from '../../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
 import { useToast } from '../../../src/store/toast';
-import { communityApi, CommunitySpaceItem } from '../../../src/api/community';
+import { communityApi, AnnouncementAudience } from '../../../src/api/community';
 import { parseApiError } from '../../../src/utils/api-error';
 
 export default function LeadershipCreateAnnouncementScreen() {
@@ -19,28 +20,13 @@ export default function LeadershipCreateAnnouncementScreen() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState<'NORMAL' | 'IMPORTANT' | 'URGENT'>('NORMAL');
-  const [selectedAudience, setSelectedAudience] = useState<'RESIDENTS' | 'OWNERS' | 'LEADERSHIP'>('RESIDENTS');
-  const [spaces, setSpaces] = useState<CommunitySpaceItem[]>([]);
+  const [selectedAudiences, setSelectedAudiences] = useState<AnnouncementAudience[]>(['RESIDENTS']);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    communityApi
-      .getSpaces()
-      .then((res) => {
-        if (res.spaces) {
-          setSpaces(res.spaces);
-        }
-      })
-      .catch((err) => console.warn('Could not fetch spaces:', err));
-  }, []);
-
-  const getTargetSpaceFromAudience = (audience: string): string => {
-    const audienceToTypeMap: Record<string, string> = {
-      'RESIDENTS': 'RESIDENT_COMMUNITY',
-      'OWNERS': 'OWNER_COMMUNITY',
-      'LEADERSHIP': 'LEADERSHIP_OPERATIONS'
-    };
-    return audienceToTypeMap[audience] || 'RESIDENT_COMMUNITY';
+  const toggleAudience = (audience: AnnouncementAudience) => {
+    setSelectedAudiences((current) => current.includes(audience)
+      ? current.filter((item) => item !== audience)
+      : [...current, audience]);
   };
 
   const handlePublish = async () => {
@@ -52,25 +38,23 @@ export default function LeadershipCreateAnnouncementScreen() {
       showToast({ title: 'Missing Content', message: 'Please provide the announcement message.', type: 'error' });
       return;
     }
+    if (selectedAudiences.length === 0) {
+      showToast({ title: 'Choose an audience', message: 'Select at least one group for this notice.', type: 'error' });
+      return;
+    }
 
     setLoading(true);
     try {
-      const targetType = getTargetSpaceFromAudience(selectedAudience);
-      const targetSpaceId = spaces.find((space) => space.type === targetType)?.id;
-
-      if (!targetSpaceId) {
-        showToast({ title: 'Notice space unavailable', message: 'The selected announcement space is not available for this community.', type: 'error' });
-        return;
-      }
-      await communityApi.postAnnouncementToSpace(targetSpaceId, {
-          title: title.trim(),
-          content: content.trim(),
-          priority,
-        });
+      await communityApi.postAnnouncementToAudiences({
+        title: title.trim(),
+        description: content.trim(),
+        priority,
+        audiences: selectedAudiences,
+      });
 
       showToast({
         title: 'Notice Broadcasted',
-        message: `Your notice has been published to ${selectedAudience === 'OWNERS' ? 'owners and eligible owner households' : selectedAudience === 'LEADERSHIP' ? 'leadership and management' : 'residents and tenants'}.`,
+        message: `Your notice has been published to ${selectedAudiences.map((audience) => audience === 'OWNERS' ? 'owners' : audience === 'LEADERSHIP' ? 'leadership' : 'residents').join(', ')}.`,
         type: 'success',
       });
       smartBack(router, '/leadership');
@@ -108,6 +92,7 @@ export default function LeadershipCreateAnnouncementScreen() {
           />
 
           <Text style={styles.label}>Target Audience</Text>
+          <Text style={styles.audienceHint}>Select one or more groups.</Text>
           <View style={styles.audienceRow}>
             {[
               { id: 'RESIDENTS', label: 'Residents' },
@@ -116,11 +101,15 @@ export default function LeadershipCreateAnnouncementScreen() {
             ].map((aud) => (
               <TouchableOpacity
                 key={aud.id}
-                style={[styles.audiencePill, selectedAudience === aud.id && styles.audiencePillActive]}
-                onPress={() => setSelectedAudience(aud.id as any)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selectedAudiences.includes(aud.id as AnnouncementAudience) }}
+                accessibilityLabel={`Send notice to ${aud.label}`}
+                style={[styles.audiencePill, selectedAudiences.includes(aud.id as AnnouncementAudience) && styles.audiencePillActive]}
+                onPress={() => toggleAudience(aud.id as AnnouncementAudience)}
               >
+                <Feather name={selectedAudiences.includes(aud.id as AnnouncementAudience) ? 'check' : 'plus'} size={14} color={selectedAudiences.includes(aud.id as AnnouncementAudience) ? '#047857' : '#4B5563'} />
                 <Text
-                  style={[styles.audiencePillText, selectedAudience === aud.id && styles.audiencePillTextActive]}
+                  style={[styles.audiencePillText, selectedAudiences.includes(aud.id as AnnouncementAudience) && styles.audiencePillTextActive]}
                 >
                   {aud.label}
                 </Text>
@@ -141,7 +130,7 @@ export default function LeadershipCreateAnnouncementScreen() {
                   styles.priorityPill,
                   priority === p.id && { backgroundColor: `${p.color}15`, borderColor: p.color },
                 ]}
-                onPress={() => setPriority(p.id as any)}
+                onPress={() => setPriority(p.id as 'NORMAL' | 'IMPORTANT' | 'URGENT')}
               >
                 <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
                 <Text style={[styles.priorityText, priority === p.id && { color: p.color, fontWeight: '700' }]}>
@@ -213,6 +202,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   audiencePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -225,6 +217,13 @@ const styles = StyleSheet.create({
   audiencePillActive: {
     backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
+  },
+  audienceHint: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: -4,
+    marginBottom: 8,
   },
   audiencePillText: {
     fontFamily: 'PlusJakartaSans_500Medium',

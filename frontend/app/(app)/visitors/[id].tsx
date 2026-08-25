@@ -18,7 +18,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 export default function VisitorDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
@@ -102,7 +102,7 @@ export default function VisitorDetailsScreen() {
   const checkOutTime = visitor.checkOutTime ? new Date(visitor.checkOutTime).toLocaleString([], { timeStyle: 'short' }) : null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Pass Details"

@@ -12,6 +12,9 @@ interface GateVisitorCardProps {
   onCheckOut: (id: string) => void;
   onHandoff: (visitor: VisitorItem) => void;
   onRecordArrival: (unitId: string) => void;
+  onApprove?: (visitor: VisitorItem) => void;
+  onReject?: (visitor: VisitorItem) => void;
+  hostActionPending?: string | null;
   checkInPending?: string | null;
   checkOutPending?: string | null;
 }
@@ -30,13 +33,17 @@ const TYPE_META: Record<string, { icon: keyof typeof Feather.glyphMap; color: st
   OTHER: { icon: 'user', color: '#6B7280', bg: '#F3F4F6', label: 'Other' },
 };
 
-export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onRecordArrival: _onRecordArrival, checkInPending, checkOutPending }: GateVisitorCardProps) {
+export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onRecordArrival: _onRecordArrival, onApprove, onReject, hostActionPending, checkInPending, checkOutPending }: GateVisitorCardProps) {
   const meta = STATUS_STYLE[visitor.status] || STATUS_STYLE.PENDING;
   const typeMeta = TYPE_META[visitor.visitorType] || TYPE_META.OTHER;
   const name = visitor.provider || visitor.name;
   const unitLabel = visitor.unit?.unitNumber || '—';
+  const hostLabel = visitor.hostUser
+    ? `${visitor.hostUser.firstName || ''} ${visitor.hostUser.lastName || ''}`.trim() || 'Manager'
+    : null;
   const isCheckingIn = checkInPending === visitor.id;
   const isCheckingOut = checkOutPending === visitor.id;
+  const isHostActionPending = hostActionPending === visitor.id;
   const time = new Date(visitor.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const checkInTime = visitor.checkInTime ? new Date(visitor.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
 
@@ -73,7 +80,7 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
             <View style={styles.metaRow}>
               <Text style={styles.metaText}>{typeMeta.label}</Text>
               <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>Unit {unitLabel}</Text>
+              <Text style={styles.metaText}>{hostLabel ? `Host ${hostLabel}` : `Unit ${unitLabel}`}</Text>
               {visitor.vehicleNumber && (
                 <>
                   <Text style={styles.metaDot}>•</Text>
@@ -109,10 +116,20 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
         {/* Action area */}
         <View style={styles.actionArea}>
           {visitor.status === 'PENDING' && (
-            <View style={styles.pendingNotice}>
-              <Feather name={meta.icon} size={14} color={meta.text} />
-              <Text style={[styles.pendingText, { color: meta.text }]}>{meta.label}</Text>
-            </View>
+            onApprove && onReject && visitor.hostUserId ? (
+              <View style={styles.hostActionGroup}>
+                <Text style={styles.hostActionHint}>Manager confirmation required</Text>
+                <View style={styles.hostActionRow}>
+                  <Button label="Decline" variant="outline" size="sm" onPress={() => onReject(visitor)} disabled={isHostActionPending} style={styles.hostActionBtn} />
+                  <Button label={isHostActionPending ? 'Saving...' : 'Approve entry'} variant="primary" size="sm" onPress={() => onApprove(visitor)} disabled={isHostActionPending} loading={isHostActionPending} style={styles.hostActionBtn} />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.pendingNotice}>
+                <Feather name={meta.icon} size={14} color={meta.text} />
+                <Text style={[styles.pendingText, { color: meta.text }]}>{meta.label}</Text>
+              </View>
+            )
           )}
 
           {visitor.status === 'APPROVED' && (
@@ -301,6 +318,10 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 13,
   },
+  hostActionGroup: { gap: 10 },
+  hostActionHint: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: '#9A3412' },
+  hostActionRow: { flexDirection: 'row', gap: 8 },
+  hostActionBtn: { flex: 1 },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

@@ -17,11 +17,12 @@ interface CommunityCreateMenuProps {
   onCreatePoll: (payload: CreatePollPayload) => Promise<unknown>;
   onCreateAnnouncement: (payload: CreateAnnouncementPayload) => Promise<unknown>;
   canChoosePollAudience?: boolean;
+  canChooseAnnouncementAudience?: boolean;
   householdUnitId?: string;
   canCreateAnnouncement?: boolean;
 }
 
-export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAnnouncement, canChoosePollAudience = false, householdUnitId, canCreateAnnouncement = true }: CommunityCreateMenuProps) {
+export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAnnouncement, canChoosePollAudience = false, canChooseAnnouncementAudience = false, householdUnitId, canCreateAnnouncement = true }: CommunityCreateMenuProps) {
   const [active, setActive] = useState<CreateTarget | null>(null);
 
   const openModal = (target: CreateTarget) => {
@@ -73,7 +74,7 @@ export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAn
       </CommunitySheet>
 
       <CreatePollModal visible={active === 'poll'} onClose={closeActive} onSubmit={onCreatePoll} canChooseAudience={canChoosePollAudience} householdUnitId={householdUnitId} />
-      {canCreateAnnouncement ? <CreateAnnouncementModal visible={active === 'announcement'} onClose={closeActive} onSubmit={onCreateAnnouncement} /> : null}
+      {canCreateAnnouncement ? <CreateAnnouncementModal visible={active === 'announcement'} onClose={closeActive} onSubmit={onCreateAnnouncement} canChooseAudience={canChooseAnnouncementAudience} /> : null}
     </>
   );
 }

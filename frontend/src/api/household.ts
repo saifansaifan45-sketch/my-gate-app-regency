@@ -6,6 +6,7 @@ export interface HouseholdMemberRecord {
   relationship: string;
   phone?: string | null;
   email?: string | null;
+  status?: 'ACTIVE' | 'PAUSED' | 'REVOKED';
   createdBy?: {
     firstName?: string | null;
     lastName?: string | null;
@@ -55,6 +56,7 @@ export const householdApi = {
   removeMember: async (id: string) => api.delete(`/household/members/${id}`),
   removeVehicle: async (id: string) => api.delete(`/household/vehicles/${id}`),
   removePet: async (id: string) => api.delete(`/household/pets/${id}`),
+  updateMemberStatus: async (id: string, status: 'ACTIVE' | 'PAUSED' | 'REVOKED') => (await api.patch(`/household/members/${id}/status`, { status })).data.member as HouseholdMemberRecord,
   getActivity: async (params?: { from?: string; to?: string }): Promise<{ activities: HouseholdActivity[] }> => (await api.get('/household/activity', { params })).data,
   getHelpDeskContact: async (): Promise<HelpDeskContact> => (await api.get('/household/help-desk')).data,
 };

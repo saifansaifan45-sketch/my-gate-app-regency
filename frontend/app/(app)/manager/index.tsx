@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 
 export default function ManagerDashboardScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { hasManagerAccess, hasResidentAccess, hasOwnerAccess } = useSession();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -61,7 +61,7 @@ export default function ManagerDashboardScreen() {
   const pendingCount = pendingWorkforce.length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="tabroot"
         title="Manager Operations"

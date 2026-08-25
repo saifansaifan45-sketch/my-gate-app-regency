@@ -24,7 +24,7 @@ const TASK_TABS = [
 
 export default function ManagerTasksTrackerScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
 
   const [activeTab, setActiveTab] = useState('ALL');
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -90,7 +90,7 @@ export default function ManagerTasksTrackerScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Task Status Tracking"

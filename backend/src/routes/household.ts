@@ -233,6 +233,37 @@ router.delete('/pets/:id', requireVerifiedResidence, async (req: AuthRequest, re
   } catch (error) { next(error); }
 });
 
+// ----------------------------------------------------
+// Household Member Status Management (Pause/Revoke)
+// ----------------------------------------------------
+
+const statusSchema = z.object({
+  status: z.enum(['ACTIVE', 'PAUSED', 'REVOKED']),
+});
+
+router.patch('/members/:id/status', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const id = typeof req.params.id === 'string' ? req.params.id : '';
+    const record = await getOwnerRecordId(householdDb.householdMember, id, req.user!.userId);
+    if (!record) return res.status(404).json({ error: { message: 'Household member not found.' } });
+    
+    const { status } = statusSchema.parse(req.body);
+    
+    // Prevent changing status of OWNER records
+    if (record.relationship === 'OWNER' && status !== 'ACTIVE') {
+      return res.status(400).json({ error: { message: 'Cannot pause or revoke the property owner.' } });
+    }
+    
+    const updated = await householdDb.householdMember.update({
+      where: { id: record.id },
+      data: { status },
+      include: { createdBy: { select: { firstName: true, lastName: true } } },
+    });
+    
+    res.json({ member: updated });
+  } catch (error) { next(error); }
+});
+
 export default router;
 
 // ----------------------------------------------------

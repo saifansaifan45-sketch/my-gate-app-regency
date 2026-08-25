@@ -10,7 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { CommunityCreateMenu } from '../../src/components/community/CommunityCreateMenu';
 import { Card } from '../../src/components/ui/Card';
-import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategory, CreatePollPayload } from '../../src/api/community';
+import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategory, CreatePollPayload, CreateAnnouncementPayload } from '../../src/api/community';
 import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
 
@@ -18,6 +18,7 @@ const TAB_PADDING = 20;
 const TAB_GAP = 8;
 
 export default function CommunityScreen() {
+  const { top } = useScreenInsets(true);
   const { bottomClearance } = useScreenInsets(true);
   const { width: screenWidth } = useWindowDimensions();
   const TAB_WIDTH = (screenWidth - TAB_PADDING * 2 - TAB_GAP) / 2;
@@ -96,16 +97,8 @@ export default function CommunityScreen() {
     await communityApi.createPoll(defaultSpaceId, payload);
     await refreshCommunity();
   };
-  const createAnnouncement = async (payload: { title: string; description: string; category?: AnnouncementCategory; priority: 'NORMAL' | 'IMPORTANT' | 'URGENT'; status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'; expiryDate?: string | null }) => {
-    if (!defaultSpaceId) throw new Error('No community space is available.');
-    await communityApi.postAnnouncementToSpace(defaultSpaceId, {
-      title: payload.title,
-      content: payload.description,
-      category: payload.category,
-      priority: payload.priority,
-      status: payload.status,
-      ...(payload.expiryDate ? { expiresAt: payload.expiryDate } : {}),
-    });
+  const createAnnouncement = async (payload: CreateAnnouncementPayload) => {
+    await communityApi.createAnnouncement(payload);
     await refreshCommunity();
   };
 
@@ -125,8 +118,7 @@ export default function CommunityScreen() {
     ));
   }, [pollsQuery.data?.polls, pollsQuery.isLoading, isManagement]);
 
-  return (
-    <View style={styles.container}>
+  return (      <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="tabroot"
         title="Community"
@@ -192,6 +184,7 @@ export default function CommunityScreen() {
           onCreatePoll={createPoll}
           onCreateAnnouncement={createAnnouncement}
           canChoosePollAudience={isManagement}
+          canChooseAnnouncementAudience={isManagement}
           householdUnitId={householdUnitId}
           canCreateAnnouncement={isManagement}
         />
@@ -321,6 +314,6 @@ function PollCard({ poll, onVote, onDelete, isManagement }: { poll: CommunityPol
   const handleDelete = () => { if (deleting || !onDelete) return; Alert.alert('Delete Poll', 'Are you sure you want to delete this poll?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { setDeleting(true); try { await onDelete(); } finally { setDeleting(false); } } }]); };
   const authorName = `${poll.author?.firstName || ''} ${poll.author?.lastName || ''}`.trim() || 'Community member';
   const authorRole = poll.author?.role ? poll.author.role.charAt(0) + poll.author.role.slice(1).toLowerCase() : 'Member';
-  const audienceLabel = poll.audience === 'HOUSEHOLD' ? 'Your residence' : poll.audience.charAt(0) + poll.audience.slice(1).toLowerCase();
+  const audienceLabel = (poll.audiences?.length ? poll.audiences : [poll.audience]).map((audience) => audience === 'HOUSEHOLD' ? 'Your residence' : audience.charAt(0) + audience.slice(1).toLowerCase()).join(', ');
   return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><View style={styles.pollTopRight}>{isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}<Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View></View><Text style={styles.cardTitle}>{poll.question}</Text><View style={styles.pollAuthor}><Feather name="user" size={13} color={theme.colors.textSecondary} /><Text style={styles.pollAuthorText}>Posted by {authorName} · {authorRole}</Text></View><Text style={styles.pollAudience}>Visible to {audienceLabel}</Text><View style={styles.pollOptions}>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</View></Card>;
 }

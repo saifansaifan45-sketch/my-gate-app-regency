@@ -24,7 +24,7 @@ const STATUS_OPTIONS: { id: AvailabilityStatus; label: string; bg: string; color
 export default function PersonnelDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
 
   const [personnel, setPersonnel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -97,7 +97,7 @@ export default function PersonnelDetailScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Personnel Details"

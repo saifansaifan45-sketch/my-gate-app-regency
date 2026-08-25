@@ -33,7 +33,8 @@ export function AddVisitorModal({
   initialVisitorType,
   initialPurpose,
   title,
-  onSuccess
+  onSuccess,
+  managerMode = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -42,6 +43,8 @@ export function AddVisitorModal({
   initialPurpose?: string;
   title?: string;
   onSuccess?: () => void;
+  /** Uses the manager-scoped invite endpoint and attaches the manager as host. */
+  managerMode?: boolean;
 }) {
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -142,7 +145,9 @@ export function AddVisitorModal({
         validUntil: validUntil.toISOString()
       };
       
-      const res = await visitorsApi.createVisitor(payload);
+      const res = managerMode
+        ? await visitorsApi.createManagerInvite(payload)
+        : await visitorsApi.createVisitor(payload);
       
       if (res.visitor.otp) {
         setGeneratedPass(res.visitor);
@@ -217,7 +222,7 @@ export function AddVisitorModal({
                   <Text style={styles.otpCode}>{generatedPass.otp}</Text>
                 </View>
 
-                <Text style={styles.otpWarning}>
+              <Text style={styles.otpWarning}>
                   Share this code with your visitor. The gate watchman will verify it upon arrival.
                 </Text>
 
@@ -351,7 +356,9 @@ export function AddVisitorModal({
               </ScrollView>
 
               <Button
-                label={requiresOtp ? 'Generate guest pass' : 'Pre-approve entry'}
+                label={managerMode
+                  ? (requiresOtp ? 'Create guest invite' : 'Create visitor invite')
+                  : (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry')}
                 icon="shield"
                 onPress={handleCreate}
                 loading={submitting}

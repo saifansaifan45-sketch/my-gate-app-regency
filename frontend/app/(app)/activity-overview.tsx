@@ -47,7 +47,7 @@ function timeLabel(value: string) {
 }
 
 export default function ActivityOverviewScreen() {
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [dateRange, setDateRange] = useState<DateRange>('ALL');
   const [startDate, setStartDate] = useState(dateKey(new Date()));
@@ -64,7 +64,7 @@ export default function ActivityOverviewScreen() {
   const activities = useMemo(() => (data?.activities || []).filter((activity) => filter === 'ALL' || activity.kind === filter), [data, filter]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Household activity" />
       <View style={styles.intro}>
         <View style={styles.introIcon}><Feather name="eye" size={19} color={theme.colors.primary} /></View>

@@ -22,6 +22,13 @@ async function verifySecurityMembership(userId: string, communityId: string | nu
   return true;
 }
 
+async function getManagementMembership(userId: string) {
+  return prisma.membership.findFirst({
+    where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER'] } },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
 router.use(requireAuth);
 
 const createVisitorSchema = z.object({
@@ -35,6 +42,13 @@ const createVisitorSchema = z.object({
   provider: z.string().trim().max(120).optional(),
   orderReference: z.string().trim().max(120).optional(),
   packageCount: z.number().int().optional(),
+});
+
+const unannouncedArrivalSchema = createVisitorSchema.extend({
+  unitId: z.string().uuid().optional(),
+  hostUserId: z.string().uuid().optional(),
+}).refine((value) => Boolean(value.unitId) !== Boolean(value.hostUserId), {
+  message: 'Choose either a residence or a manager host.',
 });
 
 function generateOtp() {
@@ -229,18 +243,37 @@ router.post('/unannounced', requireWorkforceOrManager, async (req: AuthRequest, 
   try {
     if (!req.user) return res.status(401).json({ error: { message: 'Unauthorized' } });
     const userId = req.user!.userId;
-    const body = createVisitorSchema.extend({ unitId: z.string().uuid() }).parse(req.body);
-    const { unitId } = body;
-    
-    const unit = await prisma.unit.findUnique({ where: { id: unitId } });
-    if (!unit || !(await verifySecurityMembership(userId, unit.communityId))) {
-       return res.status(403).json({ error: { message: 'Not authorized for this community' } });
+    const body = unannouncedArrivalSchema.parse(req.body);
+    const unit = body.unitId ? await prisma.unit.findUnique({ where: { id: body.unitId } }) : null;
+    const membership = await prisma.membership.findFirst({
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } },
+    });
+    const communityId = unit?.communityId || membership?.communityId || null;
+    if (!communityId || !(await verifySecurityMembership(userId, communityId))) {
+      return res.status(403).json({ error: { message: 'Not authorized for this community' } });
+    }
+
+    let hostUserId: string | null = null;
+    if (body.hostUserId) {
+      const host = await prisma.membership.findFirst({
+        where: {
+          userId: body.hostUserId,
+          communityId,
+          status: 'APPROVED',
+          role: { in: ['MANAGER', 'LEADERSHIP'] },
+        },
+      });
+      if (!host) return res.status(404).json({ error: { message: 'Manager host not found in this community.' } });
+      hostUserId = body.hostUserId;
+    }
+    if (body.unitId && (!unit || unit.communityId !== communityId)) {
+      return res.status(404).json({ error: { message: 'Residence not found in this community.' } });
     }
 
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const existing = await prisma.visitor.findFirst({
       where: {
-        unitId: unit!.id,
+        ...(body.unitId ? { unitId: body.unitId } : { hostUserId }),
         visitorType: body.visitorType,
         provider: body.provider?.trim() || null,
         status: 'PENDING',
@@ -264,37 +297,53 @@ router.post('/unannounced', requireWorkforceOrManager, async (req: AuthRequest, 
           status: 'PENDING',
           isPreApproved: false,
           createdById: userId,
-          unitId: unit!.id,
-          communityId: unit.communityId,
+          unitId: body.unitId || null,
+          hostUserId,
+          communityId,
           validFrom: new Date(),
           validUntil: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours validity for unannounced
         }
       });
       await tx.auditLog.create({
-        data: { communityId: unit.communityId, actorId: req.user!.userId, action: 'VISITOR_UNANNOUNCED_ARRIVAL', metadata: { visitorId: v.id } }
+        data: {
+          communityId,
+          actorId: req.user!.userId,
+          action: 'VISITOR_UNANNOUNCED_ARRIVAL',
+          metadata: { visitorId: v.id, unitId: body.unitId || null, hostUserId },
+        }
       });
       return v;
     });
 
-    // Notify residents
-    const residents = await prisma.user.findMany({
-      where: {
-        OR: [
-          { residencies: { some: { unitId: unit!.id, status: 'ACTIVE' } } },
-          { ownerships: { some: { unitId: unit!.id, status: 'ACTIVE' } } }
-        ]
+    if (body.unitId) {
+      const residents = await prisma.user.findMany({
+        where: {
+          OR: [
+            { residencies: { some: { unitId: body.unitId, status: 'ACTIVE' } } },
+            { ownerships: { some: { unitId: body.unitId, status: 'ACTIVE' } } }
+          ]
+        }
+      });
+      if (residents.length > 0) {
+        await prisma.notification.createMany({
+          data: residents.map((resident) => ({
+            userId: resident.id,
+            type: 'UNANNOUNCED_ARRIVAL',
+            title: `${body.visitorType} at the Gate`,
+            message: `${visitor.name} is waiting at the gate. Please approve or deny entry.`,
+            metadata: { visitorId: visitor.id }
+          }))
+        });
       }
-    });
-
-    if (residents.length > 0) {
-      await prisma.notification.createMany({
-        data: residents.map((resident) => ({
-          userId: resident.id,
+    } else if (hostUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: hostUserId,
           type: 'UNANNOUNCED_ARRIVAL',
           title: `${body.visitorType} at the Gate`,
-          message: `${visitor.name} is waiting at the gate. Please approve or deny entry.`,
-          metadata: { visitorId: visitor.id }
-        }))
+          message: `${visitor.name} is waiting at the gate for you. Review the arrival before entry.`,
+          metadata: { visitorId: visitor.id },
+        },
       });
     }
 
@@ -307,6 +356,66 @@ router.post('/unannounced', requireWorkforceOrManager, async (req: AuthRequest, 
 // ----------------------------------------------------
 // 1. POST /visitors (Resident creates an expected visitor / pass - always pre-approved)
 // ----------------------------------------------------
+router.post('/manager-invite', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const membership = await getManagementMembership(userId);
+    if (!membership) return res.status(403).json({ error: { message: 'Manager access required.' } });
+
+    const body = createVisitorSchema.parse(req.body);
+    const validFromDate = body.validFrom ? new Date(body.validFrom) : new Date();
+    const validUntilDate = body.validUntil
+      ? new Date(body.validUntil)
+      : new Date(validFromDate.getTime() + 24 * 60 * 60 * 1000);
+    if (Number.isNaN(validFromDate.getTime()) || Number.isNaN(validUntilDate.getTime()) || validUntilDate <= validFromDate) {
+      return res.status(400).json({ error: { message: 'Validity dates must be valid and the end must be after the start.' } });
+    }
+
+    let plaintextOtp: string | undefined;
+    let hashedOtp: string | null = null;
+    if (shouldGenerateOtp(body.visitorType)) {
+      plaintextOtp = generateOtp();
+      hashedOtp = await bcrypt.hash(plaintextOtp, 10);
+    }
+
+    const visitor = await prisma.visitor.create({
+      data: {
+        name: body.name?.trim() || body.provider?.trim() || 'Visitor',
+        phone: body.phone?.trim() || null,
+        purpose: body.purpose?.trim() || 'Visitor',
+        vehicleNumber: body.vehicleNumber?.trim() || null,
+        visitorType: body.visitorType,
+        status: VisitorStatus.APPROVED,
+        otp: hashedOtp,
+        isPreApproved: true,
+        createdById: userId,
+        hostUserId: userId,
+        communityId: membership.communityId,
+        validFrom: validFromDate,
+        validUntil: validUntilDate,
+        provider: body.provider?.trim() || null,
+        orderReference: body.orderReference?.trim() || null,
+        packageCount: body.packageCount || null,
+      },
+      include: { hostUser: { select: { id: true, firstName: true, lastName: true, role: true } } },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        communityId: membership.communityId,
+        actorId: userId,
+        action: 'VISITOR_CREATED',
+        metadata: { visitorId: visitor.id, type: visitor.visitorType, status: visitor.status, source: 'MANAGER_INVITE', hostUserId: userId },
+      },
+    });
+
+    const { otp: _otp, ...visitorData } = visitor;
+    res.status(201).json({ visitor: { ...visitorData, otp: plaintextOtp } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
@@ -456,6 +565,7 @@ router.get('/history', requireWorkforceOrManager, async (req: AuthRequest, res: 
       include: {
         unit: true,
         createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+        hostUser: { select: { id: true, firstName: true, lastName: true, role: true } },
       },
     });
     
@@ -512,6 +622,7 @@ router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Res
       include: {
         unit: true,
         createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+        hostUser: { select: { id: true, firstName: true, lastName: true, role: true } },
       },
     });
     
@@ -557,6 +668,32 @@ router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Res
 
 
 // ----------------------------------------------------
+// GET /visitors/gate-hosts (Manager/leadership targets for security alerts)
+// ----------------------------------------------------
+router.get('/gate-hosts', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const membership = await prisma.membership.findFirst({
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } },
+    });
+    if (!membership || !(await verifySecurityMembership(userId, membership.communityId))) {
+      return res.status(403).json({ error: { message: 'Unauthorized.' } });
+    }
+
+    const hosts = await prisma.user.findMany({
+      where: {
+        memberships: { some: { communityId: membership.communityId, status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP'] } } },
+      },
+      select: { id: true, firstName: true, lastName: true, role: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+    res.json({ hosts });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
 // GET /visitors/:id/audit (Manager)
 // ----------------------------------------------------
 router.get('/:id/audit', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -566,19 +703,19 @@ router.get('/:id/audit', requireWorkforceOrManager, async (req: AuthRequest, res
       return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
     }
     const userId = req.user!.userId;
-    const manager = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { memberships: { where: { status: 'APPROVED', role: { in: ['MANAGER', 'LEADERSHIP'] } } } }
+    const membership = await prisma.membership.findFirst({
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } },
     });
-    
-    const communityId = manager?.memberships[0]?.communityId;
+    const communityId = membership?.communityId;
     if (!communityId) return res.status(403).json({ error: { message: 'Unauthorized.' } });
+    if (!(await verifySecurityMembership(userId, communityId))) return res.status(403).json({ error: { message: 'Unauthorized.' } });
 
     const visitor = await prisma.visitor.findUnique({
       where: { id: visitorId },
       include: {
         unit: true,
         createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } },
+        hostUser: { select: { id: true, firstName: true, lastName: true, role: true } },
       },
     });
     
@@ -682,6 +819,75 @@ router.post('/:id/approve', requireVerifiedResidence, async (req: AuthRequest, r
   } catch (error: any) {
     if (error.message === 'Visitor not found') return res.status(404).json({ error: { message: 'Not found' } });
     if (error.message.includes('Unauthorized')) return res.status(403).json({ error: { message: 'Unauthorized' } });
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/host-approve (Manager/leadership approves an arrival addressed to them)
+// ----------------------------------------------------
+router.post('/:id/host-approve', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = typeof req.params.id === 'string' ? req.params.id : null;
+    if (!visitorId) return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    const userId = req.user!.userId;
+    const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!visitor || visitor.hostUserId !== userId) return res.status(404).json({ error: { message: 'Arrival not found.' } });
+    if (visitor.status !== VisitorStatus.PENDING) return res.status(400).json({ error: { message: `Arrival is already ${visitor.status.toLowerCase()}.` } });
+
+    const plaintextOtp = shouldGenerateOtp(visitor.visitorType) ? generateOtp() : null;
+    const hashedOtp = plaintextOtp ? await bcrypt.hash(plaintextOtp, 10) : null;
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.visitor.updateMany({
+        where: { id: visitor.id, status: VisitorStatus.PENDING },
+        data: { status: VisitorStatus.APPROVED, otp: hashedOtp, isPreApproved: true },
+      });
+      if (result.count === 0) throw new Error('CONCURRENCY_ERROR');
+      const current = await tx.visitor.findUnique({ where: { id: visitor.id }, include: { hostUser: { select: { id: true, firstName: true, lastName: true, role: true } } } });
+      await tx.auditLog.create({
+        data: { communityId: visitor.communityId!, actorId: userId, action: 'VISITOR_APPROVED', metadata: { visitorId: visitor.id, source: 'HOST_CONFIRMATION' } },
+      });
+      await tx.notification.create({
+        data: {
+          userId: visitor.createdById,
+          type: 'VISITOR_APPROVED',
+          title: 'Entry approved',
+          message: plaintextOtp ? `${visitor.name} was approved. OTP: ${plaintextOtp}` : `${visitor.name} was approved for entry.`,
+          metadata: { visitorId: visitor.id },
+        },
+      });
+      return current!;
+    });
+    const { otp: _otp, ...visitorData } = updated;
+    res.json({ success: true, visitor: { ...visitorData, otp: plaintextOtp || undefined } });
+  } catch (error: any) {
+    if (error.message === 'CONCURRENCY_ERROR') return res.status(409).json({ error: { message: 'Arrival was updated by someone else.' } });
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/:id/host-reject (Manager/leadership rejects an arrival addressed to them)
+// ----------------------------------------------------
+router.post('/:id/host-reject', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const visitorId = typeof req.params.id === 'string' ? req.params.id : null;
+    if (!visitorId) return res.status(400).json({ error: { message: 'Invalid visitor ID' } });
+    const userId = req.user!.userId;
+    const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    if (!visitor || visitor.hostUserId !== userId) return res.status(404).json({ error: { message: 'Arrival not found.' } });
+    if (visitor.status !== VisitorStatus.PENDING) return res.status(400).json({ error: { message: `Arrival is already ${visitor.status.toLowerCase()}.` } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.visitor.updateMany({ where: { id: visitor.id, status: VisitorStatus.PENDING }, data: { status: VisitorStatus.REJECTED } });
+      if (result.count === 0) throw new Error('CONCURRENCY_ERROR');
+      const current = await tx.visitor.findUnique({ where: { id: visitor.id } });
+      await tx.auditLog.create({ data: { communityId: visitor.communityId!, actorId: userId, action: 'VISITOR_REJECTED', metadata: { visitorId: visitor.id, source: 'HOST_CONFIRMATION' } } });
+      await tx.notification.create({ data: { userId: visitor.createdById, type: 'VISITOR_REJECTED', title: 'Entry declined', message: `${visitor.name} was not approved for entry.`, metadata: { visitorId: visitor.id } } });
+      return current!;
+    });
+    res.json({ success: true, visitor: sanitizeVisitor(updated) });
+  } catch (error: any) {
+    if (error.message === 'CONCURRENCY_ERROR') return res.status(409).json({ error: { message: 'Arrival was updated by someone else.' } });
     next(error);
   }
 });
@@ -911,7 +1117,17 @@ router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (r
       await tx.auditLog.create({
         data: { communityId: v.communityId!, actorId: req.user!.userId, action: 'VISITOR_CHECK_IN', metadata: { visitorId: v.id } }
       });
-      if (v.otp === null && v.unitId) {
+      if (v.otp === null && v.hostUserId) {
+        await tx.notification.create({
+          data: {
+            userId: v.hostUserId,
+            type: 'VISITOR_ARRIVAL',
+            title: `${v.visitorType === 'DELIVERY' ? 'Delivery' : v.visitorType === 'CAB' ? 'Cab' : 'Visitor'} Arrived`,
+            message: `${v.name} has arrived at the gate and checked in.`,
+            metadata: { visitorId: v.id },
+          },
+        });
+      } else if (v.otp === null && v.unitId) {
         // Unannounced arrival: notify all residents
         const residents = await tx.user.findMany({
           where: {
@@ -1162,7 +1378,7 @@ router.get('/gate/activity', requireWorkforceOrManager, async (req: AuthRequest,
     const visitorIds = [...new Set(logs.map(l => (l.metadata as any)?.visitorId).filter(Boolean))];
     const visitors = await prisma.visitor.findMany({
       where: { id: { in: visitorIds as string[] } },
-      include: { unit: true }
+      include: { unit: true, hostUser: { select: { id: true, firstName: true, lastName: true, role: true } } }
     });
     
     const visitorMap = new Map(visitors.map(v => [v.id, v]));
@@ -1182,7 +1398,8 @@ router.get('/gate/activity', requireWorkforceOrManager, async (req: AuthRequest,
           provider: visitor.provider,
           type: visitor.visitorType,
           status: visitor.status,
-          unitNumber: visitor.unit?.unitNumber
+          unitNumber: visitor.unit?.unitNumber,
+          hostUser: visitor.hostUser,
         } : null
       };
     });

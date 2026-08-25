@@ -13,7 +13,7 @@ import { cardSystem } from '../../src/components/ui/cardSystem';
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
 
   const renderSection = (title: string, items: { label: string, icon: any, onClick?: () => void, rightElement?: React.ReactNode }[]) => (
     <View style={styles.section}>
@@ -38,7 +38,7 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Settings"

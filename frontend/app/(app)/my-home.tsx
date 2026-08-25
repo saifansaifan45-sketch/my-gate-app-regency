@@ -38,7 +38,7 @@ function residentFullName(r: UnitResidencyRecord['user']) {
 
 export default function MyHomeScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { user, primaryResidency } = useSession() || {};
 
   const unitNumber = primaryResidency?.unitNumber || user?.unitNumber || '9A';
@@ -71,7 +71,7 @@ export default function MyHomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title={`Unit ${unitNumber}`}

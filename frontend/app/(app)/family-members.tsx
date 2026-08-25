@@ -42,7 +42,7 @@ const TAB_LABELS: Record<RecordTab, string> = {
 
 export default function FamilyMembersScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const { user } = useSession();
   const queryClient = useQueryClient();
@@ -96,6 +96,18 @@ export default function FamilyMembersScreen() {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'ACTIVE' | 'PAUSED' | 'REVOKED' }) =>
+      householdApi.updateMemberStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['household-records'] });
+      showToast({ title: 'Status updated', message: 'Family member status has been changed.', type: 'success' });
+    },
+    onError: () => {
+      showToast({ title: 'Could not update status', message: 'Please try again.', type: 'error' });
+    },
+  });
+
   const itemCount = useMemo(() => records?.[activeTab]?.length ?? 0, [activeTab, records]);
   const openForm = () => {
     if (!canManage) {
@@ -132,7 +144,7 @@ export default function FamilyMembersScreen() {
     activeTab === 'vehicles' ? (item as HouseholdVehicleRecord).registrationNumber : (item as HouseholdMemberRecord | HouseholdPetRecord).name;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader title="Family records" variant="subscreen" onBackPress={() => smartBack(router, '/profile')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} showsVerticalScrollIndicator={false}>
         <ScreenEntrance delay={40}>
@@ -179,8 +191,59 @@ export default function FamilyMembersScreen() {
           <ScreenEntrance key={item.id} delay={110}>
             <View style={styles.recordRow}>
               <View style={[styles.recordIcon, activeTab === 'vehicles' && styles.vehicleIcon, activeTab === 'pets' && styles.petIcon]}><Feather name={RECORD_ICONS[activeTab]} size={19} color={activeTab === 'vehicles' ? '#A16207' : activeTab === 'pets' ? '#BE185D' : theme.colors.primary} /></View>
-              <View style={styles.recordInfo}><Text style={styles.recordTitle}>{titleFor(item)}</Text><Text style={styles.recordDetail}>{detailFor(item)}</Text></View>
-              {canManage ? <PremiumPressable onPress={() => setDeleteTarget({ type: activeTab, id: item.id, title: titleFor(item) })} style={styles.removeButton} accessibilityLabel={`Remove ${titleFor(item)}`}><Feather name="trash-2" size={17} color={theme.colors.error} /></PremiumPressable> : null}
+              <View style={styles.recordInfo}>
+                <Text style={styles.recordTitle}>{titleFor(item)}</Text>
+                <Text style={styles.recordDetail}>{detailFor(item)}</Text>
+                {activeTab === 'members' && (item as HouseholdMemberRecord).status && (item as HouseholdMemberRecord).status !== 'ACTIVE' && (
+                  <View style={[styles.statusBadge, (item as HouseholdMemberRecord).status === 'PAUSED' ? styles.statusPaused : styles.statusRevoked]}>
+                    <Text style={[styles.statusBadgeText, (item as HouseholdMemberRecord).status === 'PAUSED' ? styles.statusPausedText : styles.statusRevokedText]}>
+                      {(item as HouseholdMemberRecord).status}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {canManage && activeTab === 'members' && (
+                <View style={styles.actionButtons}>
+                  {(item as HouseholdMemberRecord).relationship !== 'OWNER' && (
+                    <>
+                      {(item as HouseholdMemberRecord).status === 'ACTIVE' ? (
+                        <PremiumPressable
+                          onPress={() => statusMutation.mutate({ id: item.id, status: 'PAUSED' })}
+                          style={styles.actionButton}
+                          accessibilityLabel={`Pause ${titleFor(item)}`}
+                        >
+                          <Feather name="pause" size={16} color="#D97706" />
+                        </PremiumPressable>
+                      ) : (item as HouseholdMemberRecord).status === 'PAUSED' ? (
+                        <PremiumPressable
+                          onPress={() => statusMutation.mutate({ id: item.id, status: 'ACTIVE' })}
+                          style={styles.actionButton}
+                          accessibilityLabel={`Resume ${titleFor(item)}`}
+                        >
+                          <Feather name="play" size={16} color="#059669" />
+                        </PremiumPressable>
+                      ) : null}
+                      <PremiumPressable
+                        onPress={() => statusMutation.mutate({ id: item.id, status: 'REVOKED' })}
+                        style={styles.actionButton}
+                        accessibilityLabel={`Revoke ${titleFor(item)}`}
+                      >
+                        <Feather name="x-circle" size={16} color="#DC2626" />
+                      </PremiumPressable>
+                    </>
+                  )}
+                  <PremiumPressable
+                    onPress={() => setDeleteTarget({ type: activeTab, id: item.id, title: titleFor(item) })}
+                    style={styles.actionButton}
+                    accessibilityLabel={`Remove ${titleFor(item)}`}
+                  >
+                    <Feather name="trash-2" size={16} color="#DC2626" />
+                  </PremiumPressable>
+                </View>
+              )}
+              {canManage && activeTab !== 'members' && (
+                <PremiumPressable onPress={() => setDeleteTarget({ type: activeTab, id: item.id, title: titleFor(item) })} style={styles.removeButton} accessibilityLabel={`Remove ${titleFor(item)}`}><Feather name="trash-2" size={17} color={theme.colors.error} /></PremiumPressable>
+              )}
             </View>
           </ScreenEntrance>
         ))}
@@ -235,7 +298,9 @@ const styles = StyleSheet.create({
   tabBar: { paddingHorizontal: cardSystem.pagePadding, gap: 10, alignItems: 'center' },
   tab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#ECECE5' }, tabSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary }, tabTextSelected: { color: '#FFFFFF' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary }, sectionMeta: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }, addButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 12, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4 }, addButtonDisabled: { backgroundColor: '#E7E7E1' }, addButtonText: { fontFamily: 'PlusJakartaSans_700Bold', color: '#FFFFFF', fontSize: 13 }, addButtonTextDisabled: { color: theme.colors.textSecondary }, loader: { paddingVertical: 48, alignItems: 'center' },
-  recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card }, recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, vehicleIcon: { backgroundColor: '#FFF3D6' }, petIcon: { backgroundColor: '#FCE7F3' }, recordInfo: { flex: 1 }, recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary }, removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card }, recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, vehicleIcon: { backgroundColor: '#FFF3D6' }, petIcon: { backgroundColor: '#FCE7F3' }, recordInfo: { flex: 1 }, recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 98, marginTop: 4 }, statusPaused: { backgroundColor: '#FEF3C7' }, statusRevoked: { backgroundColor: '#FEE2E2' }, statusBadgeText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10 }, statusPausedText: { color: '#92400E' }, statusRevokedText: { color: '#DC2626' },
+  actionButtons: { flexDirection: 'row', gap: 4 }, actionButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }, removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' }, sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 }, handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 18 }, sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 21, color: theme.colors.textPrimary, marginBottom: 5 }, sheetSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 18 }, relationshipContext: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EDF6F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }, relationshipContextText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary }, field: { marginBottom: 10 }, fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 6 }, cancelButton: { flex: 1 }, saveButton: { flex: 1.3 },
   deleteModal: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 20, marginHorizontal: 20, marginTop: 'auto', marginBottom: 40, ...theme.shadows.floating }, deleteTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 6 }, deleteMessage: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 20, color: theme.colors.textSecondary, marginBottom: 18 }, deleteActions: { flexDirection: 'row', gap: 10 }, deleteConfirmBtn: { flex: 1, backgroundColor: '#DC2626' },
 });

@@ -26,7 +26,7 @@ const STATUS_TABS = [
 
 export default function ManagerTicketsScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -99,7 +99,7 @@ export default function ManagerTicketsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Ticket Management"

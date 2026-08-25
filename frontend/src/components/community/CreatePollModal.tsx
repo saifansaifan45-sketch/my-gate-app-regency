@@ -23,7 +23,7 @@ interface CreatePollModalProps {
 export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience = false, householdUnitId }: CreatePollModalProps) {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
-  const [audience, setAudience] = useState<PollAudience>(canChooseAudience ? 'RESIDENTS' : 'HOUSEHOLD');
+  const [selectedAudiences, setSelectedAudiences] = useState<PollAudience[]>(canChooseAudience ? ['RESIDENTS'] : ['HOUSEHOLD']);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(false);
@@ -32,7 +32,7 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
     if (visible) {
       setQuestion('');
       setOptions(['', '']);
-      setAudience(canChooseAudience ? 'RESIDENTS' : 'HOUSEHOLD');
+      setSelectedAudiences(canChooseAudience ? ['RESIDENTS'] : ['HOUSEHOLD']);
       setError('');
       setSubmitting(false);
       setCreated(false);
@@ -47,7 +47,7 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
   const trimmedOptions = options.map((o) => o.trim()).filter((o) => o.length > 0);
   const hasEnoughOptions = trimmedOptions.length >= MIN_OPTIONS;
   const hasDuplicates = new Set(trimmedOptions.map((o) => o.toLowerCase())).size !== trimmedOptions.length;
-  const canSubmit = question.trim().length > 0 && hasEnoughOptions && !hasDuplicates && !submitting;
+  const canSubmit = question.trim().length > 0 && hasEnoughOptions && selectedAudiences.length > 0 && !hasDuplicates && !submitting;
 
   const updateOption = (index: number, value: string) => {
     setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
@@ -60,6 +60,12 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
 
   const removeOption = (index: number) => {
     setOptions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleAudience = (audience: PollAudience) => {
+    setSelectedAudiences((current) => current.includes(audience)
+      ? current.filter((item) => item !== audience)
+      : [...current, audience]);
   };
 
   const handleSubmit = async () => {
@@ -75,6 +81,10 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
       setError('Poll options must be unique.');
       return;
     }
+    if (selectedAudiences.length === 0) {
+      setError('Choose at least one audience.');
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
@@ -82,8 +92,9 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
       await submit({
         question: question.trim(),
         options: trimmedOptions,
-        audience,
-        ...(audience === 'HOUSEHOLD' && householdUnitId ? { unitId: householdUnitId } : {}),
+        audience: selectedAudiences[0],
+        audiences: selectedAudiences,
+        ...(selectedAudiences.includes('HOUSEHOLD') && householdUnitId ? { unitId: householdUnitId } : {}),
       });
       setCreated(true);
     } catch {
@@ -124,6 +135,7 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
           {canChooseAudience ? (
             <View style={styles.audienceSection}>
               <Text style={styles.fieldLabel}>Who can vote?</Text>
+              <Text style={styles.audienceHint}>Select one or more groups.</Text>
               <View style={styles.audienceRow}>
                 {([
                   { id: 'RESIDENTS', label: 'Residents' },
@@ -132,10 +144,14 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
                 ] as const).map((option) => (
                   <PremiumPressable
                     key={option.id}
-                    style={[styles.audienceChip, audience === option.id && styles.audienceChipActive]}
-                    onPress={() => setAudience(option.id)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selectedAudiences.includes(option.id) }}
+                    accessibilityLabel={`Allow ${option.label} to vote`}
+                    style={[styles.audienceChip, selectedAudiences.includes(option.id) && styles.audienceChipActive]}
+                    onPress={() => toggleAudience(option.id)}
                   >
-                    <Text style={[styles.audienceText, audience === option.id && styles.audienceTextActive]}>{option.label}</Text>
+                    <Feather name={selectedAudiences.includes(option.id) ? 'check' : 'plus'} size={14} color={selectedAudiences.includes(option.id) ? theme.colors.primary : theme.colors.textSecondary} />
+                    <Text style={[styles.audienceText, selectedAudiences.includes(option.id) && styles.audienceTextActive]}>{option.label}</Text>
                   </PremiumPressable>
                 ))}
               </View>
@@ -208,8 +224,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   audienceSection: { marginTop: 4, marginBottom: 12 },
+  audienceHint: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: -3, marginBottom: 8 },
   audienceRow: { flexDirection: 'row', gap: 8 },
-  audienceChip: { flex: 1, alignItems: 'center', paddingVertical: 11, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+  audienceChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
   audienceChipActive: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
   audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary },
   audienceTextActive: { color: theme.colors.primary },

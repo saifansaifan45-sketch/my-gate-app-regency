@@ -13,7 +13,7 @@ import { cardSystem } from '../../src/components/ui/cardSystem';
 
 export default function ServicesScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(true);
+  const { top, bottomClearance } = useScreenInsets(true);
   const { user, hasRole } = useSession();
   const [isEmergencySOSVisible, setIsEmergencySOSVisible] = useState(false);
 
@@ -28,8 +28,7 @@ export default function ServicesScreen() {
     }
   });
 
-  return (
-    <View style={styles.container}>
+  return (      <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="tabroot" title="Services" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
         

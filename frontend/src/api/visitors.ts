@@ -19,6 +19,7 @@ export interface VisitorItem {
   createdById: string;
   unitId?: string | null;
   communityId?: string | null;
+  hostUserId?: string | null;
   validFrom: string;
   validUntil?: string | null;
   checkInTime?: string | null;
@@ -50,6 +51,12 @@ export interface VisitorItem {
     lastName?: string | null;
     unitNumber?: string | null;
   };
+  hostUser?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    role?: string | null;
+  } | null;
 }
 
 export interface CreateVisitorPayload {
@@ -64,6 +71,25 @@ export interface CreateVisitorPayload {
   provider?: string;
   orderReference?: string;
   packageCount?: number;
+}
+
+export interface CreateUnannouncedArrivalPayload extends CreateVisitorPayload {
+  unitId?: string;
+  hostUserId?: string;
+}
+
+export interface GateUnit {
+  id: string;
+  unitNumber: string;
+  block?: string | null;
+  floor?: string | null;
+}
+
+export interface GateHost {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
 }
 
 const ACTIVE_VISITOR_STATUSES: VisitorStatus[] = ['PENDING', 'APPROVED', 'CHECKED_IN'];
@@ -111,6 +137,26 @@ export const visitorsApi = {
     return res.data;
   },
 
+  createManagerInvite: async (payload: CreateVisitorPayload): Promise<{ visitor: VisitorItem }> => {
+    const res = await api.post<{ visitor: VisitorItem }>('/visitors/manager-invite', payload);
+    return res.data;
+  },
+
+  recordUnannouncedArrival: async (payload: CreateUnannouncedArrivalPayload): Promise<{ success: boolean; deduped?: boolean; visitor: VisitorItem }> => {
+    const res = await api.post<{ success: boolean; deduped?: boolean; visitor: VisitorItem }>('/visitors/unannounced', payload);
+    return res.data;
+  },
+
+  getGateUnits: async (): Promise<{ units: GateUnit[] }> => {
+    const res = await api.get<{ units: GateUnit[] }>('/community/units');
+    return res.data;
+  },
+
+  getGateHosts: async (): Promise<{ hosts: GateHost[] }> => {
+    const res = await api.get<{ hosts: GateHost[] }>('/visitors/gate-hosts');
+    return res.data;
+  },
+
   getMyVisitors: async (params?: { status?: VisitorStatus; type?: VisitorType }): Promise<{ visitors: VisitorItem[] }> => {
     const res = await api.get<{ visitors: VisitorItem[] }>('/visitors', { params });
     return res.data;
@@ -133,6 +179,16 @@ export const visitorsApi = {
 
   approveVisitor: async (id: string): Promise<{ success: boolean; visitor: VisitorItem }> => {
     const res = await api.post<{ success: boolean; visitor: VisitorItem }>(`/visitors/${id}/approve`);
+    return res.data;
+  },
+
+  approveHostedArrival: async (id: string): Promise<{ success: boolean; visitor: VisitorItem }> => {
+    const res = await api.post<{ success: boolean; visitor: VisitorItem }>(`/visitors/${id}/host-approve`);
+    return res.data;
+  },
+
+  rejectHostedArrival: async (id: string): Promise<{ success: boolean; visitor: VisitorItem }> => {
+    const res = await api.post<{ success: boolean; visitor: VisitorItem }>(`/visitors/${id}/host-reject`);
     return res.data;
   },
 

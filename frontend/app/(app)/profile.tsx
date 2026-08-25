@@ -15,7 +15,7 @@ import { useSession } from '../../src/store/auth';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(true);
+  const { top, bottomClearance } = useScreenInsets(true);
   const { user, logout, hasManagerAccess, hasOwnership } = useSession();
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -41,7 +41,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="tabroot"
         title="Profile"
@@ -102,8 +102,8 @@ export default function ProfileScreen() {
             <View style={styles.card}>
               {primaryResidency ? (
                 <View style={styles.menuRow}>
-                  <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
-                    <Feather name="home" size={20} color={theme.colors.primary} />
+                  <View style={[styles.iconBox, { backgroundColor: '#D6EBDD' }]}>
+                    <Feather name="home" size={20} color="#143D2A" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Unit {primaryResidency.unitNumber || unit}</Text>
@@ -150,8 +150,8 @@ export default function ProfileScreen() {
                       style={styles.menuRow}
                       onPress={() => router.push('/(app)/residency-requests')}
                     >
-                      <View style={[styles.iconBox, { backgroundColor: '#F3F8F5' }]}>
-                        <Feather name="key" size={20} color={theme.colors.primary} />
+                      <View style={[styles.iconBox, { backgroundColor: '#D6EBDD' }]}>
+                        <Feather name="key" size={20} color="#143D2A" />
                       </View>
                       <View style={styles.menuInfo}>
                         <Text style={styles.menuLabel}>Unit {o.unitNumber || unit}</Text>
@@ -194,8 +194,8 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Visitors & Deliveries</Text>
               <View style={styles.card}>
                 <PremiumPressable style={styles.menuRow} onPress={() => router.push('/manager/visitors')}>
-                  <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
-                    <Feather name="users" size={20} color={theme.colors.primary} />
+                  <View style={[styles.iconBox, { backgroundColor: '#D6EBDD' }]}>
+                    <Feather name="users" size={20} color="#143D2A" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Gate Visitors</Text>
@@ -211,7 +211,7 @@ export default function ProfileScreen() {
                   onPress={() => router.push({ pathname: '/manager/visitors', params: { tab: 'deliveries' } })}
                 >
                   <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
-                    <Feather name="package" size={20} color="#D97706" />
+                    <Feather name="package" size={20} color="#92400E" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Delivery Orders</Text>
@@ -231,8 +231,8 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Residence & Family</Text>
               <View style={styles.card}>
                 <PremiumPressable style={styles.menuRow} onPress={() => router.push('/my-home')}>
-                  <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
-                    <Feather name="home" size={20} color={theme.colors.primary} />
+                  <View style={[styles.iconBox, { backgroundColor: '#D6EBDD' }]}>
+                    <Feather name="home" size={20} color="#143D2A" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>My Home</Text>
@@ -244,8 +244,8 @@ export default function ProfileScreen() {
                 <View style={styles.divider} />
 
                 <PremiumPressable style={styles.menuRow} onPress={() => router.push('/family-members')}>
-                  <View style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
-                    <Feather name="users" size={20} color="#1976D2" />
+                  <View style={[styles.iconBox, { backgroundColor: '#DBEAFE' }]}>
+                    <Feather name="users" size={20} color="#1E40AF" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Family Records</Text>
@@ -257,8 +257,8 @@ export default function ProfileScreen() {
                 <View style={styles.divider} />
 
                 <PremiumPressable style={styles.menuRow} onPress={() => router.push('/activity-overview')}>
-                  <View style={[styles.iconBox, { backgroundColor: '#F3E8FF' }]}>
-                    <Feather name="activity" size={20} color="#7C3AED" />
+                  <View style={[styles.iconBox, { backgroundColor: '#EDE9FE' }]}>
+                    <Feather name="activity" size={20} color="#6D28D9" />
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuLabel}>Household Activity</Text>
@@ -277,11 +277,11 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Account</Text>
             <View style={styles.card}>
               <PremiumPressable style={styles.menuRow} onPress={() => setIsLogoutConfirmVisible(true)}>
-                <View style={[styles.iconBox, { backgroundColor: '#FFEBEE' }]}>
-                  <Feather name="log-out" size={20} color="#D32F2F" />
+                <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
+                  <Feather name="log-out" size={20} color="#DC2626" />
                 </View>
                 <View style={styles.menuInfo}>
-                  <Text style={[styles.menuLabel, { color: '#D32F2F' }]}>Log Out</Text>
+                  <Text style={[styles.menuLabel, { color: '#DC2626' }]}>Log Out</Text>
                   <Text style={styles.menuDesc}>Sign out of your session</Text>
                 </View>
                 <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
@@ -309,7 +309,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F5F7F3',
   },
   content: {
     paddingHorizontal: cardSystem.pagePadding,
@@ -320,22 +320,32 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 18,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#EDF6F0',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#D6EBDD',
   },
   profileCard: {
     ...homeSurface,
     padding: homeLayout.cardPaddingLarge,
     alignItems: 'center',
+    backgroundColor: '#EDF6F0',
+    borderWidth: 1,
+    borderColor: '#D6EBDD',
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 38,
     marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   profileName: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -350,44 +360,44 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   roleBadge: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#143D2A',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 98,
   },
   roleBadgeText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    color: theme.colors.primary,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 11,
+    color: '#FFFFFF',
   },
   unitBadge: {
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 98,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#143D2A',
   },
   unitBadgeText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    color: theme.colors.textSecondary,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 11,
+    color: '#143D2A',
   },
   profileContact: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 13.5,
-    color: theme.colors.textSecondary,
+    color: '#52705F',
   },
   profilePhone: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 13,
-    color: theme.colors.textPrimary,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
+    color: '#143D2A',
     marginTop: 4,
   },
   profilePhoneEmpty: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 12.5,
-    color: theme.colors.textSecondary,
+    color: '#8B9A8F',
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -396,12 +406,15 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 18,
-    color: theme.colors.textPrimary,
+    fontSize: 16,
+    color: '#143D2A',
     letterSpacing: -0.3,
   },
   card: {
     ...homeSurface,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8EDE9',
   },
   menuRow: {
     flexDirection: 'row',
@@ -437,13 +450,15 @@ const styles = StyleSheet.create({
   menuLabel: {
     ...cardSystem.title,
     marginBottom: 3,
+    color: '#1A1F1C',
   },
   menuDesc: {
     ...cardSystem.description,
+    color: '#52705F',
   },
   divider: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: '#E8EDE9',
     marginHorizontal: cardSystem.padding,
   },
   statusPill: {
@@ -456,19 +471,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   statusActive: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#D6EBDD',
   },
   statusActiveText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 11,
-    color: '#059669',
+    color: '#143D2A',
   },
   statusPending: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FEF3C7',
   },
   statusPendingText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 11,
-    color: '#C2410C',
+    color: '#92400E',
   },
 });

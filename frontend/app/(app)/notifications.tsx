@@ -19,7 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export default function NotificationsScreen() {
   const router = useRouter();
   const { hasManagerAccess, hasLeadershipAccess } = useSession();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'UNREAD'>('ALL');
@@ -114,7 +114,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Notifications"

@@ -5,7 +5,7 @@ import { PremiumPressable } from '../ui/PremiumPressable';
 import { Button } from '../ui/Button';
 import { Text } from '../ui/Text';
 import { theme } from '../../theme';
-import { visitorsApi } from '../../api/visitors';
+import { visitorsApi, GateHost, GateUnit } from '../../api/visitors';
 import { useToast } from '../../store/toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,10 +38,15 @@ export function RecordArrivalModal({
   const dialogHeight = Math.min(680, screenHeight - insets.top - insets.bottom - 32);
 
   const [visitorType, setVisitorType] = useState<'GUEST' | 'CAB' | 'DELIVERY' | 'SERVICE'>('GUEST');
+  const [targetType, setTargetType] = useState<'RESIDENCE' | 'MANAGER'>('RESIDENCE');
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
-  const [unitSuggestions, setUnitSuggestions] = useState<Array<{ id: string; unitNumber: string }>>([]);
+  const [units, setUnits] = useState<GateUnit[]>([]);
   const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+  const [hostUserId, setHostUserId] = useState('');
+  const [hostSearch, setHostSearch] = useState('');
+  const [hosts, setHosts] = useState<GateHost[]>([]);
+  const [showHostDropdown, setShowHostDropdown] = useState(false);
 
   // External service specific
   const [provider, setProvider] = useState('');
@@ -59,29 +64,48 @@ export function RecordArrivalModal({
   const requiresOtp = visitorType === 'GUEST';
 
   const canSubmit = () => {
-    if (!unitId) return false;
+    if (targetType === 'RESIDENCE' && !unitId) return false;
+    if (targetType === 'MANAGER' && !hostUserId) return false;
     if (isExternal && !provider.trim()) return false;
     if (!isExternal && !name.trim()) return false;
     if (visitorType === 'SERVICE' && !purpose.trim()) return false;
     return true;
   };
 
-  // Debounced unit search
   useEffect(() => {
-    if (unitSearch.length >= 2) {
-      const timer = setTimeout(async () => {
-        try {
-          // In a real app, you'd have a dedicated unit search endpoint
-          // For now, we'll just validate the format
-          setUnitSuggestions([]);
-        } catch {
-          setUnitSuggestions([]);
+    if (!visible) return;
+    let cancelled = false;
+    Promise.all([visitorsApi.getGateUnits(), visitorsApi.getGateHosts()])
+      .then(([unitResponse, hostResponse]) => {
+        if (!cancelled) {
+          setUnits(unitResponse.units || []);
+          setHosts(hostResponse.hosts || []);
         }
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-    setUnitSuggestions([]);
-  }, [unitSearch]);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUnits([]);
+          setHosts([]);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  const unitSuggestions = unitSearch.trim()
+    ? units.filter((unit) => unit.unitNumber.toUpperCase().includes(unitSearch.toUpperCase())).slice(0, 6)
+    : [];
+  const hostSuggestions = hostSearch.trim()
+    ? hosts.filter((host) => `${host.firstName || ''} ${host.lastName || ''}`.toUpperCase().includes(hostSearch.toUpperCase())).slice(0, 6)
+    : hosts.slice(0, 6);
+
+  const hostLabel = (host: GateHost) => `${host.firstName || ''} ${host.lastName || ''}`.trim() || 'Manager';
+
+  const clearTarget = () => {
+    setUnitId('');
+    setUnitSearch('');
+    setHostUserId('');
+    setHostSearch('');
+  };
 
   const handleCreate = async () => {
     if (!canSubmit()) return;
@@ -100,11 +124,17 @@ export function RecordArrivalModal({
         provider: isExternal ? provider : undefined,
         validFrom: now.toISOString(),
         validUntil: validUntil.toISOString(),
-        unitId,
+        ...(targetType === 'RESIDENCE' ? { unitId } : { hostUserId }),
       };
 
-      await visitorsApi.createVisitor(payload);
-      showToast({ title: 'Success', message: 'Unannounced arrival recorded. Resident notified.', type: 'success' });
+      const response = await visitorsApi.recordUnannouncedArrival(payload);
+      showToast({
+        title: response.deduped ? 'Existing alert found' : 'Alert sent',
+        message: response.deduped
+          ? 'This arrival was already sent recently.'
+          : targetType === 'MANAGER' ? 'The manager has been notified.' : 'The residence has been notified.',
+        type: 'success',
+      });
       onSuccess?.();
       onClose();
     } catch (err: any) {
@@ -117,8 +147,11 @@ export function RecordArrivalModal({
   useEffect(() => {
     if (visible) {
       setVisitorType('GUEST');
+      setTargetType('RESIDENCE');
       setUnitId('');
       setUnitSearch('');
+      setHostUserId('');
+      setHostSearch('');
       setProvider('');
       setDuration(15);
       setName('');
@@ -127,6 +160,8 @@ export function RecordArrivalModal({
       setVehicleNumber('');
     }
   }, [visible]);
+
+  if (!visible) return null;
 
   return (
     <View style={[styles.overlay, { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
@@ -160,32 +195,63 @@ export function RecordArrivalModal({
               ))}
             </View>
 
+            <Text style={[styles.fieldLabel, { marginTop: 2 }]}>Notify</Text>
+            <View style={styles.targetRow}>
+              <PremiumPressable
+                style={[styles.targetPill, targetType === 'RESIDENCE' && styles.targetPillSelected]}
+                onPress={() => { setTargetType('RESIDENCE'); clearTarget(); }}
+              >
+                <Feather name="home" size={15} color={targetType === 'RESIDENCE' ? '#FFFFFF' : theme.colors.textSecondary} />
+                <Text style={[styles.targetPillText, targetType === 'RESIDENCE' && styles.targetPillTextSelected]}>Residence</Text>
+              </PremiumPressable>
+              <PremiumPressable
+                style={[styles.targetPill, targetType === 'MANAGER' && styles.targetPillSelected]}
+                onPress={() => { setTargetType('MANAGER'); clearTarget(); }}
+              >
+                <Feather name="user" size={15} color={targetType === 'MANAGER' ? '#FFFFFF' : theme.colors.textSecondary} />
+                <Text style={[styles.targetPillText, targetType === 'MANAGER' && styles.targetPillTextSelected]}>Manager</Text>
+              </PremiumPressable>
+            </View>
+
             {/* Unit Selection */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Unit <Text style={styles.required}>*</Text></Text>
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>{targetType === 'RESIDENCE' ? 'Residence' : 'Manager'} <Text style={styles.required}>*</Text></Text>
             <View style={styles.unitSearchWrapper}>
-              <Feather name="home" size={16} color={theme.colors.textSecondary} style={styles.unitIcon} />
+              <Feather name={targetType === 'RESIDENCE' ? 'home' : 'user'} size={16} color={theme.colors.textSecondary} style={styles.unitIcon} />
               <TextInput
                 style={styles.unitInput}
-                placeholder="Select or type unit number (e.g. 7B)"
+                placeholder={targetType === 'RESIDENCE' ? 'Search unit number (e.g. 7B)' : 'Search manager name'}
                 placeholderTextColor={theme.colors.textSecondary}
-                value={unitSearch}
-                onChangeText={(v) => { setUnitSearch(v.toUpperCase()); setShowUnitDropdown(true); }}
-                onFocus={() => setShowUnitDropdown(true)}
-                onBlur={() => setTimeout(() => setShowUnitDropdown(false), 200)}
-                autoCapitalize="characters"
+                value={targetType === 'RESIDENCE' ? unitSearch : hostSearch}
+                onChangeText={(v) => targetType === 'RESIDENCE'
+                  ? (setUnitSearch(v.toUpperCase()), setShowUnitDropdown(true))
+                  : (setHostSearch(v), setShowHostDropdown(true))}
+                onFocus={() => targetType === 'RESIDENCE' ? setShowUnitDropdown(true) : setShowHostDropdown(true)}
+                onBlur={() => setTimeout(() => { setShowUnitDropdown(false); setShowHostDropdown(false); }, 200)}
+                autoCapitalize={targetType === 'RESIDENCE' ? 'characters' : 'words'}
               />
-              {unitId && (
-                <PremiumPressable onPress={() => { setUnitId(''); setUnitSearch(''); }} hitSlop={8}>
+              {(unitId || hostUserId) && (
+                <PremiumPressable onPress={clearTarget} hitSlop={8}>
                   <Feather name="x" size={14} color={theme.colors.textSecondary} />
                 </PremiumPressable>
               )}
             </View>
 
-            {showUnitDropdown && unitSuggestions.length > 0 && (
+            {targetType === 'RESIDENCE' && showUnitDropdown && unitSuggestions.length > 0 && (
               <View style={styles.unitDropdown}>
                 {unitSuggestions.map((u) => (
                   <PremiumPressable key={u.id} style={styles.unitOption} onPress={() => { setUnitId(u.id); setUnitSearch(u.unitNumber); setShowUnitDropdown(false); }}>
                     <Text style={styles.unitOptionText}>{u.unitNumber}</Text>
+                  </PremiumPressable>
+                ))}
+              </View>
+            )}
+
+            {targetType === 'MANAGER' && showHostDropdown && hostSuggestions.length > 0 && (
+              <View style={styles.unitDropdown}>
+                {hostSuggestions.map((host) => (
+                  <PremiumPressable key={host.id} style={styles.unitOption} onPress={() => { setHostUserId(host.id); setHostSearch(hostLabel(host)); setShowHostDropdown(false); }}>
+                    <Text style={styles.unitOptionText}>{hostLabel(host)}</Text>
+                    <Text style={styles.hostRole}>{host.role === 'LEADERSHIP' ? 'Leadership' : 'Manager'}</Text>
                   </PremiumPressable>
                 ))}
               </View>
@@ -278,7 +344,7 @@ export function RecordArrivalModal({
           </ScrollView>
 
           <Button
-            label={requiresOtp ? 'Record arrival & notify resident' : 'Pre-approve & notify resident'}
+            label={targetType === 'MANAGER' ? 'Alert manager' : 'Alert residence'}
             icon="shield"
             onPress={handleCreate}
             loading={submitting}
@@ -307,12 +373,18 @@ const styles = StyleSheet.create({
   typePillSelected: { backgroundColor: theme.colors.primary },
   typePillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textPrimary },
   typePillTextSelected: { color: '#FFFFFF' },
+  targetRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  targetPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F3F4F6', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  targetPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  targetPillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textPrimary },
+  targetPillTextSelected: { color: '#FFFFFF' },
   unitSearchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, height: 48 },
   unitIcon: { marginRight: 4 },
   unitInput: { flex: 1, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary },
   unitDropdown: { marginTop: 4, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, overflow: 'hidden' },
   unitOption: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   unitOptionText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary },
+  hostRole: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 },
   chip: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   chipSelected: { backgroundColor: '#F3F8F5', borderColor: theme.colors.primary },

@@ -27,7 +27,7 @@ const CATEGORIES: { id: string; label: string }[] = [
 
 export default function PersonnelListScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [personnel, setPersonnel] = useState<PersonnelItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -131,7 +131,7 @@ export default function PersonnelListScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Personnel Management"

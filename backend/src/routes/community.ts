@@ -48,7 +48,10 @@ async function notifySpaceMembers(
   }
 }
 
-async function notifyPollMembers(poll: { id: string; question: string; authorId: string; audience: PollAudience; unitId: string | null; space: { id: string; communityId: string } }) {
+async function notifyPollMembers(
+  poll: { id: string; question: string; authorId: string; audience: PollAudience; audiences?: PollAudience[]; unitId: string | null; space: { id: string; communityId: string } },
+  event: { type: string; title: string } = { type: 'POLL_CREATED', title: 'New community poll' },
+) {
   const members = await prisma.user.findMany({
     where: {
       OR: [
@@ -68,8 +71,8 @@ async function notifyPollMembers(poll: { id: string; question: string; authorId:
     await prisma.notification.createMany({
       data: recipients.map((id) => ({
         userId: id,
-        type: 'POLL_CREATED',
-        title: 'New community poll',
+        type: event.type,
+        title: event.title,
         message: poll.question,
         metadata: { pollId: poll.id, spaceId: poll.space.id },
       })),
@@ -77,20 +80,36 @@ async function notifyPollMembers(poll: { id: string; question: string; authorId:
   }
 }
 
-function serializePoll(poll: any) {
-  const userVotedOption = poll.options.find((option: any) => option.votes?.length > 0);
+type PollResponseRecord = {
+  id: string;
+  spaceId: string;
+  question: string;
+  status: PollStatus;
+  audience: PollAudience;
+  audiences?: PollAudience[];
+  unitId: string | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+  author?: { id: string; firstName: string | null; lastName: string | null; role?: string | null };
+  space?: { id: string; name: string; type: string };
+  options: Array<{ id: string; text: string; votes?: Array<{ id: string }>; _count?: { votes: number } }>;
+};
+
+function serializePoll(poll: PollResponseRecord) {
+  const userVotedOption = poll.options.find((option) => option.votes && option.votes.length > 0);
   return {
     id: poll.id,
     spaceId: poll.spaceId,
     question: poll.question,
     status: poll.status,
     audience: poll.audience,
+    audiences: poll.audiences?.length ? poll.audiences : [poll.audience],
     unitId: poll.unitId,
     expiresAt: poll.expiresAt,
     createdAt: poll.createdAt,
     author: poll.author,
     space: poll.space ? { id: poll.space.id, name: poll.space.name, type: poll.space.type } : undefined,
-    options: poll.options.map(({ votes: _votes, _count, ...option }: any) => ({ ...option, voteCount: _count?.votes ?? 0 })),
+    options: poll.options.map(({ votes: _votes, _count, ...option }) => ({ ...option, voteCount: _count?.votes ?? 0 })),
     userHasVoted: Boolean(userVotedOption),
     userVotedOptionId: userVotedOption?.id ?? null,
   };
@@ -400,6 +419,7 @@ const createPollSchema = z.object({
   options: z.array(z.string().trim().min(1)).min(2, 'Poll must have at least 2 options'),
   expiresAt: z.string().datetime().optional(),
   audience: z.enum(['HOUSEHOLD', 'LEADERSHIP', 'OWNERS', 'RESIDENTS']).optional(),
+  audiences: z.array(z.enum(['HOUSEHOLD', 'LEADERSHIP', 'OWNERS', 'RESIDENTS'])).min(1).max(3).optional(),
   unitId: z.string().uuid().optional(),
 });
 
@@ -411,9 +431,13 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       return res.status(400).json({ error: { message: 'Missing space id' } });
     }
 
-    const { question, options, expiresAt, audience, unitId } = createPollSchema.parse(req.body);
-    const selectedAudience = (audience || (unitId ? PollAudience.HOUSEHOLD : PollAudience.RESIDENTS)) as PollAudience;
-    const canCreatePoll = await canUserCreatePoll(userId, spaceId, selectedAudience, unitId);
+    const { question, options, expiresAt, audience, audiences: requestedAudiences, unitId } = createPollSchema.parse(req.body);
+    const selectedAudiences = [...new Set((requestedAudiences?.length ? requestedAudiences : [audience || (unitId ? PollAudience.HOUSEHOLD : PollAudience.RESIDENTS)]) as PollAudience[])];
+    const selectedAudience = selectedAudiences[0];
+    if (!selectedAudience || (selectedAudiences.includes(PollAudience.HOUSEHOLD) && selectedAudiences.length > 1)) {
+      return res.status(400).json({ error: { message: 'Choose either one residence or one or more community audiences.' } });
+    }
+    const canCreatePoll = await canUserCreatePoll(userId, spaceId, selectedAudiences, unitId);
     if (!canCreatePoll) {
       return res.status(403).json({ error: { message: 'Poll audience or residence is not permitted for this account' } });
     }
@@ -423,6 +447,7 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
         spaceId,
         authorId: userId,
         audience: selectedAudience,
+        audiences: selectedAudiences,
         unitId: selectedAudience === PollAudience.HOUSEHOLD ? unitId ?? null : null,
         question,
         status: PollStatus.ACTIVE,
@@ -443,6 +468,7 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       question: poll.question,
       authorId: poll.authorId,
       audience: poll.audience,
+      audiences: poll.audiences,
       unitId: poll.unitId,
       space: { id: poll.space.id, communityId: poll.space.communityId },
     });
@@ -545,6 +571,60 @@ const createAnnouncementSchema = z.object({
   priority: z.enum(['NORMAL', 'IMPORTANT', 'URGENT']).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
   expiresAt: z.string().datetime().optional(),
+});
+
+const announcementAudienceSchema = z.enum(['RESIDENTS', 'OWNERS', 'LEADERSHIP']);
+const broadcastAnnouncementSchema = createAnnouncementSchema.extend({
+  audiences: z.array(announcementAudienceSchema).min(1).max(3),
+});
+
+const announcementSpaceTypes: Record<z.infer<typeof announcementAudienceSchema>, string> = {
+  RESIDENTS: 'RESIDENT_COMMUNITY',
+  OWNERS: 'OWNER_COMMUNITY',
+  LEADERSHIP: 'LEADERSHIP_OPERATIONS',
+};
+
+router.post('/announcements/broadcast', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const { audiences, title, content, category, priority, status, expiresAt } = broadcastAnnouncementSchema.parse(req.body);
+    const selectedAudiences = [...new Set(audiences)];
+    const accessibleSpaces = await getUserAccessibleSpaces(userId);
+    const targetSpaces = accessibleSpaces.filter((space) => selectedAudiences.some((audience) => announcementSpaceTypes[audience] === space.type));
+    if (targetSpaces.length !== selectedAudiences.length) {
+      return res.status(403).json({ error: { message: 'One or more selected notice audiences are not available for this account.' } });
+    }
+
+    const created = await prisma.$transaction(
+      targetSpaces.map((space) => prisma.announcement.create({
+        data: {
+          communityId: space.communityId,
+          spaceId: space.id,
+          authorId: userId,
+          title,
+          content,
+          category: (category as AnnouncementCategory) || AnnouncementCategory.GENERAL,
+          priority: (priority as AnnouncementPriority) || AnnouncementPriority.NORMAL,
+          status: (status as AnnouncementStatus) || AnnouncementStatus.PUBLISHED,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        },
+        include: { author: { select: { id: true, firstName: true, lastName: true, role: true } } },
+      }))
+    );
+
+    if ((status || AnnouncementStatus.PUBLISHED) === AnnouncementStatus.PUBLISHED) {
+      await Promise.all(created.map((announcement) => notifySpaceMembers(announcement.spaceId, {
+        type: 'ANNOUNCEMENT_PUBLISHED',
+        title: announcement.title,
+        message: announcement.content.slice(0, 180),
+        metadata: { announcementId: announcement.id, spaceId: announcement.spaceId, navigation: '/community' },
+      })));
+    }
+
+    res.status(201).json({ announcements: created, audiences: selectedAudiences });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post('/spaces/:id/announcements', async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -662,7 +742,10 @@ router.patch('/polls/:id', async (req: AuthRequest, res: Response, next: NextFun
       },
     });
     if (values.status === 'CLOSED') {
-      await notifyPollMembers({ ...current, ...poll, space: current.space });
+      await notifyPollMembers(
+        { ...current, ...poll, space: current.space },
+        { type: 'POLL_CLOSED', title: 'Community poll closed' },
+      );
     }
     res.json({ poll });
   } catch (error) {

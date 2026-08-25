@@ -7,7 +7,7 @@ import { PremiumPressable } from '../ui/PremiumPressable';
 import { Button } from '../ui/Button';
 import { CommunitySheet } from './CommunitySheet';
 import { theme } from '../../theme';
-import { communityApi, CreateAnnouncementPayload, AnnouncementPriority, AnnouncementCategory } from '../../api/community';
+import { communityApi, CreateAnnouncementPayload, AnnouncementPriority, AnnouncementCategory, AnnouncementAudience } from '../../api/community';
 
 const PRIORITIES: AnnouncementPriority[] = ['NORMAL', 'IMPORTANT', 'URGENT'];
 const CATEGORIES: AnnouncementCategory[] = ['GENERAL', 'MAINTENANCE', 'SECURITY', 'EVENT', 'EMERGENCY'];
@@ -22,12 +22,14 @@ interface CreateAnnouncementModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit?: (payload: CreateAnnouncementPayload) => Promise<unknown>;
+  canChooseAudience?: boolean;
 }
 
-export function CreateAnnouncementModal({ visible, onClose, onSubmit }: CreateAnnouncementModalProps) {
+export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseAudience = false }: CreateAnnouncementModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<AnnouncementPriority>('NORMAL');
+  const [selectedAudiences, setSelectedAudiences] = useState<AnnouncementAudience[]>(['RESIDENTS']);
   const [category, setCategory] = useState<AnnouncementCategory>('GENERAL');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +40,7 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit }: CreateAn
       setTitle('');
       setDescription('');
       setPriority('NORMAL');
+      setSelectedAudiences(['RESIDENTS']);
       setCategory('GENERAL');
       setError('');
       setSubmitting(false);
@@ -48,6 +51,12 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit }: CreateAn
   const handleClose = () => {
     onClose();
     setTimeout(() => setCreated(false), 300);
+  };
+
+  const toggleAudience = (audience: AnnouncementAudience) => {
+    setSelectedAudiences((current) => current.includes(audience)
+      ? current.filter((item) => item !== audience)
+      : [...current, audience]);
   };
 
   const handleSubmit = async () => {
@@ -63,7 +72,11 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit }: CreateAn
     setSubmitting(true);
     try {
       const submit = onSubmit ?? ((payload: CreateAnnouncementPayload) => communityApi.createAnnouncement(payload));
-      await submit({ title: title.trim(), description: description.trim(), category, priority, status: 'PUBLISHED', expiryDate: null });
+      if (selectedAudiences.length === 0) {
+        setError('Choose at least one audience.');
+        return;
+      }
+      await submit({ title: title.trim(), description: description.trim(), category, priority, status: 'PUBLISHED', expiryDate: null, audiences: selectedAudiences });
       setCreated(true);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -114,6 +127,35 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit }: CreateAn
             textAlignVertical="top"
           />
           <Text style={styles.charCount}>{description.length}/600</Text>
+
+          {canChooseAudience ? (
+            <View style={styles.audienceSection}>
+              <Text style={styles.fieldLabel}>Who should receive this notice?</Text>
+              <Text style={styles.audienceHint}>Select one or more groups.</Text>
+              <View style={styles.audienceRow}>
+                {([
+                  { id: 'RESIDENTS', label: 'Residents' },
+                  { id: 'OWNERS', label: 'Owners' },
+                  { id: 'LEADERSHIP', label: 'Leadership' },
+                ] as const).map((audience) => {
+                  const selected = selectedAudiences.includes(audience.id);
+                  return (
+                    <PremiumPressable
+                      key={audience.id}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={`Send notice to ${audience.label}`}
+                      style={[styles.audienceChip, selected && styles.audienceChipActive]}
+                      onPress={() => toggleAudience(audience.id)}
+                    >
+                      <Feather name={selected ? 'check' : 'plus'} size={14} color={selected ? theme.colors.primary : theme.colors.textSecondary} />
+                      <Text style={[styles.audienceText, selected && styles.audienceTextActive]}>{audience.label}</Text>
+                    </PremiumPressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           <Text style={styles.fieldLabel}>Priority</Text>
           <View style={styles.priorityRow}>
@@ -178,6 +220,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 18,
   },
+  audienceSection: { marginBottom: 18 },
+  audienceHint: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: -3, marginBottom: 8 },
+  audienceRow: { flexDirection: 'row', gap: 8 },
+  audienceChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+  audienceChipActive: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
+  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary },
+  audienceTextActive: { color: theme.colors.primary },
   priorityRow: {
     flexDirection: 'row',
     gap: 8,

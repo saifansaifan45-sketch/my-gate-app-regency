@@ -206,7 +206,7 @@ export async function canUserPostAnnouncement(userId: string, spaceId: string): 
 export async function canUserCreatePoll(
   userId: string,
   spaceId: string,
-  audience: PollAudience,
+  audiences: PollAudience[],
   unitId?: string | null,
 ): Promise<boolean> {
   const space = await prisma.space.findUnique({
@@ -220,10 +220,10 @@ export async function canUserCreatePoll(
 
   const isManagement = context.roles.has(Role.LEADERSHIP) || context.roles.has(Role.MANAGER);
   if (isManagement) {
-    return audience !== PollAudience.HOUSEHOLD && !unitId;
+    return audiences.length > 0 && !audiences.includes(PollAudience.HOUSEHOLD) && !unitId;
   }
 
-  if (audience !== PollAudience.HOUSEHOLD || !unitId) return false;
+  if (audiences.length !== 1 || audiences[0] !== PollAudience.HOUSEHOLD || !unitId) return false;
 
   const [ownership, residency] = await Promise.all([
     prisma.unitOwnership.findFirst({ where: { userId, unitId, status: 'ACTIVE', unit: { communityId: space.communityId } } }),
@@ -235,31 +235,35 @@ export async function canUserCreatePoll(
 
 export async function canUserAccessPoll(
   userId: string,
-  poll: { authorId: string; audience: PollAudience; unitId: string | null; space: { communityId: string } },
+  poll: { authorId: string; audience: PollAudience; audiences?: PollAudience[]; unitId: string | null; space: { communityId: string } },
 ): Promise<boolean> {
   if (poll.authorId === userId) return true;
 
   const context = await getUserContext(userId, poll.space.communityId);
   if (!context) return false;
 
-  switch (poll.audience) {
-    case PollAudience.LEADERSHIP:
-      return context.roles.has(Role.LEADERSHIP);
-    case PollAudience.OWNERS:
-      return context.hasOwnership;
-    case PollAudience.RESIDENTS:
-      return context.hasActiveResidency;
-    case PollAudience.HOUSEHOLD: {
+  const audiences = poll.audiences?.length ? poll.audiences : [poll.audience];
+  if (audiences.includes(PollAudience.HOUSEHOLD)) {
       if (!poll.unitId) return false;
       const [ownership, residency] = await Promise.all([
         prisma.unitOwnership.findFirst({ where: { userId, unitId: poll.unitId, status: 'ACTIVE' } }),
         prisma.unitResidency.findFirst({ where: { userId, unitId: poll.unitId, status: 'ACTIVE' } }),
       ]);
       return Boolean(ownership || residency);
-    }
-    default:
-      return false;
   }
+
+  return audiences.some((audience) => {
+    switch (audience) {
+      case PollAudience.LEADERSHIP:
+        return context.roles.has(Role.LEADERSHIP);
+      case PollAudience.OWNERS:
+        return context.hasOwnership;
+      case PollAudience.RESIDENTS:
+        return context.hasActiveResidency;
+      default:
+        return false;
+    }
+  });
 }
 
 export async function canUserManagePoll(userId: string, poll: { authorId: string; space: { communityId: string } }): Promise<boolean> {
