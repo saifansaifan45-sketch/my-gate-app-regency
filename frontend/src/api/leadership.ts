@@ -58,6 +58,16 @@ export interface PendingManagerItem {
   };
 }
 
+export interface LeadershipTicketItem {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  status: string;
+  raisedAt: string;
+  resolved: boolean;
+}
+
 export const leadershipApi = {
   getOverview: async (): Promise<LeadershipOverviewResponse> => {
     const res = await api.get('/leadership/overview');
@@ -69,13 +79,23 @@ export const leadershipApi = {
     return res.data;
   },
 
-  approveManager: async (membershipId: string): Promise<{ success: boolean; message: string }> => {
-    const res = await api.post(`/leadership/managers/${membershipId}/approve`);
+  getTickets: async (): Promise<{ tickets: LeadershipTicketItem[] }> => {
+    const res = await api.get<{ tickets: LeadershipTicketItem[] }>('/leadership/tickets');
     return res.data;
   },
 
-  rejectManager: async (membershipId: string): Promise<{ success: boolean; message: string }> => {
-    const res = await api.post(`/leadership/managers/${membershipId}/reject`);
+  approveManager: async (membershipId: string, note?: string): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post(`/leadership/managers/${membershipId}/approve`, { note });
+    return res.data;
+  },
+
+  rejectManager: async (membershipId: string, note?: string): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post(`/leadership/managers/${membershipId}/reject`, { note });
+    return res.data;
+  },
+
+  blockManager: async (membershipId: string, note?: string): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post(`/leadership/managers/${membershipId}/block`, { note });
     return res.data;
   },
 };

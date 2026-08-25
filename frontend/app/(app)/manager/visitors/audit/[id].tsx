@@ -9,7 +9,6 @@ import { AppHeader } from '../../../../../src/components/ui/AppHeader';
 import { useScreenInsets } from '../../../../../src/hooks/useScreenInsets';
 import { theme } from '../../../../../src/theme';
 import { visitorsApi } from '../../../../../src/api/visitors';
-import { PremiumPressable } from '../../../../../src/components/ui/PremiumPressable';
 
 export default function VisitorAuditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

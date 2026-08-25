@@ -125,7 +125,7 @@ export default function CommunityHubScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  content: { paddingHorizontal: cardSystem.pagePadding, paddingBottom: 40, paddingTop: 16, gap: 24 },
+  content: { paddingHorizontal: cardSystem.pagePadding, paddingBottom: 100, paddingTop: 16, gap: 24 },
   heroCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
   heroIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#EAF6EE', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   heroTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, color: theme.colors.textPrimary, marginBottom: 6, textAlign: 'center' },

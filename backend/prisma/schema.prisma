@@ -33,6 +33,8 @@ enum OwnershipStatus {
 enum ResidencyStatus {
   PENDING
   ACTIVE
+  PAUSED
+  REVOKED
   REJECTED
   EXPIRED
 }
@@ -71,6 +73,13 @@ enum PollStatus {
   ACTIVE
   EXPIRED
   CLOSED
+}
+
+enum PollAudience {
+  HOUSEHOLD
+  LEADERSHIP
+  OWNERS
+  RESIDENTS
 }
 
 enum AnnouncementPriority {
@@ -379,6 +388,7 @@ model Unit {
   householdVehicles HouseholdVehicle[]
   householdPets     HouseholdPet[]
   householdHelps    HouseholdHelp[]
+  polls             Poll[]
 
   @@unique([communityId, unitNumber])
 }
@@ -465,17 +475,21 @@ model Poll {
   id        String       @id @default(uuid())
   spaceId   String
   authorId  String
+  unitId    String?
   question  String
   status    PollStatus   @default(ACTIVE)
+  audience  PollAudience @default(RESIDENTS)
   expiresAt DateTime?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   space     Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   author    User         @relation("UserPolls", fields: [authorId], references: [id], onDelete: Cascade)
+  unit      Unit?        @relation(fields: [unitId], references: [id], onDelete: Cascade)
   options   PollOption[]
   votes     PollVote[]
 
   @@index([spaceId, status])
+  @@index([unitId])
 }
 
 model PollOption {
@@ -732,6 +746,7 @@ model Visitor {
   visitorType           VisitorType   @default(GUEST)
   status                VisitorStatus @default(PENDING)
   otp                   String?
+  otpFailedAttempts     Int           @default(0)
   isPreApproved         Boolean       @default(false)
   createdById           String
   createdBy             User          @relation("UserVisitors", fields: [createdById], references: [id], onDelete: Cascade)
@@ -763,6 +778,7 @@ model Visitor {
   @@index([unitId])
   @@index([communityId])
   @@index([status])
+  @@index([status, validUntil])
   @@index([validFrom])
 }
 

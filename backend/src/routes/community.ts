@@ -6,8 +6,11 @@ import {
   getUserAccessibleSpaces,
   canUserAccessSpace,
   canUserPostAnnouncement,
+  canUserCreatePoll,
+  canUserAccessPoll,
+  canUserManagePoll,
 } from '../services/spaceMembership';
-import { PostType, AnnouncementPriority, AnnouncementCategory, AnnouncementStatus, PollStatus } from '@prisma/client';
+import { PostType, AnnouncementPriority, AnnouncementCategory, AnnouncementStatus, PollAudience, PollStatus } from '@prisma/client';
 
 const router = Router();
 
@@ -43,6 +46,54 @@ async function notifySpaceMembers(
       data: recipients.map((id) => ({ userId: id, ...notification })),
     });
   }
+}
+
+async function notifyPollMembers(poll: { id: string; question: string; authorId: string; audience: PollAudience; unitId: string | null; space: { id: string; communityId: string } }) {
+  const members = await prisma.user.findMany({
+    where: {
+      OR: [
+        { memberships: { some: { communityId: poll.space.communityId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'OWNER', 'RESIDENT', 'TENANT'] } } } },
+        { ownerships: { some: { status: 'ACTIVE', unit: { communityId: poll.space.communityId } } } },
+        { residencies: { some: { status: 'ACTIVE', unit: { communityId: poll.space.communityId } } } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const recipients = (await Promise.all(
+    members.map(async ({ id }) => ((await canUserAccessPoll(id, poll)) ? id : null))
+  )).filter((id): id is string => id !== null && id !== poll.authorId);
+
+  if (recipients.length) {
+    await prisma.notification.createMany({
+      data: recipients.map((id) => ({
+        userId: id,
+        type: 'POLL_CREATED',
+        title: 'New community poll',
+        message: poll.question,
+        metadata: { pollId: poll.id, spaceId: poll.space.id },
+      })),
+    });
+  }
+}
+
+function serializePoll(poll: any) {
+  const userVotedOption = poll.options.find((option: any) => option.votes?.length > 0);
+  return {
+    id: poll.id,
+    spaceId: poll.spaceId,
+    question: poll.question,
+    status: poll.status,
+    audience: poll.audience,
+    unitId: poll.unitId,
+    expiresAt: poll.expiresAt,
+    createdAt: poll.createdAt,
+    author: poll.author,
+    space: poll.space ? { id: poll.space.id, name: poll.space.name, type: poll.space.type } : undefined,
+    options: poll.options.map(({ votes: _votes, _count, ...option }: any) => ({ ...option, voteCount: _count?.votes ?? 0 })),
+    userHasVoted: Boolean(userVotedOption),
+    userVotedOptionId: userVotedOption?.id ?? null,
+  };
 }
 
 // Aggregated resident-facing feed. Space access remains the source of truth for
@@ -113,27 +164,26 @@ router.get('/polls', async (req: AuthRequest, res: Response, next: NextFunction)
     const { page, limit } = listQuerySchema.parse(req.query);
     const userId = req.user!.userId;
     const spaces = await getUserAccessibleSpaces(userId);
-    const spaceIds = spaces.map((space) => space.id);
-    if (!spaceIds.length) return res.json({ polls: [], page, hasMore: false });
+    const communityIds = [...new Set(spaces.map((space) => space.communityId))];
+    if (!communityIds.length) return res.json({ polls: [], page, hasMore: false });
     const polls = await prisma.poll.findMany({
-      where: { spaceId: { in: spaceIds } },
+      where: { space: { communityId: { in: communityIds } } },
       include: {
-        space: { select: { id: true, name: true,  } },
-        author: { select: { id: true, firstName: true, lastName: true } },
+        space: { select: { id: true, name: true, type: true, communityId: true } },
+        author: { select: { id: true, firstName: true, lastName: true, role: true } },
         options: { include: { _count: { select: { votes: true } }, votes: { where: { userId }, select: { id: true } } } },
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit + 1,
     });
-    const hasMore = polls.length > limit;
+
+    const visiblePolls = (await Promise.all(
+      polls.map(async (poll) => ((await canUserAccessPoll(userId, poll)) ? poll : null))
+    )).filter((poll): poll is NonNullable<typeof poll> => poll !== null);
+    const pagedPolls = visiblePolls.slice((page - 1) * limit, page * limit);
+    const hasMore = visiblePolls.length > page * limit;
+
     res.json({
-      polls: polls.slice(0, limit).map((poll) => ({
-        ...poll,
-        userHasVoted: poll.options.some((option) => option.votes.length > 0),
-        userVotedOptionId: poll.options.find((option) => option.votes.length > 0)?.id ?? null,
-        options: poll.options.map(({ votes: _votes, _count, ...option }) => ({ ...option, voteCount: _count.votes })),
-      })),
+      polls: pagedPolls.map((poll) => serializePoll(poll)),
       page,
       hasMore,
     });
@@ -150,22 +200,15 @@ router.get('/polls/:id', async (req: AuthRequest, res: Response, next: NextFunct
       ? await prisma.poll.findUnique({
           where: { id },
           include: {
-            space: { select: { id: true, name: true,  } },
-            author: { select: { id: true, firstName: true, lastName: true } },
+            space: { select: { id: true, name: true, type: true, communityId: true } },
+            author: { select: { id: true, firstName: true, lastName: true, role: true } },
             options: { include: { _count: { select: { votes: true } }, votes: { where: { userId }, select: { id: true } } } },
           },
         })
       : null;
     if (!poll) return res.status(404).json({ error: { message: 'Poll not found' } });
-    if (!(await canUserAccessSpace(userId, poll.spaceId))) return res.status(403).json({ error: { message: 'Access denied' } });
-    res.json({
-      poll: {
-        ...poll,
-        userHasVoted: poll.options.some((option) => option.votes.length > 0),
-        userVotedOptionId: poll.options.find((option) => option.votes.length > 0)?.id ?? null,
-        options: poll.options.map(({ votes: _votes, _count, ...option }) => ({ ...option, voteCount: _count.votes })),
-      },
-    });
+    if (!(await canUserAccessPoll(userId, poll))) return res.status(403).json({ error: { message: 'Access denied' } });
+    res.json({ poll: serializePoll(poll) });
   } catch (error) {
     next(error);
   }
@@ -226,7 +269,7 @@ router.get('/spaces/:id', async (req: AuthRequest, res: Response, next: NextFunc
           where: { status: PollStatus.ACTIVE },
           orderBy: { createdAt: 'desc' },
           include: {
-            author: { select: { id: true, firstName: true, lastName: true } },
+            author: { select: { id: true, firstName: true, lastName: true, role: true } },
             options: {
               include: {
                 _count: { select: { votes: true } },
@@ -252,6 +295,11 @@ router.get('/spaces/:id', async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     const canAnnounce = await canUserPostAnnouncement(userId, spaceId);
+    const visiblePolls = (await Promise.all(
+      space.polls.map(async (poll) => (
+        (await canUserAccessPoll(userId, { ...poll, space: { communityId: space.communityId } })) ? poll : null
+      ))
+    )).filter((poll): poll is NonNullable<typeof poll> => poll !== null);
 
     res.json({
       space: {
@@ -261,21 +309,7 @@ router.get('/spaces/:id', async (req: AuthRequest, res: Response, next: NextFunc
         type: space.type,
         canPostAnnouncement: canAnnounce,
         announcements: space.announcements,
-        polls: space.polls.map((p) => ({
-          id: p.id,
-          question: p.question,
-          status: p.status,
-          expiresAt: p.expiresAt,
-          createdAt: p.createdAt,
-          author: p.author,
-          userHasVoted: p.options.some((opt) => opt.votes.length > 0),
-          userVotedOptionId: p.options.find((opt) => opt.votes.length > 0)?.id || null,
-          options: p.options.map((opt) => ({
-            id: opt.id,
-            text: opt.text,
-            votesCount: opt._count.votes,
-          })),
-        })),
+        polls: visiblePolls.map((poll) => serializePoll({ ...poll, space: { id: space.id, name: space.name, type: space.type } })),
         recentPosts: space.posts,
         systemMessages: space.messages,
       },
@@ -363,8 +397,10 @@ router.get('/spaces/:id/posts', async (req: AuthRequest, res: Response, next: Ne
 // -----------------------------------------------------------------------------
 const createPollSchema = z.object({
   question: z.string().min(3, 'Question must be at least 3 characters'),
-  options: z.array(z.string().min(1)).min(2, 'Poll must have at least 2 options'),
+  options: z.array(z.string().trim().min(1)).min(2, 'Poll must have at least 2 options'),
   expiresAt: z.string().datetime().optional(),
+  audience: z.enum(['HOUSEHOLD', 'LEADERSHIP', 'OWNERS', 'RESIDENTS']).optional(),
+  unitId: z.string().uuid().optional(),
 });
 
 router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -375,17 +411,19 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       return res.status(400).json({ error: { message: 'Missing space id' } });
     }
 
-    const canCreatePoll = await canUserPostAnnouncement(userId, spaceId);
+    const { question, options, expiresAt, audience, unitId } = createPollSchema.parse(req.body);
+    const selectedAudience = (audience || (unitId ? PollAudience.HOUSEHOLD : PollAudience.RESIDENTS)) as PollAudience;
+    const canCreatePoll = await canUserCreatePoll(userId, spaceId, selectedAudience, unitId);
     if (!canCreatePoll) {
-      return res.status(403).json({ error: { message: 'Only Leadership and Managers can create polls' } });
+      return res.status(403).json({ error: { message: 'Poll audience or residence is not permitted for this account' } });
     }
-
-    const { question, options, expiresAt } = createPollSchema.parse(req.body);
 
     const poll = await prisma.poll.create({
       data: {
         spaceId,
         authorId: userId,
+        audience: selectedAudience,
+        unitId: selectedAudience === PollAudience.HOUSEHOLD ? unitId ?? null : null,
         question,
         status: PollStatus.ACTIVE,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
@@ -394,16 +432,19 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
         },
       },
       include: {
-        author: { select: { id: true, firstName: true, lastName: true } },
+        space: { select: { id: true, name: true, type: true, communityId: true } },
+        author: { select: { id: true, firstName: true, lastName: true, role: true } },
         options: true,
       },
     });
 
-    await notifySpaceMembers(spaceId, {
-      type: 'POLL_CREATED',
-      title: 'New community poll',
-      message: poll.question,
-      metadata: { pollId: poll.id, spaceId },
+    await notifyPollMembers({
+      id: poll.id,
+      question: poll.question,
+      authorId: poll.authorId,
+      audience: poll.audience,
+      unitId: poll.unitId,
+      space: { id: poll.space.id, communityId: poll.space.communityId },
     });
 
     res.status(201).json(poll);
@@ -431,7 +472,10 @@ router.post('/polls/:id/vote', async (req: AuthRequest, res: Response, next: Nex
 
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
-      include: { options: true },
+      include: {
+        space: { select: { communityId: true } },
+        options: true,
+      },
     });
 
     if (!poll) {
@@ -442,7 +486,7 @@ router.post('/polls/:id/vote', async (req: AuthRequest, res: Response, next: Nex
       return res.status(400).json({ error: { message: 'This poll is no longer active or has expired' } });
     }
 
-    const hasAccess = await canUserAccessSpace(userId, poll.spaceId);
+    const hasAccess = await canUserAccessPoll(userId, poll);
     if (!hasAccess) {
       return res.status(403).json({ error: { message: 'You do not have permission to vote in this poll' } });
     }
@@ -603,10 +647,10 @@ const updatePollSchema = z.object({
 router.patch('/polls/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const current = id ? await prisma.poll.findUnique({ where: { id } }) : null;
+    const current = id ? await prisma.poll.findUnique({ where: { id }, include: { space: { select: { id: true, communityId: true } } } }) : null;
     if (!current) return res.status(404).json({ error: { message: 'Poll not found' } });
-    if (!(await canUserPostAnnouncement(req.user!.userId, current.spaceId))) {
-      return res.status(403).json({ error: { message: 'Only Leadership and Managers can edit polls' } });
+    if (!(await canUserManagePoll(req.user!.userId, current))) {
+      return res.status(403).json({ error: { message: 'You do not have permission to edit this poll' } });
     }
     const values = updatePollSchema.parse(req.body);
     const poll = await prisma.poll.update({
@@ -618,12 +662,7 @@ router.patch('/polls/:id', async (req: AuthRequest, res: Response, next: NextFun
       },
     });
     if (values.status === 'CLOSED') {
-      await notifySpaceMembers(current.spaceId, {
-        type: 'POLL_CLOSED',
-        title: 'Community poll closed',
-        message: poll.question,
-        metadata: { pollId: poll.id, spaceId: current.spaceId },
-      });
+      await notifyPollMembers({ ...current, ...poll, space: current.space });
     }
     res.json({ poll });
   } catch (error) {
@@ -634,10 +673,10 @@ router.patch('/polls/:id', async (req: AuthRequest, res: Response, next: NextFun
 router.delete('/polls/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const current = id ? await prisma.poll.findUnique({ where: { id } }) : null;
+    const current = id ? await prisma.poll.findUnique({ where: { id }, include: { space: { select: { communityId: true } } } }) : null;
     if (!current) return res.status(404).json({ error: { message: 'Poll not found' } });
-    if (!(await canUserPostAnnouncement(req.user!.userId, current.spaceId))) {
-      return res.status(403).json({ error: { message: 'Only Leadership and Managers can delete polls' } });
+    if (!(await canUserManagePoll(req.user!.userId, current))) {
+      return res.status(403).json({ error: { message: 'You do not have permission to delete this poll' } });
     }
     await prisma.poll.delete({ where: { id: current.id } });
     res.status(204).send();

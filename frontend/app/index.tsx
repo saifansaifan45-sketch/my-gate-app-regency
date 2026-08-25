@@ -9,7 +9,7 @@ export default function Index() {
     isAuthenticated,
     isOnboarded,
     isPendingApproval,
-    hasLeadershipAccess,
+    hasApprovedMembership,
     hasManagerAccess,
     hasWorkforceAccess,
   } = useSession();
@@ -37,7 +37,7 @@ export default function Index() {
   }
 
   // 3. Operational Roles (Decoupled from resident experience)
-  if (hasLeadershipAccess()) {
+  if (hasApprovedMembership('LEADERSHIP')) {
     return <Redirect href="/(app)/leadership" />;
   }
 

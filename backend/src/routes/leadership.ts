@@ -1,7 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../prisma';
 import { requireAuth, requireLeadership, AuthRequest, getApprovedCommunityIds } from '../middleware/auth';
-import { Role } from '@prisma/client';
+import { Role, TicketStatus } from '@prisma/client';
 import { z } from 'zod';
 
 const router = Router();
@@ -224,7 +224,42 @@ router.post('/managers/:id/block', async (req: AuthRequest, res: Response, next:
 });
 
 // ----------------------------------------------------
-// 4. GET /leadership/overview
+// 4. GET /leadership/tickets
+// ----------------------------------------------------
+router.get('/tickets', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const communityIds = await getLeadershipCommunityIds(req.user!.userId);
+    const tickets = await prisma.ticket.findMany({
+      where: { communityId: { in: communityIds } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        description: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    const ticketLedger = tickets.map((ticket) => ({
+      id: ticket.id,
+      category: ticket.category,
+      title: ticket.title,
+      description: ticket.description,
+      status: ticket.status,
+      raisedAt: ticket.createdAt,
+      resolved: ticket.status === TicketStatus.CLOSED,
+    }));
+
+    res.json({ tickets: ticketLedger });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 5. GET /leadership/overview
 // ----------------------------------------------------
 router.get('/overview', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

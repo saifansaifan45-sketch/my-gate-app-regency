@@ -59,7 +59,7 @@ export default function StaffAttendanceScreen() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'PRESENT':
         return { bg: '#ECFDF5', color: '#059669', label: 'Present' };
@@ -67,8 +67,10 @@ export default function StaffAttendanceScreen() {
         return { bg: '#FEF3C7', color: '#D97706', label: 'Half Day' };
       case 'LEAVE':
         return { bg: '#EFF6FF', color: '#2563EB', label: 'On Leave' };
-      default:
+      case 'ABSENT':
         return { bg: '#FEE2E2', color: '#DC2626', label: 'Absent' };
+      default:
+        return { bg: '#F3F4F6', color: '#6B7280', label: 'Not marked' };
     }
   };
 

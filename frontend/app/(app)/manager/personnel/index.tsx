@@ -31,8 +31,15 @@ export default function PersonnelListScreen() {
   const [personnel, setPersonnel] = useState<PersonnelItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Add Personnel Modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -43,18 +50,20 @@ export default function PersonnelListScreen() {
 
   const fetchPersonnel = useCallback(async () => {
     try {
+      setLoadError(false);
       const res = await managerApi.getPersonnel({
         category: selectedCategory === 'ALL' ? undefined : selectedCategory,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       setPersonnel(res.personnel);
     } catch (err) {
+      setLoadError(true);
       console.warn('Failed to load personnel:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, search]);
+  }, [selectedCategory, debouncedSearch]);
 
   useEffect(() => {
     fetchPersonnel();
@@ -77,13 +86,13 @@ export default function PersonnelListScreen() {
         name: newName.trim(),
         phone: newPhone.trim(),
         category: newCategory,
-        availabilityStatus: 'AVAILABLE',
+        availabilityStatus: 'OFF_DUTY',
       });
       setModalVisible(false);
       setNewName('');
       setNewPhone('');
       fetchPersonnel();
-      Alert.alert('Personnel Added', 'Staff member enrolled and available for task assignment.');
+      Alert.alert('Personnel Added', 'Staff member added. Mark attendance before assigning work.');
     } catch {
       Alert.alert('Error', 'Failed to create personnel.');
     } finally {
@@ -182,6 +191,15 @@ export default function PersonnelListScreen() {
             <Skeleton height={90} borderRadius={18} />
             <Skeleton height={90} borderRadius={18} />
           </View>
+        ) : loadError ? (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={24} color="#B45309" />
+            <Text style={styles.errorTitle}>Personnel could not be loaded</Text>
+            <Text style={styles.errorDescription}>Check your connection and try again.</Text>
+            <PremiumPressable style={styles.retryBtn} onPress={fetchPersonnel}>
+              <Text style={styles.retryText}>Try again</Text>
+            </PremiumPressable>
+          </View>
         ) : personnel.length > 0 ? (
           personnel.map((person, index) => {
             const statusMeta = getStatusBadge(person.availabilityStatus);
@@ -236,7 +254,7 @@ export default function PersonnelListScreen() {
       <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Maintenance Personnel</Text>
+            <Text style={styles.modalTitle}>Add Personnel</Text>
             <Text style={styles.modalSubtitle}>Enter details for the new staff member.</Text>
 
             <Text style={styles.inputLabel}>Full Name</Text>
@@ -504,4 +522,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textSecondary,
   },
+  errorCard: { alignItems: 'center', backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 24, marginTop: 12 },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#92400E', marginTop: 10 },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#B45309', marginTop: 4, textAlign: 'center' },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
 });

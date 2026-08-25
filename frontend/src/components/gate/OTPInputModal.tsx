@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
 import { Button } from '../ui/Button';
 import { Text } from '../ui/Text';
@@ -13,6 +13,10 @@ interface OTPInputModalProps {
 }
 
 export function OTPInputModal({ visible, onClose, onVerify, visitorName, isPending }: OTPInputModalProps) {
+  const [otp, setOtp] = useState('');
+  useEffect(() => {
+    if (!visible) setOtp('');
+  }, [visible]);
   if (!visible) return null;
 
   return (
@@ -29,7 +33,8 @@ export function OTPInputModal({ visible, onClose, onVerify, visitorName, isPendi
             <TextInput
               style={styles.otpInput}
               placeholder="Enter OTP"
-              onChangeText={(v) => onVerify(v.replace(/\D/g, '').slice(0, 6))}
+              value={otp}
+              onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
               keyboardType="number-pad"
               secureTextEntry
               maxLength={6}
@@ -42,8 +47,8 @@ export function OTPInputModal({ visible, onClose, onVerify, visitorName, isPendi
               label={isPending ? 'Verifying...' : 'Verify & Check In'}
               variant="primary"
               size="md"
-              onPress={onClose}
-              disabled={isPending}
+              onPress={() => onVerify(otp)}
+              disabled={isPending || otp.length !== 6}
               loading={isPending}
               style={{ flex: 1 }}
             />

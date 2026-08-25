@@ -44,14 +44,14 @@ export default function GateOperationsScreen() {
   const [otpInput, setOtpInput] = useState('');
 
   // Queue fetching (Live operational API)
-  const { data: queueData, isLoading: isLoadingQueue, refetch: refetchQueue } = useQuery({
+  const { data: queueData, isLoading: isLoadingQueue, isRefetching: isRefetchingQueue, isError: queueError, refetch: refetchQueue } = useQuery({
     queryKey: ['gate-visitors'],
     queryFn: () => visitorsApi.getGateVisitors(),
     refetchInterval: 30000,
   });
 
   // History fetching (Manager audit API)
-  const { data: historyData, isLoading: isLoadingHistory, refetch: refetchHistory } = useQuery({
+  const { data: historyData, isLoading: isLoadingHistory, isRefetching: isRefetchingHistory, isError: historyError, refetch: refetchHistory } = useQuery({
     queryKey: ['gate-history'],
     queryFn: () => visitorsApi.getGateHistory(),
     enabled: viewMode === 'HISTORY',
@@ -89,7 +89,7 @@ export default function GateOperationsScreen() {
   // Filtering for HISTORY view
   const historyList = useMemo(() => {
     const sq = searchQuery.toLowerCase();
-    let list = sq ? rawHistory.filter(v => v.name.toLowerCase().includes(sq) || v.unit?.unitNumber.toLowerCase().includes(sq)) : rawHistory;
+    const list = sq ? rawHistory.filter(v => v.name.toLowerCase().includes(sq) || v.unit?.unitNumber.toLowerCase().includes(sq)) : rawHistory;
     // Sort by updatedAt desc (most recent first)
     return list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [rawHistory, searchQuery]);
@@ -116,12 +116,6 @@ export default function GateOperationsScreen() {
   };
 
   const renderQueueCard = useCallback((v: VisitorItem) => {
-    const meta = STATUS_META[v.status] || STATUS_META.PENDING;
-    const time = new Date(v.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const unitLabel = v.unit?.unitNumber || v.createdBy?.unitNumber;
-    const isInside = v.status === 'CHECKED_IN';
-    const checkInTime = v.checkInTime ? new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-
     return (
       <GateVisitorCard
         key={v.id}
@@ -245,11 +239,26 @@ export default function GateOperationsScreen() {
       </View>
 
       {/* List */}
-      <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={false} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}>
+      <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={viewMode === 'QUEUE' ? isRefetchingQueue : isRefetchingHistory} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}>
         {isLoading ? (
           <View style={{ gap: 12 }}>
             <Skeleton height={120} borderRadius={18} />
             <Skeleton height={120} borderRadius={18} />
+          </View>
+        ) : (viewMode === 'QUEUE' ? queueError : historyError) ? (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={24} color="#B45309" />
+            <Text style={styles.errorTitle}>Gate data could not be loaded</Text>
+            <Text style={styles.errorDescription}>Check your connection and try again.</Text>
+            <PremiumPressable style={styles.retryBtn} onPress={() => { void handleRefresh(); }}>
+              <Text style={styles.retryText}>Try again</Text>
+            </PremiumPressable>
+          </View>
+        ) : activeList.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Feather name={viewMode === 'QUEUE' ? 'shield' : 'archive'} size={26} color={theme.colors.textSecondary} />
+            <Text style={styles.emptyTitle}>{viewMode === 'QUEUE' ? 'Gate is clear' : 'No gate history yet'}</Text>
+            <Text style={styles.emptyDescription}>{viewMode === 'QUEUE' ? 'New arrivals and approved visitors will appear here.' : 'Completed gate activity will appear here.'}</Text>
           </View>
         ) : (
           activeList.map(viewMode === 'QUEUE' ? renderQueueCard : renderHistoryCard)
@@ -266,11 +275,11 @@ export default function GateOperationsScreen() {
               Enter the 6-digit code shared by <Text style={{ fontWeight: '600' }}>{selectedVisitor.name}</Text>
             </Text>
             <View style={styles.otpInputContainer}>
-              <TextInput
+              <RNTextInput
                 style={styles.otpInput}
                 placeholder="Enter OTP"
                 value={otpInput}
-                onChangeText={(v) => setOtpInput(v.replace(/\D/g, '').slice(0, 6))}
+                onChangeText={(v: string) => setOtpInput(v.replace(/\D/g, '').slice(0, 6))}
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={6}
@@ -331,7 +340,7 @@ const styles = StyleSheet.create({
   auditBtnText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary },
 
   // OTP Modal
-  otpModalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,24,39,0.45)', justifyContent: 'flex-end' },
+  otpModalOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17,24,39,0.45)', justifyContent: 'flex-end' },
   otpModalContent: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
   otpModalHandle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 16 },
   otpModalTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 2 },
@@ -339,4 +348,12 @@ const styles = StyleSheet.create({
   otpInputContainer: { marginBottom: 16 },
   otpInput: { height: 56, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 20, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: theme.colors.textPrimary, letterSpacing: 8, textAlign: 'center' },
   otpModalActions: { flexDirection: 'row', gap: 10 },
+  errorCard: { alignItems: 'center', backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 24 },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#92400E', marginTop: 10 },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#B45309', marginTop: 4, textAlign: 'center' },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
+  emptyCard: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 28, marginTop: 8 },
+  emptyTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginTop: 10 },
+  emptyDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, marginTop: 4, textAlign: 'center' },
 });

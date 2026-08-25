@@ -28,7 +28,7 @@ export function useResidenceAuth(): ResidenceAuthStatus {
 
     const isVerified = Boolean(user && user.isOnboarded === true && !user.isPendingApproval);
     const hasActiveResidence = Boolean(
-      session.hasResidentAccess() || session.hasOwnerAccess() || session.hasManagerAccess()
+      session.hasResidentAccess() || session.hasOwnerAccess() || session.hasManagerAccess() || session.hasLeadershipAccess()
     );
 
     const canPerformResidentAction = isAuthenticated && isVerified && hasActiveResidence;

@@ -1,5 +1,5 @@
 import { prisma } from '../prisma';
-import { SpaceAccessType, Space, SpaceAccessRule, Role } from '@prisma/client';
+import { PollAudience, SpaceAccessType, Space, SpaceAccessRule, Role } from '@prisma/client';
 
 export interface SpaceWithRules extends Space {
   accessRules: SpaceAccessRule[];
@@ -201,4 +201,69 @@ export async function canUserPostAnnouncement(userId: string, spaceId: string): 
   if (!evaluateSpaceAccess(space, context)) return false;
 
   return context.roles.has(Role.LEADERSHIP) || context.roles.has(Role.MANAGER);
+}
+
+export async function canUserCreatePoll(
+  userId: string,
+  spaceId: string,
+  audience: PollAudience,
+  unitId?: string | null,
+): Promise<boolean> {
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { communityId: true, accessRules: true },
+  });
+  if (!space) return false;
+
+  const context = await getUserContext(userId, space.communityId);
+  if (!context || !evaluateSpaceAccess(space, context)) return false;
+
+  const isManagement = context.roles.has(Role.LEADERSHIP) || context.roles.has(Role.MANAGER);
+  if (isManagement) {
+    return audience !== PollAudience.HOUSEHOLD && !unitId;
+  }
+
+  if (audience !== PollAudience.HOUSEHOLD || !unitId) return false;
+
+  const [ownership, residency] = await Promise.all([
+    prisma.unitOwnership.findFirst({ where: { userId, unitId, status: 'ACTIVE', unit: { communityId: space.communityId } } }),
+    prisma.unitResidency.findFirst({ where: { userId, unitId, status: 'ACTIVE', unit: { communityId: space.communityId } } }),
+  ]);
+
+  return Boolean(ownership || residency);
+}
+
+export async function canUserAccessPoll(
+  userId: string,
+  poll: { authorId: string; audience: PollAudience; unitId: string | null; space: { communityId: string } },
+): Promise<boolean> {
+  if (poll.authorId === userId) return true;
+
+  const context = await getUserContext(userId, poll.space.communityId);
+  if (!context) return false;
+
+  switch (poll.audience) {
+    case PollAudience.LEADERSHIP:
+      return context.roles.has(Role.LEADERSHIP);
+    case PollAudience.OWNERS:
+      return context.hasOwnership;
+    case PollAudience.RESIDENTS:
+      return context.hasActiveResidency;
+    case PollAudience.HOUSEHOLD: {
+      if (!poll.unitId) return false;
+      const [ownership, residency] = await Promise.all([
+        prisma.unitOwnership.findFirst({ where: { userId, unitId: poll.unitId, status: 'ACTIVE' } }),
+        prisma.unitResidency.findFirst({ where: { userId, unitId: poll.unitId, status: 'ACTIVE' } }),
+      ]);
+      return Boolean(ownership || residency);
+    }
+    default:
+      return false;
+  }
+}
+
+export async function canUserManagePoll(userId: string, poll: { authorId: string; space: { communityId: string } }): Promise<boolean> {
+  if (poll.authorId === userId) return true;
+  const context = await getUserContext(userId, poll.space.communityId);
+  return Boolean(context?.roles.has(Role.LEADERSHIP) || context?.roles.has(Role.MANAGER));
 }

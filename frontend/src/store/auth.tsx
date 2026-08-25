@@ -207,18 +207,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  const hasLeadershipAccess = useCallback((): boolean => {
-    return hasApprovedMembership('LEADERSHIP');
-  }, [hasApprovedMembership]);
-
-  const hasManagerAccess = useCallback((): boolean => {
-    return hasApprovedMembership('MANAGER');
-  }, [hasApprovedMembership]);
-
-  const hasWorkforceAccess = useCallback((): boolean => {
-    return hasApprovedMembership('WORKFORCE') || hasApprovedMembership('MANAGER') || hasApprovedMembership('LEADERSHIP');
-  }, [hasApprovedMembership]);
-
   const hasResidentAccess = useCallback((): boolean => {
     if (!user?.residencies) return false;
     return user.residencies.some((r) => r.status === 'ACTIVE');
@@ -228,6 +216,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.ownerships) return false;
     return user.ownerships.some((o) => o.status === 'ACTIVE');
   }, [user]);
+
+  const hasLeadershipAccess = useCallback((): boolean => {
+    const hasLeadershipMembership = hasApprovedMembership('LEADERSHIP');
+    const hasManagerMembership = hasApprovedMembership('MANAGER');
+    const hasWorkforceMembership = hasApprovedMembership('WORKFORCE');
+    const hasOwnerMembership = hasOwnerAccess();
+    const hasResidentMembership = hasResidentAccess();
+
+    return hasLeadershipMembership || hasManagerMembership || hasWorkforceMembership || hasOwnerMembership || hasResidentMembership;
+  }, [hasApprovedMembership, hasOwnerAccess, hasResidentAccess]);
+
+  const hasManagerAccess = useCallback((): boolean => {
+    return hasApprovedMembership('MANAGER');
+  }, [hasApprovedMembership]);
+
+  const hasWorkforceAccess = useCallback((): boolean => {
+    return hasApprovedMembership('WORKFORCE') || hasApprovedMembership('MANAGER') || hasApprovedMembership('LEADERSHIP');
+  }, [hasApprovedMembership]);
 
   const isPendingApproval = useCallback((): boolean => {
     if (!user) return false;

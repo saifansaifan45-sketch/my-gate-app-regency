@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, StyleSheet, ScrollView, Image, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -39,7 +39,7 @@ function residentFullName(r: UnitResidencyRecord['user']) {
 export default function MyHomeScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  const { user, primaryResidency, hasOwnership } = useSession() || {};
+  const { user, primaryResidency } = useSession() || {};
 
   const unitNumber = primaryResidency?.unitNumber || user?.unitNumber || '9A';
   const unitId = primaryResidency?.unitId;
@@ -60,7 +60,7 @@ export default function MyHomeScreen() {
   const isRefreshing = residenciesRefetching || householdRefetching;
   const isLoading = residenciesLoading || householdLoading;
 
-  const verifiedResidents = residencyData?.residencies || [];
+  const verifiedResidents = residencyData?.residencies.filter((residency) => residency.status === 'ACTIVE') || [];
   const householdMembers = householdData?.members || [];
   const vehicles = householdData?.vehicles || [];
   const pets = householdData?.pets || [];
@@ -375,10 +375,12 @@ const styles = StyleSheet.create({
   heroContainer: {
     height: 180,
     borderRadius: cardSystem.radius,
+    marginHorizontal: cardSystem.pagePadding,
     marginBottom: cardSystem.sectionSpacing,
     position: 'relative',
     justifyContent: 'flex-end',
     padding: cardSystem.padding,
+    overflow: 'hidden',
   },
   heroImage: {
     position: 'absolute',
@@ -386,8 +388,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: undefined,
-    height: undefined,
+    width: '100%',
+    height: '100%',
   },
   heroGradient: {
     position: 'absolute',
@@ -418,8 +420,11 @@ const styles = StyleSheet.create({
   heroUnit: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 36,
+    lineHeight: 44,
     color: '#FFF',
     letterSpacing: -0.8,
+    includeFontPadding: false,
+    paddingBottom: 2,
     marginBottom: 2,
   },
   heroAddress: {

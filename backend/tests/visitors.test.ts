@@ -96,7 +96,7 @@ describe('Visitor Management Integration Tests', () => {
   });
 
   describe('Visitor Domain Workflows', () => {
-    it('1. Should allow resident to create a standard visitor entry request', async () => {
+    it('1. Should allow resident to create a pre-approved standard visitor entry', async () => {
       const res = await request(app)
         .post('/visitors')
         .set('Authorization', `Bearer ${residentToken}`)
@@ -111,8 +111,8 @@ describe('Visitor Management Integration Tests', () => {
       expect(res.status).toBe(201);
       expect(res.body.visitor).toBeDefined();
       expect(res.body.visitor.name).toBe('Rahul Verma');
-      expect(res.body.visitor.status).toBe(VisitorStatus.PENDING);
-      expect(res.body.visitor.otp).toBeUndefined(); // Pending visitors have no OTP yet
+      expect(res.body.visitor.status).toBe(VisitorStatus.APPROVED);
+      expect(res.body.visitor.otp).toMatch(/^\d{6}$/); // The OTP is returned once when the pass is created
 
       createdVisitorId = res.body.visitor.id;
     });
@@ -148,14 +148,14 @@ describe('Visitor Management Integration Tests', () => {
       expect(res.body.visitors[0].otp).toBeUndefined(); // OTP hashes MUST NOT be sent
     });
 
-    it('4. Resident can approve a pending visitor', async () => {
+    it('4. Resident approval is idempotent for a pre-approved visitor', async () => {
       const res = await request(app)
         .post(`/visitors/${createdVisitorId}/approve`)
         .set('Authorization', `Bearer ${residentToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.visitor.status).toBe(VisitorStatus.APPROVED);
-      expect(res.body.visitor.otp).toBeDefined(); // Should get an OTP back
+      expect(res.body.visitor.otp).toBeUndefined(); // Existing OTP is never returned again
     });
 
     it('5. Gate should check in an approved visitor with OTP', async () => {

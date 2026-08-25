@@ -8,7 +8,7 @@ import ticketsRoutes from './routes/tickets';
 import notificationsRoutes from './routes/notifications';
 import propertiesRoutes from './routes/properties';
 import communityRoutes from './routes/community';
-import visitorsRoutes from './routes/visitors';
+import visitorsRoutes, { reconcileVisitorLifecycle } from './routes/visitors';
 import leadershipRoutes from './routes/leadership';
 import workforceRoutes from './routes/workforce';
 import emergencyRoutes from './routes/emergency';
@@ -95,6 +95,13 @@ app.use('/visitors', visitorsRoutes);
 app.use('/emergency', emergencyRoutes);
 app.use('/household', householdRoutes);
 app.use('/activity-log', activityLogRoutes);
+
+// Keep time-bound gate passes accurate even when no watchman is actively viewing the queue.
+const visitorLifecycleTimer = setInterval(() => {
+  reconcileVisitorLifecycle().catch((error) => console.error('Visitor lifecycle reconciliation failed:', error));
+}, 60_000);
+visitorLifecycleTimer.unref?.();
+
 // Disabled feature: keep this unmounted until the lost-found backend is implemented.
 // app.use('/lost-found', lostFoundRoutes);
 
@@ -125,8 +132,8 @@ app.use((_err: any, _req: express.Request, res: express.Response, _next: express
 export default app;
 
 if (require.main === module) {
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
   });
 }

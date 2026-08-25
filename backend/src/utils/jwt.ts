@@ -13,6 +13,14 @@ export const verifyAccessToken = (token: string) => {
   return jwt.verify(token, ACCESS_SECRET) as { userId: string, tokenVersion?: number };
 };
 
+export const generateAttendanceExportToken = (userId: string, tokenVersion: number = 0) => {
+  return jwt.sign({ userId, tokenVersion, purpose: 'attendance-export' }, ACCESS_SECRET, { expiresIn: '60s' });
+};
+
+export const verifyAttendanceExportToken = (token: string) => {
+  return jwt.verify(token, ACCESS_SECRET) as { userId: string, tokenVersion?: number, purpose?: string };
+};
+
 export const verifyRefreshToken = (token: string) => {
   return jwt.verify(token, REFRESH_SECRET) as { userId: string };
 };

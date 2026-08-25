@@ -64,13 +64,14 @@ export default function LeadershipApprovalsScreen() {
   const handleApprove = async (item: PendingManagerItem) => {
     setActionLoading(true);
     try {
-      await leadershipApi.approveManager(item.id);
+      await leadershipApi.approveManager(item.id, reviewNote.trim() || undefined);
       showToast({
         title: 'Manager Approved',
         message: `${item.user.firstName || 'Applicant'} is now an active Operations Manager.`,
         type: 'success',
       });
       setSelectedApplicant(null);
+      setReviewNote('');
       await loadApprovals();
     } catch (err) {
       showToast({
@@ -86,13 +87,14 @@ export default function LeadershipApprovalsScreen() {
   const handleReject = async (item: PendingManagerItem) => {
     setActionLoading(true);
     try {
-      await leadershipApi.rejectManager(item.id);
+      await leadershipApi.rejectManager(item.id, reviewNote.trim() || undefined);
       showToast({
         title: 'Application Rejected',
         message: `The manager request for ${item.user.firstName || 'Applicant'} has been rejected.`,
         type: 'info',
       });
       setSelectedApplicant(null);
+      setReviewNote('');
       await loadApprovals();
     } catch (err) {
       showToast({
@@ -108,13 +110,14 @@ export default function LeadershipApprovalsScreen() {
   const handleBlock = async (item: PendingManagerItem) => {
     setActionLoading(true);
     try {
-      await leadershipApi.rejectManager(item.id);
+      await leadershipApi.blockManager(item.id, reviewNote.trim() || undefined);
       showToast({
         title: 'Applicant Blocked',
         message: `The applicant has been blocked from accessing managerial features.`,
         type: 'error',
       });
       setSelectedApplicant(null);
+      setReviewNote('');
       await loadApprovals();
     } catch (err) {
       showToast({

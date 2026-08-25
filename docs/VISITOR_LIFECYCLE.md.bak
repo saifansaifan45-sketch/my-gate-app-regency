@@ -1,0 +1,39 @@
+# Visitor Lifecycle & Access Workflows
+
+This document outlines the strict backend state machine and frontend integrations for managing Guest, Service, Cab, and Delivery access at Regency Salma.
+
+## Core States
+- \`PENDING\`: Pass created, awaiting authorization (used for ad-hoc arrivals).
+- \`APPROVED\`: Authorized by resident or auto-approved via pre-approval. An OTP is actively generated.
+- \`CHECKED_IN\`: Verified at the gate by security.
+- \`CHECKED_OUT\`: Exited the community.
+- \`REVOKED\`: Cancelled forcefully by resident.
+- \`EXPIRED\`: Past the \`validUntil\` date.
+- \`REJECTED\`: Denied entry by the resident.
+
+## Distinct Flows
+
+### 1. Standard Guests & Service
+- Resident creates with \`isPreApproved: true\` -> Status \`APPROVED\`.
+- Gate inputs OTP via \`POST /:id/check-in\` -> Status \`CHECKED_IN\`.
+- Gate taps "Check Out" upon exit via \`POST /:id/check-out\` -> Status \`CHECKED_OUT\`.
+
+### 2. Cabs (Pickup / Drop-off)
+- Same lifecycle as guests, but frontend displays the \`provider\` and \`vehicleNumber\` natively instead of generic names.
+
+### 3. Deliveries & Immutable Handoff
+- Deliveries have an independent **Handoff** process.
+- **Handoff** (\`POST /:id/handoff\`) merely logs the recipient type (Security, Locker, Resident), time, and proof. It **does not** trigger a physical check-out. 
+- Delivery agent must still be explicitly checked out of the community via \`POST /:id/check-out\`.
+- The frontend renders an immutable **Delivery Handoff Receipt** when \`handoffTimestamp\` is present.
+- If a delivery checks out without a handoff, the UI surfaces a bright orange **Operational Exception**.
+
+## Security Constraints
+1. **Role Guarding**: All operational mutations (\`/check-in\`, \`/check-out\`, \`/handoff\`, \`/history\`) require an active \`MANAGER\` or \`LEADERSHIP\` token.
+2. **Community Isolation**: All queries implicitly filter on \`req.user.communityId\`.
+3. **OTP Secrecy**: The \`otp\` is returned exactly once during the \`/visitors\` creation or approval. All list/audit endpoints aggressively strip the OTP from the response payload.
+4. **Rate Limiting**: \`POST /:id/check-in\` is throttled via \`express-rate-limit\` to prevent OTP brute-forcing.
+
+## Audit Trailing
+- All state transitions create an immutable \`AuditLog\` record.
+- Management can inspect any record via \`GET /:id/audit\`, which provides a chronological array of actions securely omitting resident contact details.

@@ -6,10 +6,17 @@ import { AppHeader } from '../../src/components/ui/AppHeader';
 import { Button } from '../../src/components/ui/Button';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { Skeleton } from '../../src/components/ui/Skeleton';
+import { ConfirmationModal } from '../../src/components/ui/ConfirmationModal';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
 import { useSession } from '../../src/store/auth';
 import { propertiesApi, UnitResidencyRecord } from '../../src/api/properties';
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error !== 'object' || error === null || !('response' in error)) return fallback;
+  const response = (error as { response?: { data?: { error?: { message?: string } } } }).response;
+  return response?.data?.error?.message || fallback;
+}
 
 export default function ResidencyRequestsScreen() {
   const { bottomClearance } = useScreenInsets(false);
@@ -19,6 +26,12 @@ export default function ResidencyRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [incomingRequests, setIncomingRequests] = useState<{ unitNumber: string; unitId: string; residencies: UnitResidencyRecord[] }[]>([]);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [accessAction, setAccessAction] = useState<{
+    unitId: string;
+    residencyId: string;
+    residentName: string;
+    action: 'pause' | 'resume' | 'revoke';
+  } | null>(null);
 
   const isOwner = hasOwnership();
   const myResidencies = user?.residencies || [];
@@ -62,8 +75,8 @@ export default function ResidencyRequestsScreen() {
       await propertiesApi.approveResidency(unitId, residencyId);
       Alert.alert('Residency Approved', `Approved residency access for ${applicantName}.`);
       await loadData();
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error?.message || 'Failed to approve residency.');
+    } catch (err: unknown) {
+      Alert.alert('Error', getApiErrorMessage(err, 'Failed to approve residency.'));
     } finally {
       setActionInProgress(null);
     }
@@ -75,8 +88,24 @@ export default function ResidencyRequestsScreen() {
       await propertiesApi.rejectResidency(unitId, residencyId);
       Alert.alert('Residency Rejected', `Declined residency request for ${applicantName}.`);
       await loadData();
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error?.message || 'Failed to reject residency.');
+    } catch (err: unknown) {
+      Alert.alert('Error', getApiErrorMessage(err, 'Failed to reject residency.'));
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleAccessAction = async () => {
+    if (!accessAction) return;
+    setActionInProgress(accessAction.residencyId);
+    try {
+      await propertiesApi.updateResidencyAccess(accessAction.unitId, accessAction.residencyId, accessAction.action);
+      const verb = accessAction.action === 'pause' ? 'paused' : accessAction.action === 'resume' ? 'restored' : 'revoked';
+      Alert.alert('Access Updated', `${accessAction.residentName}'s resident access has been ${verb}.`);
+      setAccessAction(null);
+      await loadData();
+    } catch (err: unknown) {
+      Alert.alert('Access Update Failed', getApiErrorMessage(err, 'Could not update resident access.'));
     } finally {
       setActionInProgress(null);
     }
@@ -138,10 +167,14 @@ export default function ResidencyRequestsScreen() {
 
                   <Text style={styles.statusDescription}>
                     {r.status === 'ACTIVE'
-                      ? '✓ Verified & Active: You have full resident access to raise tickets, gate management, and services.'
+                      ? 'Verified & Active: You have full resident access to raise tickets, gate management, and services.'
                       : r.status === 'PENDING'
-                      ? '⏳ Pending Verification: The property owner has been notified and will verify your tenancy.'
-                      : '✕ Request Declined: Please contact your property owner or township management.'}
+                      ? 'Pending Verification: The property owner has been notified and will verify your tenancy.'
+                      : r.status === 'PAUSED'
+                      ? 'Access Paused: Your resident access is temporarily paused by the property owner.'
+                      : r.status === 'REVOKED'
+                      ? 'Access Revoked: Your resident access was removed by the property owner. Contact them if this needs to be restored.'
+                      : 'Request Declined: Please contact your property owner or township management.'}
                   </Text>
                 </View>
               ))
@@ -184,13 +217,21 @@ export default function ResidencyRequestsScreen() {
                         <View
                           style={[
                             styles.statusBadge,
-                            req.status === 'ACTIVE' ? styles.statusActive : styles.statusPending,
+                            req.status === 'ACTIVE'
+                              ? styles.statusActive
+                              : req.status === 'PENDING' || req.status === 'PAUSED'
+                              ? styles.statusPending
+                              : styles.statusRejected,
                           ]}
                         >
                           <Text
                             style={[
                               styles.statusText,
-                              req.status === 'ACTIVE' ? styles.statusActiveText : styles.statusPendingText,
+                              req.status === 'ACTIVE'
+                                ? styles.statusActiveText
+                                : req.status === 'PENDING' || req.status === 'PAUSED'
+                                ? styles.statusPendingText
+                                : styles.statusRejectedText,
                             ]}
                           >
                             {req.status}
@@ -223,6 +264,38 @@ export default function ResidencyRequestsScreen() {
                           />
                         </View>
                       )}
+
+                      {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && (
+                        <View style={styles.actionRow}>
+                          <Button
+                            label={req.status === 'PAUSED' ? 'Restore access' : 'Pause access'}
+                            variant="outline"
+                            icon={req.status === 'PAUSED' ? 'play' : 'pause'}
+                            onPress={() => setAccessAction({
+                              unitId: group.unitId,
+                              residencyId: req.id,
+                              residentName: req.user.firstName || 'Resident',
+                              action: req.status === 'PAUSED' ? 'resume' : 'pause',
+                            })}
+                            disabled={actionInProgress === req.id}
+                            loading={actionInProgress === req.id && accessAction?.residencyId === req.id}
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            label="Revoke"
+                            variant="dangerOutline"
+                            icon="slash"
+                            onPress={() => setAccessAction({
+                              unitId: group.unitId,
+                              residencyId: req.id,
+                              residentName: req.user.firstName || 'Resident',
+                              action: 'revoke',
+                            })}
+                            disabled={actionInProgress === req.id}
+                            style={{ flex: 1 }}
+                          />
+                        </View>
+                      )}
                     </View>
                   ))
                 )
@@ -236,6 +309,21 @@ export default function ResidencyRequestsScreen() {
           </ScreenEntrance>
         )}
       </ScrollView>
+
+      <ConfirmationModal
+        visible={!!accessAction}
+        onClose={() => setAccessAction(null)}
+        onConfirm={handleAccessAction}
+        title={accessAction?.action === 'revoke' ? 'Revoke resident access?' : accessAction?.action === 'pause' ? 'Pause resident access?' : 'Restore resident access?'}
+        message={accessAction?.action === 'revoke'
+          ? `${accessAction.residentName} will lose access to this unit and will need to submit a new request to return.`
+          : accessAction?.action === 'pause'
+          ? `${accessAction.residentName} will temporarily lose resident access. You can restore it later.`
+          : `${accessAction?.residentName || 'This resident'} will regain access to this unit.`}
+        confirmLabel={accessAction?.action === 'revoke' ? 'Revoke access' : accessAction?.action === 'pause' ? 'Pause access' : 'Restore access'}
+        variant={accessAction?.action === 'revoke' ? 'danger' : accessAction?.action === 'pause' ? 'warning' : 'default'}
+        loading={!!accessAction && actionInProgress === accessAction.residencyId}
+      />
     </View>
   );
 }

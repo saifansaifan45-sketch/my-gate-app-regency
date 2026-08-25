@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -36,14 +36,14 @@ export default function ManagerDashboardScreen() {
     }
   }, [hasManagerAccess, hasResidentAccess, hasOwnerAccess, router]);
 
-  const { data: dashboardData, isLoading: dashLoading } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading: dashLoading, isError: dashError, refetch: refetchDashboard } = useQuery<DashboardData>({
     queryKey: ['manager-dashboard'],
     queryFn: () => managerApi.getDashboard(),
     enabled: hasManagerAccess(),
     staleTime: 30_000,
   });
 
-  const { data: pendingWorkforce = [], isLoading: pendingLoading } = useQuery<PendingWorkforceItem[]>({
+  const { data: pendingWorkforce = [], isLoading: pendingLoading, isError: workforceError, refetch: refetchWorkforce } = useQuery<PendingWorkforceItem[]>({
     queryKey: ['manager-pending-workforce'],
     queryFn: async () => {
       const res = await managerApi.getPendingWorkforce();
@@ -83,6 +83,23 @@ export default function ManagerDashboardScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        {(dashError || workforceError) && (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={22} color="#B45309" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorTitle}>Some operations data is unavailable</Text>
+              <Text style={styles.errorDescription}>You can retry without leaving this page.</Text>
+            </View>
+            <PremiumPressable
+              style={styles.retryBtn}
+              onPress={() => { refetchDashboard(); refetchWorkforce(); }}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading operations data"
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </PremiumPressable>
+          </View>
+        )}
         {/* Operations Hub Banner */}
         <ScreenEntrance delay={40}>
           <View style={styles.hubBanner}>
@@ -188,21 +205,21 @@ export default function ManagerDashboardScreen() {
 
               <View style={styles.wfStatCol}>
                 <View style={[styles.statusDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={styles.wfStatVal}>{stats?.inProgressTasks || 0}</Text>
+                <Text style={styles.wfStatVal}>{stats?.busyPersonnel || stats?.inProgressTasks || 0}</Text>
                 <Text style={styles.wfStatLabel}>On Task / Busy</Text>
               </View>
 
               <View style={styles.wfStatCol}>
                 <View style={[styles.statusDot, { backgroundColor: '#9CA3AF' }]} />
                 <Text style={styles.wfStatVal}>
-                  {Math.max(0, (stats?.totalPersonnel || 0) - (stats?.availablePersonnel || 0) - (attendance?.leave || 0))}
+                  {stats?.offDutyPersonnel || 0}
                 </Text>
                 <Text style={styles.wfStatLabel}>Off Duty</Text>
               </View>
 
               <View style={styles.wfStatCol}>
                 <View style={[styles.statusDot, { backgroundColor: '#F59E0B' }]} />
-                <Text style={styles.wfStatVal}>{attendance?.leave || 0}</Text>
+                <Text style={styles.wfStatVal}>{stats?.onLeavePersonnel ?? attendance?.leave ?? 0}</Text>
                 <Text style={styles.wfStatLabel}>On Leave</Text>
               </View>
             </View>
@@ -725,4 +742,9 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#9CA3AF',
   },
+  errorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 16 },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: '#92400E' },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: '#B45309', marginTop: 2 },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: '#FFFFFF' },
 });

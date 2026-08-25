@@ -354,7 +354,7 @@ export function QuickActionsRadial() {
             <Feather name="plus" size={28} color="#FFFFFF" />
           </Animated.View>
         </Pressable>
-        <Text style={styles.centerLabel}>Quick</Text>
+        <Text style={styles.centerLabel}>Actions</Text>
       </View>
 
       <Modal visible={isOpen} transparent statusBarTranslucent onRequestClose={() => closeMenu()}>

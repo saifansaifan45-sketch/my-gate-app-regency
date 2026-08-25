@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';

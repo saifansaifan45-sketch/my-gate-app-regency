@@ -493,6 +493,7 @@ export default function HomeScreen() {
             <CommunityUpdates
               announcements={announcements}
               loading={isAnnouncementsLoading}
+              currentUserId={user?.id}
               onViewAllPress={() => router.push('/announcements')}
               onAnnouncementPress={(ann) => router.push(`/announcement/${ann.id}`)}
               onCreateNotice={isLeadership ? () => router.push('/leadership/create-announcement') : undefined}

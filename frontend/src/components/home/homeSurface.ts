@@ -25,8 +25,10 @@ export const homeLayout = {
   sectionTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 16,
+    lineHeight: 22,
     color: theme.colors.textPrimary,
     letterSpacing: -0.3,
+    includeFontPadding: false,
   } as TextStyle,
   emptyState: {
     borderRadius: cardSystem.radius,

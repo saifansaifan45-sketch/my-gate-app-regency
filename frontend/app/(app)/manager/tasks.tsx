@@ -11,7 +11,7 @@ import { EmptyState } from '../../../src/components/ui/EmptyState';
 import { Skeleton } from '../../../src/components/ui/Skeleton';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
-import { managerApi, TicketItem, TaskStatus } from '../../../src/api/manager';
+import { managerApi, TaskItem, TaskStatus } from '../../../src/api/manager';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 const TASK_TABS = [
@@ -27,18 +27,19 @@ export default function ManagerTasksTrackerScreen() {
   const { bottomClearance } = useScreenInsets(false);
 
   const [activeTab, setActiveTab] = useState('ALL');
-  const [ticketsWithTasks, setTicketsWithTasks] = useState<TicketItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await managerApi.getTickets();
-      // Filter tickets that have tasks
-      const withTasks = res.tickets.filter((t) => t.tasks && t.tasks.length > 0);
-      setTicketsWithTasks(withTasks);
+      setLoadError(false);
+      const res = await managerApi.getTasks();
+      setTasks(res.tasks);
     } catch (err) {
+      setLoadError(true);
       console.warn('Failed to fetch tasks:', err);
     } finally {
       setLoading(false);
@@ -68,17 +69,7 @@ export default function ManagerTasksTrackerScreen() {
     }
   };
 
-  // Flatten tasks with ticket info
-  const allTasks = ticketsWithTasks.flatMap((t) =>
-    (t.tasks || []).map((tsk) => ({
-      ...tsk,
-      ticketTitle: t.title,
-      ticketCategory: t.category,
-      resident: t.resident,
-    }))
-  );
-
-  const filteredTasks = allTasks.filter((t) => {
+  const filteredTasks = tasks.filter((t) => {
     if (activeTab === 'ALL') return true;
     return t.status === activeTab;
   });
@@ -134,6 +125,15 @@ export default function ManagerTasksTrackerScreen() {
             <Skeleton height={140} borderRadius={18} />
             <Skeleton height={140} borderRadius={18} />
           </View>
+        ) : loadError ? (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={24} color="#B45309" />
+            <Text style={styles.errorTitle}>Tasks could not be loaded</Text>
+            <Text style={styles.errorDescription}>Check your connection and try again.</Text>
+            <PremiumPressable style={styles.retryBtn} onPress={fetchTasks}>
+              <Text style={styles.retryText}>Try again</Text>
+            </PremiumPressable>
+          </View>
         ) : filteredTasks.length > 0 ? (
           filteredTasks.map((task, index) => {
             const statusMeta = getStatusBadge(task.status);
@@ -143,16 +143,16 @@ export default function ManagerTasksTrackerScreen() {
                 <View style={styles.taskCard}>
                   <View style={styles.taskTop}>
                     <View style={styles.categoryPill}>
-                      <Text style={styles.categoryText}>{task.ticketCategory}</Text>
+                    <Text style={styles.categoryText}>{task.ticket?.category || 'Task'}</Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: statusMeta.bg }]}>
                       <Text style={[styles.statusText, { color: statusMeta.text }]}>{statusMeta.label}</Text>
                     </View>
                   </View>
 
-                  <Text style={styles.taskTitle}>{task.ticketTitle}</Text>
+                  <Text style={styles.taskTitle}>{task.ticket?.title || 'Maintenance task'}</Text>
                   <Text style={styles.residentSub}>
-                    Unit {task.resident?.unitNumber || '9A'} · Resident: {task.resident?.firstName} {task.resident?.lastName || ''}
+                    Unit {task.ticket?.resident?.unitNumber || '—'} · Resident: {task.ticket?.resident?.firstName || 'Resident'} {task.ticket?.resident?.lastName || ''}
                   </Text>
 
                   {/* Staff Info Box */}
@@ -364,4 +364,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textSecondary,
   },
+  errorCard: {
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 24,
+    marginTop: 12,
+  },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#92400E', marginTop: 10 },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#B45309', marginTop: 4, textAlign: 'center' },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
 });

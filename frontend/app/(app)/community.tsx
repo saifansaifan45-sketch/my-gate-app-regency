@@ -10,7 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { CommunityCreateMenu } from '../../src/components/community/CommunityCreateMenu';
 import { Card } from '../../src/components/ui/Card';
-import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategory } from '../../src/api/community';
+import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategory, CreatePollPayload } from '../../src/api/community';
 import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
 
@@ -21,7 +21,7 @@ export default function CommunityScreen() {
   const { bottomClearance } = useScreenInsets(true);
   const { width: screenWidth } = useWindowDimensions();
   const TAB_WIDTH = (screenWidth - TAB_PADDING * 2 - TAB_GAP) / 2;
-  const { hasManagerAccess } = useSession();
+  const { hasManagerAccess, hasApprovedMembership, hasOwnerAccess, hasResidentAccess, primaryResidency, primaryOwnership } = useSession();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'announcements' | 'polls'>('announcements');
   const [category, setCategory] = useState<AnnouncementCategory | undefined>();
@@ -30,7 +30,10 @@ export default function CommunityScreen() {
   const announcementsQuery = useQuery({ queryKey: ['community', 'announcements', category], queryFn: () => communityApi.getAnnouncements(undefined, category) });
   const pollsQuery = useQuery({ queryKey: ['community', 'polls'], queryFn: () => communityApi.getPolls() });
   const defaultSpaceId = spacesQuery.data?.spaces[0]?.id;
-  const isManagement = hasManagerAccess();
+  const isManagement = hasManagerAccess() || hasApprovedMembership('LEADERSHIP');
+  const householdUnitId = primaryResidency?.unitId || primaryOwnership?.unitId;
+  const canCreateHouseholdPoll = (hasOwnerAccess() || hasResidentAccess()) && Boolean(householdUnitId);
+  const canCreateContent = isManagement || canCreateHouseholdPoll;
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -88,7 +91,7 @@ export default function CommunityScreen() {
     queryClient.invalidateQueries({ queryKey: ['community', 'polls'] }),
   ]);
 
-  const createPoll = async (payload: { question: string; options: string[] }) => {
+  const createPoll = async (payload: CreatePollPayload) => {
     if (!defaultSpaceId) throw new Error('No community space is available.');
     await communityApi.createPoll(defaultSpaceId, payload);
     await refreshCommunity();
@@ -127,7 +130,7 @@ export default function CommunityScreen() {
       <AppHeader
         variant="tabroot"
         title="Community"
-        rightAction={isManagement ? (
+        rightAction={canCreateContent ? (
           <PremiumPressable style={styles.createBtn} onPress={() => setIsCreateMenuVisible(true)} activeOpacity={0.9}>
             <Feather name="plus" size={16} color="#FFFFFF" />
             <Text style={styles.createBtnText}>Create</Text>
@@ -182,7 +185,17 @@ export default function CommunityScreen() {
         )}
       </Animated.View>
 
-      {isManagement ? <CommunityCreateMenu visible={isCreateMenuVisible} onClose={() => setIsCreateMenuVisible(false)} onCreatePoll={createPoll} onCreateAnnouncement={createAnnouncement} /> : null}
+      {canCreateContent ? (
+        <CommunityCreateMenu
+          visible={isCreateMenuVisible}
+          onClose={() => setIsCreateMenuVisible(false)}
+          onCreatePoll={createPoll}
+          onCreateAnnouncement={createAnnouncement}
+          canChoosePollAudience={isManagement}
+          householdUnitId={householdUnitId}
+          canCreateAnnouncement={isManagement}
+        />
+      ) : null}
     </View>
   );
 }
@@ -263,6 +276,9 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, lineHeight: 20, color: theme.colors.textPrimary, marginBottom: 6 },
   cardBody: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 18, color: theme.colors.textSecondary },
   readMore: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary, marginTop: 6 },
+  pollAuthor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -1, marginBottom: 12 },
+  pollAuthorText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: theme.colors.textSecondary },
+  pollAudience: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 10, color: '#3159A5', marginBottom: 10 },
   pollOptions: { gap: 10 },
   pollOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
   pollOptionSelected: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
@@ -303,5 +319,8 @@ function PollCard({ poll, onVote, onDelete, isManagement }: { poll: CommunityPol
   const expired = poll.status !== 'ACTIVE' || (!!poll.expiresAt && new Date(poll.expiresAt) <= new Date());
   const vote = async (optionId: string) => { if (voting || poll.userHasVoted || expired) return; setVoting(true); try { await onVote(optionId); } finally { setVoting(false); } };
   const handleDelete = () => { if (deleting || !onDelete) return; Alert.alert('Delete Poll', 'Are you sure you want to delete this poll?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { setDeleting(true); try { await onDelete(); } finally { setDeleting(false); } } }]); };
-  return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><View style={styles.pollTopRight}>{isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}<Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View></View><Text style={styles.cardTitle}>{poll.question}</Text><View style={styles.pollOptions}>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</View></Card>;
+  const authorName = `${poll.author?.firstName || ''} ${poll.author?.lastName || ''}`.trim() || 'Community member';
+  const authorRole = poll.author?.role ? poll.author.role.charAt(0) + poll.author.role.slice(1).toLowerCase() : 'Member';
+  const audienceLabel = poll.audience === 'HOUSEHOLD' ? 'Your residence' : poll.audience.charAt(0) + poll.audience.slice(1).toLowerCase();
+  return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><View style={styles.pollTopRight}>{isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}<Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View></View><Text style={styles.cardTitle}>{poll.question}</Text><View style={styles.pollAuthor}><Feather name="user" size={13} color={theme.colors.textSecondary} /><Text style={styles.pollAuthorText}>Posted by {authorName} · {authorRole}</Text></View><Text style={styles.pollAudience}>Visible to {audienceLabel}</Text><View style={styles.pollOptions}>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</View></Card>;
 }

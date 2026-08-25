@@ -29,24 +29,33 @@ export default function ManagerTicketsScreen() {
   const { bottomClearance } = useScreenInsets(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchTickets = useCallback(async () => {
     try {
+      setLoadError(false);
       const res = await managerApi.getTickets({
         status: activeTab === 'ALL' ? undefined : activeTab,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       setTickets(res.tickets);
     } catch (err) {
+      setLoadError(true);
       console.warn('Failed to load tickets:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeTab, search]);
+  }, [activeTab, debouncedSearch]);
 
   useEffect(() => {
     fetchTickets();
@@ -145,6 +154,15 @@ export default function ManagerTicketsScreen() {
             <Skeleton height={130} borderRadius={18} />
             <Skeleton height={130} borderRadius={18} />
             <Skeleton height={130} borderRadius={18} />
+          </View>
+        ) : loadError ? (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={24} color="#B45309" />
+            <Text style={styles.errorTitle}>Tickets could not be loaded</Text>
+            <Text style={styles.errorDescription}>Check your connection and try again.</Text>
+            <PremiumPressable style={styles.retryBtn} onPress={fetchTickets}>
+              <Text style={styles.retryText}>Try again</Text>
+            </PremiumPressable>
           </View>
         ) : tickets.length > 0 ? (
           tickets.map((ticket, index) => {
@@ -384,4 +402,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.primary,
   },
+  errorCard: { alignItems: 'center', backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 24, marginTop: 12 },
+  errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#92400E', marginTop: 10 },
+  errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#B45309', marginTop: 4, textAlign: 'center' },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
+  retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
 });

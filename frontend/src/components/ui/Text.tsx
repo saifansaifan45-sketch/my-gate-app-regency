@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps, StyleSheet, Platform } from 'react-native';
 import { theme } from '../../theme';
 
 interface TextProps extends RNTextProps {
@@ -14,6 +14,7 @@ export function Text({ style, variant = 'body', ...props }: TextProps) {
 
 const styles = StyleSheet.create({
   base: {
-    // Shared base text styles can go here
+    includeFontPadding: false,
+    paddingBottom: Platform.select({ android: 2, ios: 1, default: 1 }),
   },
 });

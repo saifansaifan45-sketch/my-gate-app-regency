@@ -99,4 +99,16 @@ export const propertiesApi = {
     const res = await api.post<{ success: boolean; message: string; residency: UnitResidencyRecord }>(`/properties/units/${unitId}/residencies/${residencyId}/reject`);
     return res.data;
   },
+
+  updateResidencyAccess: async (
+    unitId: string,
+    residencyId: string,
+    action: 'pause' | 'resume' | 'revoke',
+  ): Promise<{ success: boolean; message: string; residency: UnitResidencyRecord }> => {
+    const res = await api.patch<{ success: boolean; message: string; residency: UnitResidencyRecord }>(
+      `/properties/units/${unitId}/residencies/${residencyId}/access`,
+      { action },
+    );
+    return res.data;
+  },
 };

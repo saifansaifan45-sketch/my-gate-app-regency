@@ -1,7 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../prisma';
-import { requireAuth, requireVerifiedResidence, requireWorkforceOrManager, requireSecurityOrLeadership, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireVerifiedResidence, requireWorkforceOrManager, AuthRequest } from '../middleware/auth';
 import rateLimit from 'express-rate-limit';
 import { VisitorStatus, VisitorType, ResidencyStatus, OwnershipStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
@@ -196,7 +196,7 @@ export async function reconcileVisitorLifecycle(communityId?: string) {
 // ----------------------------------------------------
 // POST /visitors/reconcile (Cron job endpoint - requires auth)
 // ----------------------------------------------------
-router.post('/reconcile', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/reconcile', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     const { communityId } = req.body;
@@ -225,7 +225,7 @@ router.post('/reconcile', requireSecurityOrLeadership, async (req: AuthRequest, 
 // ----------------------------------------------------
 // POST /visitors/unannounced (Gate Security)
 // ----------------------------------------------------
-router.post('/unannounced', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/unannounced', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ error: { message: 'Unauthorized' } });
     const userId = req.user!.userId;
@@ -472,7 +472,7 @@ router.get('/history', requireWorkforceOrManager, async (req: AuthRequest, res: 
 
 // 3. GET /visitors/gate (Gate / Security / Manager overview)
 // ----------------------------------------------------
-router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     const unitLabel = typeof req.query.unitLabel === 'string' ? req.query.unitLabel.trim().toUpperCase() : '';
@@ -543,6 +543,8 @@ router.get('/gate', requireSecurityOrLeadership, async (req: AuthRequest, res: R
       pending,
       approved,
       checkedIn,
+      // Keep one aggregate queue for Management and Gate Operations consumers.
+      visitors: [...checkedIn, ...approved, ...pending],
     });
   } catch (error) {
     console.error(error);
@@ -851,7 +853,7 @@ const checkInLimiter = rateLimit({
 const checkInSchema = z.object({
   otp: z.string().optional()
 });
-router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const visitorId = req.params.id;
     if (!visitorId || typeof visitorId !== 'string') {
@@ -963,7 +965,7 @@ router.post('/:id/check-in', requireSecurityOrLeadership, checkInLimiter, async 
 // ----------------------------------------------------
 // POST /visitors/:id/check-out (Gate / Manager)
 // ----------------------------------------------------
-router.post('/:id/check-out', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/:id/check-out', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const visitorId = req.params.id;
     if (!visitorId || typeof visitorId !== 'string') {
@@ -1022,7 +1024,7 @@ const handoffSchema = z.object({
   recipientName: z.string().optional(),
   proofReference: z.string().optional()
 });
-router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/:id/handoff', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const visitorId = req.params.id;
     if (!visitorId || typeof visitorId !== 'string') {
@@ -1109,13 +1111,13 @@ router.post('/:id/handoff', requireSecurityOrLeadership, async (req: AuthRequest
 // ----------------------------------------------------
 // GET /visitors/gate/activity (Watchman Activity Log)
 // ----------------------------------------------------
-router.get('/gate/activity', requireSecurityOrLeadership, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.get('/gate/activity', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     const { unitLabel, type } = req.query;
     
     const membership = await prisma.membership.findFirst({
-      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'WORKFORCE'] } }
+      where: { userId, status: 'APPROVED', role: { in: ['LEADERSHIP', 'MANAGER', 'WORKFORCE'] } }
     });
     const communityId = ((req.query.communityId as string)) || membership?.communityId;
     if (!communityId || !(await verifySecurityMembership(userId, communityId))) {

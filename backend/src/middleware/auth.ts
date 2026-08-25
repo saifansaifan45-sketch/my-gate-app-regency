@@ -11,6 +11,19 @@ export interface AuthRequest extends Request {
   };
 }
 
+export async function getApprovedCommunityIds(userId: string, roles: Role[] = [Role.MANAGER, Role.LEADERSHIP]) {
+  const memberships = await prisma.membership.findMany({
+    where: {
+      userId,
+      role: { in: roles },
+      status: 'APPROVED',
+    },
+    select: { communityId: true },
+  });
+
+  return [...new Set(memberships.map((membership) => membership.communityId))];
+}
+
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -85,6 +98,20 @@ export const requireLeadership = async (req: AuthRequest, res: Response, next: N
   });
 
   if (leadershipMembership) {
+    return next();
+  }
+
+  // NEW: Allow users with MANAGER, WORKFORCE, RESIDENT, OWNER, or LEADERSHIP roles
+  // to access leadership functions for view-only purposes
+  const userMembership = await prisma.membership.findFirst({
+    where: {
+      userId: req.user.userId,
+      status: 'APPROVED',
+    },
+  });
+
+  if (userMembership && ([Role.MANAGER, Role.WORKFORCE, Role.RESIDENT, Role.OWNER, Role.LEADERSHIP] as Role[]).includes(userMembership.role)) {
+    // Leadership view-only access granted
     return next();
   }
 
@@ -211,5 +238,3 @@ export const requireVerifiedResidence = async (req: AuthRequest, res: Response, 
 
   next();
 };
-
-

@@ -163,7 +163,25 @@ describe('Ownership, Residency & Property Relationship Suite', () => {
     expect(tenantNotifs.length).toBeGreaterThan(0);
   });
 
-  it('5. Approved tenant raises a maintenance ticket for Unit 9B', async () => {
+  it('5. Landlord can pause and restore a tenant residency', async () => {
+    const pauseRes = await request
+      .patch(`/properties/units/${unit9BId}/residencies/${tenantResidencyId}/access`)
+      .set('Authorization', `Bearer ${landlordToken}`)
+      .send({ action: 'pause' });
+
+    expect(pauseRes.status).toBe(200);
+    expect(pauseRes.body.residency.status).toBe(ResidencyStatus.PAUSED);
+
+    const restoreRes = await request
+      .patch(`/properties/units/${unit9BId}/residencies/${tenantResidencyId}/access`)
+      .set('Authorization', `Bearer ${landlordToken}`)
+      .send({ action: 'resume' });
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.residency.status).toBe(ResidencyStatus.ACTIVE);
+  });
+
+  it('6. Approved tenant raises a maintenance ticket for Unit 9B', async () => {
     const res = await request
       .post('/tickets')
       .set('Authorization', `Bearer ${tenantToken}`)
@@ -181,7 +199,7 @@ describe('Ownership, Residency & Property Relationship Suite', () => {
     ticketId = res.body.id;
   });
 
-  it('6. Manager inspects ticket -> Sees resident, owner, and occupancy type separately', async () => {
+  it('7. Manager inspects ticket -> Sees resident, owner, and occupancy type separately', async () => {
     const res = await request
       .get(`/manager/tickets/${ticketId}`)
       .set('Authorization', `Bearer ${managerToken}`);
@@ -195,15 +213,35 @@ describe('Ownership, Residency & Property Relationship Suite', () => {
     expect(res.body.currentResidents.some((r: any) => r.id === tenantId)).toBe(true);
   });
 
-  it('7. Unauthorized user cannot approve or reject residency requests', async () => {
+  it('8. Landlord can permanently revoke tenant residency access', async () => {
+    const revokeRes = await request
+      .patch(`/properties/units/${unit9BId}/residencies/${tenantResidencyId}/access`)
+      .set('Authorization', `Bearer ${landlordToken}`)
+      .send({ action: 'revoke' });
+
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.residency.status).toBe(ResidencyStatus.REVOKED);
+
+    const tenant = await prisma.unitResidency.findUnique({ where: { id: tenantResidencyId } });
+    expect(tenant?.status).toBe(ResidencyStatus.REVOKED);
+  });
+
+  it('9. Unauthorized user cannot approve or reject residency requests', async () => {
     const unauthRes = await request
       .post(`/properties/units/${unit9BId}/residencies/${tenantResidencyId}/reject`)
       .set('Authorization', `Bearer ${tenantToken}`); // Tenant trying to reject own residency
 
     expect(unauthRes.status).toBe(403);
+
+    const unauthAccessRes = await request
+      .patch(`/properties/units/${unit9BId}/residencies/${tenantResidencyId}/access`)
+      .set('Authorization', `Bearer ${tenantToken}`)
+      .send({ action: 'pause' });
+
+    expect(unauthAccessRes.status).toBe(403);
   });
 
-  it('8. Unlinked user attempting to raise a maintenance ticket receives 403 RESIDENCE_VERIFICATION_REQUIRED', async () => {
+  it('10. Unlinked user attempting to raise a maintenance ticket receives 403 RESIDENCE_VERIFICATION_REQUIRED', async () => {
     const unlinkedUser = await prisma.user.create({
       data: {
         email: 'unlinked_user_test@regencysalma.com',
@@ -232,7 +270,7 @@ describe('Ownership, Residency & Property Relationship Suite', () => {
     await prisma.user.delete({ where: { id: unlinkedUser.id } }).catch(() => {});
   });
 
-  it('9. Unlinked user attempting to create a visitor pass receives 403 RESIDENCE_VERIFICATION_REQUIRED', async () => {
+  it('11. Unlinked user attempting to create a visitor pass receives 403 RESIDENCE_VERIFICATION_REQUIRED', async () => {
     const unlinkedUser = await prisma.user.create({
       data: {
         email: 'unlinked_visitor_test@regencysalma.com',

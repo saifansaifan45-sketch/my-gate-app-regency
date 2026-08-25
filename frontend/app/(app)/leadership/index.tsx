@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
@@ -85,6 +85,14 @@ export default function LeadershipOverviewScreen() {
   // Check if user has view-only access
   const isViewOnly = hasLeadershipAccess() && !hasApprovedMembership('LEADERSHIP');
 
+  // Parallax scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroTranslateY = scrollY.interpolate({
+    inputRange: [0, 180],
+    outputRange: [0, -18],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.container}>
       <AppHeader
@@ -106,9 +114,17 @@ export default function LeadershipOverviewScreen() {
         }
       />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}
+      <Animated.ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         {loadError && (
@@ -129,21 +145,24 @@ export default function LeadershipOverviewScreen() {
           </View>
         )}
 
-        {/* Governance Greeting Header */}
-        <ScreenEntrance delay={40}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroBadge}>
-              <Feather name="shield" size={13} color={theme.colors.onPrimary} />
-              <Text style={styles.heroBadgeText}>TOWNSHIP LEADERSHIP</Text>
+        {/* Hero Section with Parallax */}
+        <Animated.View style={[styles.heroWrapper, { transform: [{ translateY: heroTranslateY }] }]}>
+          <ScreenEntrance delay={40}>
+            <View style={styles.heroCard}>
+              <View style={styles.heroBadge}>
+                <Feather name="shield" size={13} color={theme.colors.onPrimary} />
+                <Text style={styles.heroBadgeText}>TOWNSHIP LEADERSHIP</Text>
+              </View>
+              <Text style={styles.heroTitle}>Good day, {displayName}</Text>
+              <Text style={styles.heroSub}>
+                Regency Salma Governance &amp; Operational Oversight
+              </Text>
             </View>
-            <Text style={styles.heroTitle}>Good day, {displayName}</Text>
-            <Text style={styles.heroSub}>
-              Regency Salma Governance &amp; Operational Oversight
-            </Text>
-          </View>
-        </ScreenEntrance>
+          </ScreenEntrance>
+        </Animated.View>
 
-        {/* View-Only Access Notice */}
+        {/* Body Sections */}
+        <View style={[styles.bodyWrapper, { paddingBottom: bottomClearance + 40 }]}>
         {isViewOnly && (
           <ScreenEntrance delay={60} animation="rise" distance={10}>
             <View style={styles.infoCard}>
@@ -398,7 +417,8 @@ export default function LeadershipOverviewScreen() {
             />
           )}
         </ScreenEntrance>
-      </ScrollView>
+        </View>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -408,9 +428,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  content: {
+  scrollContent: {
+    paddingBottom: 0,
+  },
+  heroWrapper: {
+    position: 'relative',
+    minHeight: 180,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.background,
+  },
+  bodyWrapper: {
+    marginTop: -24,
+    paddingTop: 16,
     paddingHorizontal: cardSystem.pagePadding,
-    paddingTop: 12,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 6,
   },
   notifBtn: {
     position: 'relative',
@@ -429,7 +467,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: 18,
     padding: 20,
-    marginBottom: 16,
+    marginHorizontal: cardSystem.pagePadding,
+    marginTop: 12,
+    marginBottom: 24,
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,

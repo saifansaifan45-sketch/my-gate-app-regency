@@ -20,15 +20,16 @@ import { cardSystem } from '../../../../src/components/ui/cardSystem';
 
 const WORKFLOW_STEPS = [
   { key: 'CREATED', label: 'Created' },
-  { key: 'ACCEPTED', label: 'Accepted' },
   { key: 'ASSIGNED', label: 'Assigned' },
   { key: 'IN_PROGRESS', label: 'In Progress' },
-  { key: 'COMPLETED', label: 'Completed' },
-  { key: 'VERIFIED', label: 'Verified' },
+  { key: 'COMPLETED', label: 'Work completed' },
+  { key: 'RESIDENT_REVIEW', label: 'Resident review' },
+  { key: 'CLOSED', label: 'Closed' },
 ];
 
 export default function TicketDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const ticketId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { bottomClearance } = useScreenInsets(false);
@@ -36,6 +37,7 @@ export default function TicketDetailScreen() {
 
   const [ticket, setTicket] = useState<TicketItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<'not-found' | 'generic' | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Remarks Modal
@@ -43,28 +45,44 @@ export default function TicketDetailScreen() {
   const [managerRemarks, setManagerRemarks] = useState('');
 
   const fetchTicket = useCallback(async () => {
-    if (!id) return;
+    if (!ticketId) {
+      setTicket(null);
+      setLoadError('not-found');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
     try {
-      const data = await managerApi.getTicket(id);
+      const data = await managerApi.getTicket(ticketId);
       setTicket(data);
       setManagerRemarks(data.remarks || '');
     } catch (err) {
       console.warn('Failed to load ticket:', err);
+      setTicket(null);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      setLoadError(status === 404 ? 'not-found' : 'generic');
       showToast({
-        title: 'Error',
-        message: 'Could not load ticket details.',
+        title: status === 404 ? 'Ticket unavailable' : 'Unable to load ticket',
+        message: status === 404 ? 'This request may have been removed or is no longer accessible.' : 'Check your connection and try again.',
         type: 'error',
       });
     } finally {
       setLoading(false);
     }
-  }, [id, showToast]);
+  }, [ticketId, showToast]);
 
   useEffect(() => {
     fetchTicket();
   }, [fetchTicket]);
 
-  const activeTask = ticket?.tasks && ticket.tasks[0];
+  // Tasks are kept as a history. Prefer the newest non-cancelled assignment
+  // with its personnel relation present instead of assuming tasks[0] is the
+  // current assignment.
+  const activeTask =
+    ticket?.tasks?.find((task) => task.status !== 'CANCELLED' && task.assignedPersonnel) ??
+    ticket?.tasks?.find((task) => task.status !== 'CANCELLED');
 
   const getStepIndex = () => {
     if (!ticket) return 0;
@@ -82,7 +100,7 @@ export default function TicketDetailScreen() {
       case 'CLOSED':
         return 5;
       case 'REOPENED':
-        return 2;
+        return 1;
       default:
         return 0;
     }
@@ -91,10 +109,10 @@ export default function TicketDetailScreen() {
   const currentStep = getStepIndex();
 
   const handleAcceptTicket = async () => {
-    if (!id) return;
+    if (!ticketId) return;
     setActionLoading(true);
     try {
-      const updated = await managerApi.updateTicket(id, { status: 'ASSIGNED' });
+      const updated = await managerApi.updateTicket(ticketId, { status: 'ASSIGNED' });
       setTicket(updated);
       await queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
       showToast({
@@ -145,9 +163,10 @@ export default function TicketDetailScreen() {
   };
 
   const handleApproveCompletion = async () => {
+    if (!ticketId) return;
     setActionLoading(true);
     try {
-      await api.post(`/manager/tickets/${id}/approve-work-completion`);
+      await api.post(`/manager/tickets/${ticketId}/approve-work-completion`);
       await fetchTicket();
       await queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey });
       showToast({
@@ -167,9 +186,9 @@ export default function TicketDetailScreen() {
   };
 
   const handleSaveRemarks = async () => {
-    if (!id) return;
+    if (!ticketId) return;
     try {
-      const updated = await managerApi.updateTicket(id, { remarks: managerRemarks.trim() });
+      const updated = await managerApi.updateTicket(ticketId, { remarks: managerRemarks.trim() });
       setTicket(updated);
       setRemarksModalVisible(false);
       showToast({
@@ -187,9 +206,9 @@ export default function TicketDetailScreen() {
   };
 
   const handleChangePriority = async (priority: TicketPriority) => {
-    if (!id) return;
+    if (!ticketId) return;
     try {
-      const updated = await managerApi.updateTicket(id, { priority });
+      const updated = await managerApi.updateTicket(ticketId, { priority });
       setTicket(updated);
       showToast({
         title: 'Priority Updated',
@@ -213,9 +232,9 @@ export default function TicketDetailScreen() {
     <View style={styles.container}>
       <AppHeader
         variant="subscreen"
-        title={`Ticket #${id ? id.slice(0, 6).toUpperCase() : ''}`}
+        title={`Ticket #${ticketId ? ticketId.slice(0, 6).toUpperCase() : ''}`}
         onBackPress={() => smartBack(router, '/manager/tickets')}
-        rightAction={
+        rightAction={ticket ? (
           <PremiumPressable
             onPress={() => setRemarksModalVisible(true)}
             style={styles.headerBtn}
@@ -223,18 +242,45 @@ export default function TicketDetailScreen() {
           >
             <Feather name="edit-3" size={18} color={theme.colors.textPrimary} />
           </PremiumPressable>
-        }
+        ) : undefined}
       />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 60 }]}
         showsVerticalScrollIndicator={false}
       >
-        {loading || !ticket ? (
+        {loading ? (
           <View style={{ gap: 14 }}>
             <Skeleton height={140} borderRadius={20} />
             <Skeleton height={120} borderRadius={20} />
             <Skeleton height={200} borderRadius={20} />
+          </View>
+        ) : loadError ? (
+          <View style={styles.errorState}>
+            <View style={styles.errorIcon}>
+              <Feather name={loadError === 'not-found' ? 'file-minus' : 'wifi-off'} size={24} color="#B45309" />
+            </View>
+            <Text style={styles.errorTitle}>
+              {loadError === 'not-found' ? 'Ticket unavailable' : 'Ticket could not be loaded'}
+            </Text>
+            <Text style={styles.errorDescription}>
+              {loadError === 'not-found'
+                ? 'This request may have been removed, expired, or is no longer available to your community.'
+                : 'Check your connection and try again.'}
+            </Text>
+            <View style={styles.errorActions}>
+              <PremiumPressable style={styles.errorSecondaryButton} onPress={() => router.replace('/manager/tickets')}>
+                <Text style={styles.errorSecondaryText}>Back to tickets</Text>
+              </PremiumPressable>
+              <PremiumPressable style={styles.errorPrimaryButton} onPress={fetchTicket}>
+                <Text style={styles.errorPrimaryText}>Try again</Text>
+              </PremiumPressable>
+            </View>
+          </View>
+        ) : !ticket ? (
+          <View style={styles.errorState}>
+            <Text style={styles.errorTitle}>Ticket unavailable</Text>
+            <Text style={styles.errorDescription}>We could not find this request.</Text>
           </View>
         ) : (
           <>
@@ -445,11 +491,11 @@ export default function TicketDetailScreen() {
       </ScrollView>
 
       {/* Bottom Sticky Action Bar */}
-      {ticket && ticket.status === 'OPEN' && (
+      {ticket && ticket.status === 'OPEN' && !activeTask && (
         <View style={styles.bottomBar}>
           <View style={{ flex: 1, marginRight: 8 }}>
             <Button
-              label="Accept Ticket"
+              label="Accept Request"
               variant="secondary"
               onPress={handleAcceptTicket}
               loading={actionLoading}
@@ -503,6 +549,70 @@ export default function TicketDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 10 },
+  errorState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 34,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  errorIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+    marginBottom: 14,
+  },
+  errorTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 17,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorDescription: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    lineHeight: 20,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 300,
+    marginBottom: 22,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  errorSecondaryButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  errorSecondaryText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+  },
+  errorPrimaryButton: {
+    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  errorPrimaryText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
   headerBtn: {
     width: 36,
     height: 36,

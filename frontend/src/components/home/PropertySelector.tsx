@@ -61,9 +61,11 @@ const styles = StyleSheet.create({
   unitText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 15,
+    lineHeight: 20,
     color: '#111827',
     letterSpacing: -0.2,
     marginRight: 10,
+    includeFontPadding: false,
   },
   chevron: {
     marginLeft: 2,

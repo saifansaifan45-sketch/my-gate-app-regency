@@ -12,7 +12,7 @@ const router = Router();
 // ----------------------------------------------------
 router.get('/units', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    let community = await prisma.community.findFirst();
+    const community = await prisma.community.findFirst();
     if (!community) {
       return res.json({ units: [] });
     }
@@ -352,6 +352,118 @@ router.post('/units/:unitId/residencies/:residencyId/reject', async (req: AuthRe
     });
 
     res.json({ success: true, message: 'Residency request rejected.', residency: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 6. PATCH /properties/units/:unitId/residencies/:residencyId/access
+// Owner pauses, restores, or permanently revokes resident access
+// ----------------------------------------------------
+const residencyAccessSchema = z.object({
+  action: z.enum(['pause', 'resume', 'revoke']),
+});
+
+router.patch('/units/:unitId/residencies/:residencyId/access', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const unitId = Array.isArray(req.params.unitId) ? req.params.unitId[0] : req.params.unitId;
+    const residencyId = Array.isArray(req.params.residencyId) ? req.params.residencyId[0] : req.params.residencyId;
+    const { action } = residencyAccessSchema.parse(req.body);
+
+    if (!unitId || !residencyId) {
+      return res.status(400).json({ error: { message: 'Missing unitId or residencyId' } });
+    }
+
+    const isOwner = await prisma.unitOwnership.findFirst({
+      where: { userId, unitId, status: OwnershipStatus.ACTIVE },
+    });
+    const isManager = req.user?.role === 'MANAGER' || req.user?.role === 'LEADERSHIP';
+
+    if (!isOwner && !isManager) {
+      return res.status(403).json({ error: { message: 'Only an active unit owner or manager can manage resident access' } });
+    }
+
+    const residency = await prisma.unitResidency.findUnique({
+      where: { id: residencyId },
+      include: {
+        unit: true,
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    if (!residency || residency.unitId !== unitId) {
+      return res.status(404).json({ error: { message: 'Residency record not found' } });
+    }
+
+    const targetOwnsUnit = await prisma.unitOwnership.findFirst({
+      where: { userId: residency.userId, unitId, status: OwnershipStatus.ACTIVE },
+    });
+    if (targetOwnsUnit || residency.relationshipType === ResidencyType.OWNER) {
+      return res.status(403).json({ error: { message: 'Owner access cannot be paused or revoked from this screen' } });
+    }
+
+    const nextStatus = action === 'pause'
+      ? ResidencyStatus.PAUSED
+      : action === 'resume'
+        ? ResidencyStatus.ACTIVE
+        : ResidencyStatus.REVOKED;
+
+    if (action === 'pause' && residency.status !== ResidencyStatus.ACTIVE) {
+      return res.status(409).json({ error: { message: 'Only active resident access can be paused' } });
+    }
+    if (action === 'resume' && residency.status !== ResidencyStatus.PAUSED) {
+      return res.status(409).json({ error: { message: 'Only paused resident access can be restored' } });
+    }
+    if (action === 'revoke' && !([ResidencyStatus.ACTIVE, ResidencyStatus.PAUSED] as ResidencyStatus[]).includes(residency.status)) {
+      return res.status(409).json({ error: { message: 'Only active or paused resident access can be revoked' } });
+    }
+
+    const updated = await prisma.unitResidency.update({
+      where: { id: residencyId },
+      data: {
+        status: nextStatus,
+        verifiedById: userId,
+        verifiedAt: new Date(),
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } },
+        verifiedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    const actionCopy = action === 'pause'
+      ? { type: 'RESIDENCY_ACCESS_PAUSED', title: 'Residency Access Paused', message: `Your access to Unit ${residency.unit.unitNumber} has been temporarily paused by the property owner.` }
+      : action === 'resume'
+        ? { type: 'RESIDENCY_ACCESS_RESTORED', title: 'Residency Access Restored', message: `Your access to Unit ${residency.unit.unitNumber} has been restored.` }
+        : { type: 'RESIDENCY_ACCESS_REVOKED', title: 'Residency Access Revoked', message: `Your access to Unit ${residency.unit.unitNumber} has been revoked by the property owner.` };
+
+    await prisma.notification.create({
+      data: {
+        userId: residency.userId,
+        type: actionCopy.type,
+        title: actionCopy.title,
+        message: actionCopy.message,
+        metadata: { unitId, unitNumber: residency.unit.unitNumber, residencyId, action },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        communityId: residency.unit.communityId,
+        actorId: userId,
+        targetId: residency.userId,
+        action: action === 'pause' ? 'RESIDENCY_ACCESS_PAUSED' : action === 'resume' ? 'RESIDENCY_ACCESS_RESTORED' : 'RESIDENCY_ACCESS_REVOKED',
+        metadata: { unitId, unitNumber: residency.unit.unitNumber, residencyId, action },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `${residency.user.firstName || 'Resident'} access ${action === 'pause' ? 'paused' : action === 'resume' ? 'restored' : 'revoked'}.`,
+      residency: updated,
+    });
   } catch (error) {
     next(error);
   }

@@ -4,11 +4,12 @@ export type AnnouncementPriority = 'NORMAL' | 'IMPORTANT' | 'URGENT';
 export type AnnouncementCategory = 'GENERAL' | 'MAINTENANCE' | 'SECURITY' | 'EVENT' | 'EMERGENCY';
 export type AnnouncementStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type PollStatus = 'ACTIVE' | 'EXPIRED' | 'CLOSED';
+export type PollAudience = 'HOUSEHOLD' | 'LEADERSHIP' | 'OWNERS' | 'RESIDENTS';
 
 export interface CommunitySpaceItem { id: string; name: string; description?: string | null; type: string }
 export type PostCategory = 'GENERAL' | 'EVENT' | 'DISCUSSION' | 'UPDATE';
 export interface CreatePostPayload { content: string; category?: PostCategory; imageUri?: string | null }
-export interface CreatePollPayload { question: string; options: string[]; expiresAt?: string }
+export interface CreatePollPayload { question: string; options: string[]; expiresAt?: string; audience?: PollAudience; unitId?: string }
 export interface CreateAnnouncementPayload { title: string; description: string; category?: AnnouncementCategory; priority: AnnouncementPriority; status?: AnnouncementStatus; expiryDate?: string | null }
 export interface CommunityAnnouncement {
   id: string; spaceId: string; title: string; content: string; priority: AnnouncementPriority;
@@ -19,8 +20,8 @@ export interface CommunityAnnouncement {
 }
 export interface CommunityPollOption { id: string; text: string; voteCount: number }
 export interface CommunityPoll {
-  id: string; spaceId: string; question: string; status: PollStatus; expiresAt?: string | null; createdAt: string;
-  space?: { id: string; name: string; type: string }; options: CommunityPollOption[];
+  id: string; spaceId: string; question: string; status: PollStatus; audience: PollAudience; unitId?: string | null; expiresAt?: string | null; createdAt: string;
+  space?: { id: string; name: string; type: string }; author?: { id: string; firstName?: string | null; lastName?: string | null; role?: string | null }; options: CommunityPollOption[];
   userHasVoted: boolean; userVotedOptionId: string | null;
 }
 

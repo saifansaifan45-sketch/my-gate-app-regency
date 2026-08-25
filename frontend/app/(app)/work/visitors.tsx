@@ -1,18 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform, Pressable, AppState, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, AppState, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { theme } from '../../../src/theme';
 import { visitorsApi, VisitorItem, GateVisitorsResponse } from '../../../src/api/visitors';
 import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
-import { Button } from '../../../src/components/ui/Button';
 import { Text } from '../../../src/components/ui/Text';
 import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
 import { useToast } from '../../../src/store/toast';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
-import { Animated } from 'react-native';
 
 import {
   GateVisitorCard,
@@ -36,7 +34,6 @@ export default function SecurityGateOperations() {
   const [isRecordArrivalVisible, setIsRecordArrivalVisible] = useState(false);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otpModalVisitor, setOtpModalVisitor] = useState<VisitorItem | null>(null);
-  const [otpInput, setOtpInput] = useState('');
   const [handoffModalVisible, setHandoffModalVisible] = useState(false);
   const [handoffModalVisitor, setHandoffModalVisitor] = useState<VisitorItem | null>(null);
 
@@ -68,7 +65,6 @@ export default function SecurityGateOperations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security-gate'] });
       setCheckInPending(null);
-      setOtpInput('');
       setOtpModalVisible(false);
       setOtpModalVisitor(null);
       showToast({ title: 'Visitor checked in', message: 'The visitor is now marked as at the gate.', type: 'success' });
@@ -122,12 +118,14 @@ export default function SecurityGateOperations() {
     return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [gateData]);
 
-  const handleVerifyOtp = (visitor: VisitorItem) => {
-    if (!/^\d{6}$/.test(otpInput)) {
+  const handleVerifyOtp = (otp: string) => {
+    const visitor = otpModalVisitor;
+    if (!visitor) return;
+    if (!/^\d{6}$/.test(otp)) {
       Alert.alert('Invalid OTP', 'Enter the six-digit OTP shared by the visitor.');
       return;
     }
-    checkInMutation.mutate({ id: visitor.id, otp: otpInput });
+    checkInMutation.mutate({ id: visitor.id, otp });
   };
 
   const handleDirectCheckIn = (visitor: VisitorItem) => {
@@ -144,7 +142,6 @@ export default function SecurityGateOperations() {
   const handleCheckIn = (visitor: VisitorItem) => {
     if (visitor.requiresOtp) {
       setOtpModalVisitor(visitor);
-      setOtpInput('');
       setOtpModalVisible(true);
     } else {
       handleDirectCheckIn(visitor);
@@ -266,12 +263,18 @@ export default function SecurityGateOperations() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            {allVisitors().map((visitor, i) => (
+            {allVisitors().map((visitor) => (
               <GateVisitorCard
                 key={visitor.id}
                 visitor={visitor}
-                onCheckIn={handleCheckIn}
-                onCheckOut={handleCheckOut}
+                onCheckIn={(id) => {
+                  const visitor = allVisitors().find((item) => item.id === id);
+                  if (visitor) handleCheckIn(visitor);
+                }}
+                onCheckOut={(id) => {
+                  const visitor = allVisitors().find((item) => item.id === id);
+                  if (visitor) handleCheckOut(visitor);
+                }}
                 onHandoff={(v) => { setHandoffModalVisitor(v); setHandoffModalVisible(true); }}
                 onRecordArrival={() => {}}
                 checkInPending={checkInPending}
@@ -295,7 +298,7 @@ export default function SecurityGateOperations() {
       {/* OTP Verification Modal */}
       <OTPInputModal
         visible={otpModalVisible}
-        onClose={() => { setOtpModalVisible(false); setOtpModalVisitor(null); setOtpInput(''); }}
+        onClose={() => { setOtpModalVisible(false); setOtpModalVisitor(null); }}
         onVerify={handleVerifyOtp}
         visitorName={otpModalVisitor?.name || ''}
         isPending={checkInMutation.isPending}

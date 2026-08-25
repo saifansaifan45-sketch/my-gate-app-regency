@@ -67,26 +67,26 @@ describe('Visitor resident approval and gate verification', () => {
     await prisma.community.delete({ where: { id: communityId } });
   });
 
-  it('generates a guest OTP after resident approval and verifies it at the gate', async () => {
+  it('generates a guest OTP for a resident-created pass and verifies it at the gate', async () => {
     const create = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'Rohan Guest',
       visitorType: 'GUEST',
       isPreApproved: false,
     });
     expect(create.status).toBe(201);
-    expect(create.body.visitor.status).toBe(VisitorStatus.PENDING);
-    expect(create.body.visitor.otp).toBeUndefined();
+    expect(create.body.visitor.status).toBe(VisitorStatus.APPROVED);
+    expect(create.body.visitor.otp).toMatch(/^\d{6}$/);
 
     const approve = await api.post(`/visitors/${create.body.visitor.id}/approve`).set('Authorization', `Bearer ${residentToken}`);
     expect(approve.status).toBe(200);
     expect(approve.body.visitor.status).toBe(VisitorStatus.APPROVED);
-    expect(approve.body.visitor.otp).toMatch(/^\d{6}$/);
+    expect(approve.body.visitor.otp).toBeUndefined();
 
     const wrongCode = await api.post(`/visitors/${create.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: '000000' });
     expect(wrongCode.status).toBe(400);
     expect(wrongCode.body.error.message).toBe('Invalid OTP');
 
-    const checkIn = await api.post(`/visitors/${create.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: approve.body.visitor.otp });
+    const checkIn = await api.post(`/visitors/${create.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: create.body.visitor.otp });
     expect(checkIn.status).toBe(200);
     expect(checkIn.body.visitor.status).toBe(VisitorStatus.CHECKED_IN);
   });
@@ -114,5 +114,98 @@ describe('Visitor resident approval and gate verification', () => {
     const checkIn = await api.post(`/visitors/${arrival.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
     expect(checkIn.status).toBe(200);
     expect(checkIn.body.visitor.status).toBe(VisitorStatus.CHECKED_IN);
+  });
+
+  it('expires time-bound passes out of the active gate queue', async () => {
+    const expiredPass = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
+      name: 'Expired Guest',
+      visitorType: 'GUEST',
+      validFrom: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      validUntil: new Date(Date.now() - 60 * 1000).toISOString(),
+    });
+    expect(expiredPass.status).toBe(201);
+
+    const gate = await api.get('/visitors/gate').set('Authorization', `Bearer ${securityToken}`);
+    expect(gate.status).toBe(200);
+    expect(gate.body.pending.some((visitor: { id: string }) => visitor.id === expiredPass.body.visitor.id)).toBe(false);
+    expect(gate.body.approved.some((visitor: { id: string }) => visitor.id === expiredPass.body.visitor.id)).toBe(false);
+
+    const stored = await prisma.visitor.findUnique({ where: { id: expiredPass.body.visitor.id } });
+    expect(stored?.status).toBe(VisitorStatus.EXPIRED);
+  });
+
+  it('automatically checks out visitors that remain inside past their validity window', async () => {
+    const pass = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
+      name: 'Timed Guest',
+      visitorType: 'SERVICE',
+      validUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    });
+    expect(pass.status).toBe(201);
+
+    const checkIn = await api.post(`/visitors/${pass.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
+    expect(checkIn.status).toBe(200);
+
+    await prisma.visitor.update({
+      where: { id: pass.body.visitor.id },
+      data: { validUntil: new Date(Date.now() - 60 * 1000) },
+    });
+
+    await api.get('/visitors/gate').set('Authorization', `Bearer ${securityToken}`);
+    const stored = await prisma.visitor.findUnique({ where: { id: pass.body.visitor.id } });
+    expect(stored?.status).toBe(VisitorStatus.CHECKED_OUT);
+    expect(stored?.checkOutTime).toBeDefined();
+  });
+
+  it('locks repeated OTP guesses and allows the resident to regenerate the code', async () => {
+    const created = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
+      name: 'OTP Lock Guest',
+      visitorType: 'GUEST',
+    });
+    expect(created.status).toBe(201);
+    const visitorId = created.body.visitor.id;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const wrong = await api.post(`/visitors/${visitorId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: '000000' });
+      expect([400, 429]).toContain(wrong.status);
+    }
+
+    const locked = await api.post(`/visitors/${visitorId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: created.body.visitor.otp });
+    expect(locked.status).toBe(429);
+
+    const regenerated = await api.post(`/visitors/${visitorId}/approve`).set('Authorization', `Bearer ${residentToken}`);
+    expect(regenerated.status).toBe(200);
+    expect(regenerated.body.visitor.otp).toMatch(/^\d{6}$/);
+
+    const checkIn = await api.post(`/visitors/${visitorId}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({ otp: regenerated.body.visitor.otp });
+    expect(checkIn.status).toBe(200);
+    expect(checkIn.body.visitor.otp).toBeUndefined();
+  });
+
+  it('keeps resident handoff suggestions separate from the completed gate handoff', async () => {
+    const created = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
+      name: 'Suggested Delivery',
+      visitorType: 'DELIVERY',
+      provider: 'Parcel Service',
+    });
+    expect(created.status).toBe(201);
+
+    const checkIn = await api.post(`/visitors/${created.body.visitor.id}/check-in`).set('Authorization', `Bearer ${securityToken}`).send({});
+    expect(checkIn.status).toBe(200);
+
+    const suggestion = await api.post(`/visitors/${created.body.visitor.id}/suggest-handoff`).set('Authorization', `Bearer ${residentToken}`).send({
+      recipientType: 'GATE',
+      recipientName: 'Gate desk',
+    });
+    expect(suggestion.status).toBe(200);
+    expect(suggestion.body.visitor.handoffSuggestionType).toBe('GATE');
+    expect(suggestion.body.visitor.handoffTimestamp).toBeNull();
+
+    const handoff = await api.post(`/visitors/${created.body.visitor.id}/handoff`).set('Authorization', `Bearer ${securityToken}`).send({
+      recipientType: 'GATE',
+      proofReference: 'LOCKER-101',
+    });
+    expect(handoff.status).toBe(200);
+    expect(handoff.body.visitor.handoffTimestamp).toBeDefined();
+    expect(handoff.body.visitor.handoffProofReference).toBe('LOCKER-101');
   });
 });

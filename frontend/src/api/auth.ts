@@ -3,7 +3,7 @@ import { api } from './client';
 export type UserRole = 'LEADERSHIP' | 'MANAGER' | 'WORKFORCE' | 'RESIDENT' | 'OWNER' | 'TENANT' | string;
 
 export type OwnershipStatus = 'ACTIVE' | 'INACTIVE' | 'TRANSFERRED';
-export type ResidencyStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'EXPIRED';
+export type ResidencyStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'REVOKED' | 'REJECTED' | 'EXPIRED';
 export type ResidencyType = 'OWNER' | 'TENANT' | 'FAMILY_MEMBER';
 export type EmployeeRole =
   | 'MANAGER'

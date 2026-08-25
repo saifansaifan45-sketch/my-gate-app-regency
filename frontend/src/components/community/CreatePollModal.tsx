@@ -7,7 +7,7 @@ import { PremiumPressable } from '../ui/PremiumPressable';
 import { Button } from '../ui/Button';
 import { CommunitySheet } from './CommunitySheet';
 import { theme } from '../../theme';
-import { communityApi, CreatePollPayload } from '../../api/community';
+import { communityApi, CreatePollPayload, PollAudience } from '../../api/community';
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 5;
@@ -16,11 +16,14 @@ interface CreatePollModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit?: (payload: CreatePollPayload) => Promise<unknown>;
+  canChooseAudience?: boolean;
+  householdUnitId?: string;
 }
 
-export function CreatePollModal({ visible, onClose, onSubmit }: CreatePollModalProps) {
+export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience = false, householdUnitId }: CreatePollModalProps) {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
+  const [audience, setAudience] = useState<PollAudience>(canChooseAudience ? 'RESIDENTS' : 'HOUSEHOLD');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(false);
@@ -29,6 +32,7 @@ export function CreatePollModal({ visible, onClose, onSubmit }: CreatePollModalP
     if (visible) {
       setQuestion('');
       setOptions(['', '']);
+      setAudience(canChooseAudience ? 'RESIDENTS' : 'HOUSEHOLD');
       setError('');
       setSubmitting(false);
       setCreated(false);
@@ -75,7 +79,12 @@ export function CreatePollModal({ visible, onClose, onSubmit }: CreatePollModalP
     setSubmitting(true);
     try {
       const submit = onSubmit ?? ((payload: CreatePollPayload) => communityApi.createPollInDefaultSpace(payload));
-      await submit({ question: question.trim(), options: trimmedOptions });
+      await submit({
+        question: question.trim(),
+        options: trimmedOptions,
+        audience,
+        ...(audience === 'HOUSEHOLD' && householdUnitId ? { unitId: householdUnitId } : {}),
+      });
       setCreated(true);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -111,6 +120,32 @@ export function CreatePollModal({ visible, onClose, onSubmit }: CreatePollModalP
             value={question}
             onChangeText={setQuestion}
           />
+
+          {canChooseAudience ? (
+            <View style={styles.audienceSection}>
+              <Text style={styles.fieldLabel}>Who can vote?</Text>
+              <View style={styles.audienceRow}>
+                {([
+                  { id: 'RESIDENTS', label: 'Residents' },
+                  { id: 'OWNERS', label: 'Owners' },
+                  { id: 'LEADERSHIP', label: 'Leadership' },
+                ] as const).map((option) => (
+                  <PremiumPressable
+                    key={option.id}
+                    style={[styles.audienceChip, audience === option.id && styles.audienceChipActive]}
+                    onPress={() => setAudience(option.id)}
+                  >
+                    <Text style={[styles.audienceText, audience === option.id && styles.audienceTextActive]}>{option.label}</Text>
+                  </PremiumPressable>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.scopeNote}>
+              <Feather name="home" size={16} color={theme.colors.primary} />
+              <Text style={styles.scopeNoteText}>Only people connected to your residence can see and vote on this poll.</Text>
+            </View>
+          )}
 
           <View style={styles.optionsHeader}>
             <Text style={styles.fieldLabel}>Options</Text>
@@ -172,6 +207,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  audienceSection: { marginTop: 4, marginBottom: 12 },
+  audienceRow: { flexDirection: 'row', gap: 8 },
+  audienceChip: { flex: 1, alignItems: 'center', paddingVertical: 11, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+  audienceChipActive: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
+  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary },
+  audienceTextActive: { color: theme.colors.primary },
+  scopeNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EEF8F1', borderRadius: 12, padding: 12, marginBottom: 14 },
+  scopeNoteText: { flex: 1, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, lineHeight: 17, color: theme.colors.primary },
   optionCount: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 12,

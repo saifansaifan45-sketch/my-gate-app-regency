@@ -25,18 +25,18 @@ export const QUICK_ACTION_VISUALS = {
 
 export const SERVICE_CATALOG: ServiceEntry[] = [
   { id: 'sos', label: 'SOS Alert', description: 'Emergency response', icon: 'alert-circle', route: '/home', category: 'Safety', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], isEmergency: true, requiresAuth: true },
-  { id: 'add-visitor', label: 'Add Visitor', description: 'Pre-approve entry', icon: 'user-plus', route: '/visitors', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'cab-alert', label: 'Cab Alert', description: 'Expected cab', icon: 'navigation', route: '/visitors', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'delivery', label: 'Delivery', description: 'Expected package', icon: 'package', route: '/visitors', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'house-help', label: 'House Help', description: 'Maids & cooks', icon: 'users', route: '/visitors', category: 'Home Services', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'help-desk', label: 'Help Desk', description: 'Raise a ticket', icon: 'headphones', route: '/help-desk', category: 'Support', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'maintenance', label: 'Maintenance', description: 'Request repairs', icon: 'tool', route: '/services/maintenance', category: 'Home Services', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
+  { id: 'add-visitor', label: 'Invite Guest', description: 'Pre-approve entry', icon: 'user-plus', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'cab-alert', label: 'Cab Arrival', description: 'Notify the gate', icon: 'navigation', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'delivery', label: 'Delivery Arrival', description: 'Notify the gate', icon: 'package', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'house-help', label: 'Household Help', description: 'Manage home staff', icon: 'users', route: '/visitors', category: 'Home Care', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'help-desk', label: 'Support', description: 'Get help from management', icon: 'headphones', route: '/help-desk', category: 'Support', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'maintenance', label: 'Repairs', description: 'Report a maintenance issue', icon: 'tool', route: '/services/maintenance', category: 'Home Care', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
   // Disabled: no /lost-found backend route exists yet.
   // { id: 'lost-found', label: 'Lost & Found', description: 'Report items', icon: 'search', route: '/community', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP'], requiresAuth: true },
-  { id: 'activity-log', label: 'Activity Log', description: 'My gate history', icon: 'list', route: '/activity-log', category: 'Gate & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT'], requiresAuth: true },
-  { id: 'announcements', label: 'Notice', description: 'Notices & updates', icon: 'bell', route: '/announcements', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
-  { id: 'family', label: 'Family', description: 'Manage access', icon: 'home', route: '/family-members', category: 'Support', availableRoles: ['OWNER', 'TENANT'], requiresAuth: true },
-  { id: 'community-hub', label: 'Community', description: 'Rules & docs', icon: 'grid', route: '/community-hub', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
+  { id: 'activity-log', label: 'Entry History', description: 'Review gate activity', icon: 'list', route: '/activity-log', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'announcements', label: 'Notices', description: 'Community updates', icon: 'bell', route: '/announcements', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
+  { id: 'family', label: 'Family Access', description: 'Manage household access', icon: 'home', route: '/family-members', category: 'Support', availableRoles: ['OWNER', 'TENANT', 'LEADERSHIP'], requiresAuth: true },
+  { id: 'community-hub', label: 'Community Hub', description: 'Rules, documents & spaces', icon: 'grid', route: '/community-hub', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], requiresAuth: true },
   // Disabled: Calendar currently uses local seeded state and has no backend event API.
   // { id: 'calendar', label: 'Calendar', description: 'Events & bookings', icon: 'calendar', route: '/calendar', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP'], requiresAuth: true },
 ];

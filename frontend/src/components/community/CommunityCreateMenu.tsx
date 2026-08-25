@@ -16,9 +16,12 @@ interface CommunityCreateMenuProps {
   onClose: () => void;
   onCreatePoll: (payload: CreatePollPayload) => Promise<unknown>;
   onCreateAnnouncement: (payload: CreateAnnouncementPayload) => Promise<unknown>;
+  canChoosePollAudience?: boolean;
+  householdUnitId?: string;
+  canCreateAnnouncement?: boolean;
 }
 
-export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAnnouncement }: CommunityCreateMenuProps) {
+export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAnnouncement, canChoosePollAudience = false, householdUnitId, canCreateAnnouncement = true }: CommunityCreateMenuProps) {
   const [active, setActive] = useState<CreateTarget | null>(null);
 
   const openModal = (target: CreateTarget) => {
@@ -36,8 +39,8 @@ export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAn
     title: string;
     description: string;
   }> = [
-    { id: 'poll', icon: 'pie-chart', bg: '#E3F2FD', color: '#1976D2', title: 'Create Poll', description: 'Ask the community to weigh in' },
-    { id: 'announcement', icon: 'bell', bg: '#FFF3E0', color: theme.colors.accent, title: 'Create Announcement', description: 'Publish an important notice' },
+    { id: 'poll', icon: 'pie-chart', bg: '#E3F2FD', color: '#1976D2', title: 'Create Poll', description: canChoosePollAudience ? 'Ask a selected community group to vote' : 'Ask people in your residence to vote' },
+    ...(canCreateAnnouncement ? [{ id: 'announcement' as const, icon: 'bell' as const, bg: '#FFF3E0', color: theme.colors.accent, title: 'Create Announcement', description: 'Publish an important notice' }] : []),
   ];
 
   return (
@@ -69,8 +72,8 @@ export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAn
         </View>
       </CommunitySheet>
 
-      <CreatePollModal visible={active === 'poll'} onClose={closeActive} onSubmit={onCreatePoll} />
-      <CreateAnnouncementModal visible={active === 'announcement'} onClose={closeActive} onSubmit={onCreateAnnouncement} />
+      <CreatePollModal visible={active === 'poll'} onClose={closeActive} onSubmit={onCreatePoll} canChooseAudience={canChoosePollAudience} householdUnitId={householdUnitId} />
+      {canCreateAnnouncement ? <CreateAnnouncementModal visible={active === 'announcement'} onClose={closeActive} onSubmit={onCreateAnnouncement} /> : null}
     </>
   );
 }

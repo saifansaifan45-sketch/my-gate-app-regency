@@ -7,7 +7,6 @@ export function useRoleGuard() {
   const segments = useSegments();
   const {
     hasManagerAccess,
-    hasLeadershipAccess,
     hasResidentAccess,
     hasOwnerAccess,
     hasApprovedMembership,
@@ -28,13 +27,15 @@ export function useRoleGuard() {
     // Specifically Resident-Only Routes
     const isResidentOnlyRoute = route.includes('/services/maintenance') || route.includes('/services/raise-issue') || route.includes('/my-home');
 
-    const isPureOps = (hasManagerAccess() || hasLeadershipAccess()) && !hasResidentAccess() && !hasOwnerAccess();
-    const isResidentOrOwner = (hasResidentAccess() || hasOwnerAccess()) && !hasManagerAccess() && !hasLeadershipAccess();
-    const isPureWorkforce = hasApprovedMembership('WORKFORCE') && !hasManagerAccess() && !hasLeadershipAccess();
+    const isLeadershipMember = hasApprovedMembership('LEADERSHIP');
+    const isManagerMember = hasManagerAccess();
+    const isPureOps = (isManagerMember || isLeadershipMember) && !hasResidentAccess() && !hasOwnerAccess();
+    const isResidentOrOwner = (hasResidentAccess() || hasOwnerAccess()) && !isManagerMember && !isLeadershipMember;
+    const isPureWorkforce = hasApprovedMembership('WORKFORCE') && !isManagerMember && !isLeadershipMember;
     
     // Q1: Can manager accidentally access resident routes?
     if (isPureOps && (isResidentRoute || isWorkforceRoute)) {
-      if (hasLeadershipAccess()) {
+      if (isLeadershipMember) {
         router.replace('/(app)/leadership');
       } else {
         router.replace('/(app)/manager');
@@ -67,14 +68,14 @@ export function useRoleGuard() {
     }
 
     // Enforce strict access to Manager/Leadership routes
-    if (isManagerRoute && !hasManagerAccess() && !hasLeadershipAccess()) {
+    if (isManagerRoute && !isManagerMember && !isLeadershipMember) {
         router.replace('/(app)/home');
         return;
     }
-    if (isLeadershipRoute && !hasLeadershipAccess()) {
+    if (isLeadershipRoute && !isLeadershipMember) {
         router.replace('/(app)/home');
         return;
     }
 
-  }, [segments, hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasApprovedMembership, router]);
+  }, [segments, hasManagerAccess, hasResidentAccess, hasOwnerAccess, hasApprovedMembership, router]);
 }

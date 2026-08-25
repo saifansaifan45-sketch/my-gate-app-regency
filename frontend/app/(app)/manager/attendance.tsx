@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
@@ -30,7 +31,14 @@ export default function AttendanceScreen() {
   const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const formatLocalDate = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [date, setDate] = useState(() => formatLocalDate(new Date()));
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -167,12 +175,12 @@ export default function AttendanceScreen() {
   const changeDay = (delta: number) => {
     const d = new Date(date);
     d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(formatLocalDate(d));
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
+  const isToday = date === formatLocalDate(new Date());
 
-  const getStatusBadge = (status: AttendanceStatus) => {
+  const getStatusBadge = (status: AttendanceStatus | null) => {
     switch (status) {
       case 'PRESENT':
         return { bg: '#ECFDF5', text: '#059669', label: 'Present', dotColor: '#10B981' };
@@ -183,8 +191,19 @@ export default function AttendanceScreen() {
       case 'HALF_DAY':
         return { bg: '#EFF6FF', text: '#2563EB', label: 'Half Day', dotColor: '#3B82F6' };
       default:
-        return { bg: '#F3F4F6', text: '#6B7280', label: 'Not Marked', dotColor: '#9CA3AF' };
+        return { bg: '#F3F4F6', text: '#6B7280', label: 'Not marked', dotColor: '#9CA3AF' };
     }
+  };
+
+  const confirmBatchMarkPresent = () => {
+    Alert.alert(
+      'Mark everyone present?',
+      `This will set PRESENT for all ${records.length} personnel on ${date}. Existing attendance entries will be overwritten.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Mark present', onPress: handleBatchMarkPresent },
+      ]
+    );
   };
 
   return (
@@ -473,7 +492,7 @@ export default function AttendanceScreen() {
 
             <TouchableOpacity
               style={styles.batchActionCard}
-              onPress={handleBatchMarkPresent}
+              onPress={confirmBatchMarkPresent}
               disabled={importing}
             >
               <View style={[styles.batchIconBox, { backgroundColor: '#ECFDF5' }]}>

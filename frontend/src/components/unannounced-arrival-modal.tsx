@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from './ui/Text';
@@ -28,6 +28,7 @@ export function UnannouncedArrivalModal({
   const [providerPreset, setProviderPreset] = useState('');
   const [customProvider, setCustomProvider] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   
   const [activeUnit, setActiveUnit] = useState('');
@@ -43,8 +44,33 @@ export function UnannouncedArrivalModal({
 
   const isExternal = visitorType === 'CAB' || visitorType === 'DELIVERY';
   const activeProvider = providerPreset === 'Custom' ? customProvider : providerPreset;
+
+  const resetForm = () => {
+    setVisitorType('GUEST');
+    setProviderPreset('');
+    setCustomProvider('');
+    setName('');
+    setPhone('');
+    setVehicleNumber('');
+    setActiveUnit('');
+  };
+
+  const handleClose = () => {
+    if (submitting) return;
+    resetForm();
+    onClose();
+  };
+
+  useEffect(() => {
+    if (!visible) resetForm();
+  }, [visible]);
   
   const matchedUnit = units.find((u: any) => u.unitNumber.toUpperCase() === activeUnit.toUpperCase());
+  const unitSuggestions = activeUnit.trim()
+    ? units
+        .filter((u: any) => u.unitNumber.toUpperCase().includes(activeUnit.toUpperCase()))
+        .slice(0, 6)
+    : [];
 
   const canSubmit = () => {
     if (!matchedUnit) return false;
@@ -58,16 +84,22 @@ export function UnannouncedArrivalModal({
     setSubmitting(true);
     
     try {
-      await api.post('/visitors/unannounced', {
+      const response = await api.post<{ deduped?: boolean }>('/visitors/unannounced', {
         name: isExternal ? name || activeProvider : name,
+        phone: phone || undefined,
         vehicleNumber: vehicleNumber || undefined,
         visitorType,
         provider: isExternal ? activeProvider : undefined,
         unitId: matchedUnit.id
       });
       
-      showToast({ title: 'Alert Sent', message: 'Resident has been notified for approval.', type: 'success' });
+      showToast({
+        title: response.data.deduped ? 'Existing alert found' : 'Alert sent',
+        message: response.data.deduped ? 'This arrival was already sent to the resident recently.' : 'Resident has been notified for approval.',
+        type: 'success',
+      });
       if (onSuccess) onSuccess();
+      resetForm();
       onClose();
     } catch (err: any) {
       showToast({ title: 'Error', message: err.response?.data?.error?.message || 'Failed to alert resident', type: 'error' });
@@ -77,13 +109,13 @@ export function UnannouncedArrivalModal({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet visible={visible} onClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardAvoiding}>
         <View style={styles.sheet}>
           <View style={styles.grabber} />
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Unannounced Arrival</Text>
-            <PremiumPressable style={styles.closeBtn} onPress={onClose}>
+            <PremiumPressable style={styles.closeBtn} onPress={handleClose}>
               <Feather name="x" size={20} color={theme.colors.textSecondary} />
             </PremiumPressable>
           </View>
@@ -99,9 +131,28 @@ export function UnannouncedArrivalModal({
               autoCapitalize="characters"
               placeholderTextColor={theme.colors.textSecondary}
             />
-            {activeUnit && !matchedUnit && (
+            {matchedUnit ? (
+              <View style={styles.selectedUnit}>
+                <Feather name="check-circle" size={15} color={theme.colors.success} />
+                <Text style={styles.selectedUnitText}>Unit {matchedUnit.unitNumber} selected</Text>
+              </View>
+            ) : activeUnit && unitSuggestions.length > 0 ? (
+              <View style={styles.unitSuggestions}>
+                {unitSuggestions.map((unit: any) => (
+                  <PremiumPressable
+                    key={unit.id}
+                    style={styles.unitSuggestion}
+                    onPress={() => setActiveUnit(unit.unitNumber)}
+                  >
+                    <Feather name="home" size={15} color={theme.colors.primary} />
+                    <Text style={styles.unitSuggestionText}>Unit {unit.unitNumber}</Text>
+                    <Feather name="arrow-up-left" size={14} color={theme.colors.textSecondary} />
+                  </PremiumPressable>
+                ))}
+              </View>
+            ) : activeUnit ? (
               <Text style={styles.errorText}>Unit not found.</Text>
-            )}
+            ) : null}
 
             <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Type of Arrival</Text>
             <View style={styles.typeRow}>
@@ -167,6 +218,15 @@ export function UnannouncedArrivalModal({
 
             <RNTextInput
               style={styles.input}
+              placeholder="Phone number (optional)"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+
+            <RNTextInput
+              style={styles.input}
               placeholder="Vehicle number (optional)"
               value={vehicleNumber}
               onChangeText={setVehicleNumber}
@@ -198,6 +258,11 @@ const styles = StyleSheet.create({
   closeBtn: { width: 44, height: 44, borderRadius: 20, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' },
   fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textPrimary, marginBottom: 8 },
   errorText: { color: theme.colors.error, fontSize: 12, marginBottom: 12, marginTop: -8 },
+  unitSuggestions: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 14, backgroundColor: theme.colors.surface, marginBottom: 12, overflow: 'hidden' },
+  unitSuggestion: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  unitSuggestionText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textPrimary },
+  selectedUnit: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 12, paddingHorizontal: 2 },
+  selectedUnitText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.success },
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F3F4F6', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 98 },
   typePillSelected: { backgroundColor: theme.colors.primary },

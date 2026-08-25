@@ -17,7 +17,12 @@ import { cardSystem } from '../../../../src/components/ui/cardSystem';
 import { isPersonnelCompatibleWithTicket } from '../../../../src/utils/personnel';
 
 export default function AssignPersonnelScreen() {
-  const { ticketId, category } = useLocalSearchParams<{ ticketId: string; category?: string }>();
+  const { ticketId: rawTicketId, category: rawCategory } = useLocalSearchParams<{
+    ticketId?: string | string[];
+    category?: string | string[];
+  }>();
+  const ticketId = Array.isArray(rawTicketId) ? rawTicketId[0] : rawTicketId;
+  const category = Array.isArray(rawCategory) ? rawCategory[0] : rawCategory;
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
@@ -27,10 +32,23 @@ export default function AssignPersonnelScreen() {
   const [selectedPersonnelId, setSelectedPersonnelId] = useState<string | null>(null);
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const existingAssignment = ticket?.tasks?.find(
+    (task) => task.status !== 'CANCELLED' && ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'].includes(task.status)
+  );
+
   const fetchData = useCallback(async () => {
-    if (!ticketId) return;
+    if (!ticketId) {
+      setLoadError(true);
+      setLoading(false);
+      return;
+    }
+
+    setLoadError(false);
+    setLoading(true);
+    setSelectedPersonnelId(null);
     try {
       const [ticketData, personnelData] = await Promise.all([
         managerApi.getTicket(ticketId),
@@ -40,14 +58,16 @@ export default function AssignPersonnelScreen() {
       setPersonnelList(personnelData.personnel);
 
       // Auto-select first available matching technician if possible
+      const effectiveCategory = ticketData.category || category || '';
       const matched = personnelData.personnel.find(
         (p) =>
           p.availabilityStatus === 'AVAILABLE' &&
-          isPersonnelCompatibleWithTicket(p.category, category || '')
+          isPersonnelCompatibleWithTicket(p.category, effectiveCategory)
       );
       if (matched) setSelectedPersonnelId(matched.id);
     } catch (err) {
       console.warn('Failed to load assign data:', err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -82,10 +102,13 @@ export default function AssignPersonnelScreen() {
         type: 'success',
       });
       router.replace(`/manager/tickets/${ticketId}` as any);
-    } catch {
+    } catch (err) {
+      const message = (err as {
+        response?: { data?: { error?: { message?: string } } };
+      })?.response?.data?.error?.message;
       showToast({
         title: 'Assignment Failed',
-        message: 'Failed to assign personnel. Please try again.',
+        message: message || 'Failed to assign personnel. Please try again.',
         type: 'error',
       });
     } finally {
@@ -107,8 +130,19 @@ export default function AssignPersonnelScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 80 }]}
         showsVerticalScrollIndicator={false}
       >
+        {loadError ? (
+          <View style={styles.errorCard}>
+            <Feather name="wifi-off" size={24} color="#B45309" />
+            <Text style={styles.errorTitle}>Assignment details unavailable</Text>
+            <Text style={styles.errorDescription}>We could not load the ticket or available personnel.</Text>
+            <PremiumPressable style={styles.retryButton} onPress={fetchData}>
+              <Text style={styles.retryText}>Try again</Text>
+            </PremiumPressable>
+          </View>
+        ) : null}
+
         {/* Ticket Context Card */}
-        <ScreenEntrance delay={50}>
+        {!loadError && <ScreenEntrance delay={50}>
           <View style={styles.ticketContextCard}>
             <View style={styles.ticketCategoryPill}>
               <Text style={styles.ticketCategoryText}>{ticket?.category || category || 'Maintenance'}</Text>
@@ -118,14 +152,23 @@ export default function AssignPersonnelScreen() {
               Unit {ticket?.resident?.unitNumber || '9A'} · Resident: {ticket?.resident?.firstName} {ticket?.resident?.lastName || ''}
             </Text>
           </View>
-        </ScreenEntrance>
+        </ScreenEntrance>}
 
         {/* Personnel Selection Section */}
-        <ScreenEntrance delay={100}>
+        {!loadError && <ScreenEntrance delay={100}>
+          {existingAssignment ? (
+            <View style={styles.existingAssignmentCard}>
+              <Feather name="check-circle" size={22} color="#047857" />
+              <Text style={styles.existingAssignmentTitle}>This ticket is already assigned</Text>
+              <Text style={styles.existingAssignmentText}>
+                {existingAssignment.assignedPersonnel?.name || 'A team member'} is currently working on this request.
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.sectionTitle}>Select Maintenance Staff</Text>
           <Text style={styles.sectionSub}>Choose based on trade category and current active workload.</Text>
 
-          {loading ? (
+          {existingAssignment ? null : loading ? (
             <View style={{ gap: 10, marginTop: 10 }}>
               <Skeleton height={74} borderRadius={16} />
               <Skeleton height={74} borderRadius={16} />
@@ -195,10 +238,10 @@ export default function AssignPersonnelScreen() {
               </View>
             );
           })()}
-        </ScreenEntrance>
+        </ScreenEntrance>}
 
         {/* Manager Instructions / Remarks */}
-        <ScreenEntrance delay={150}>
+        {!loadError && <ScreenEntrance delay={150}>
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Instructions / Notes (Optional)</Text>
           <View style={styles.inputWrap}>
             <TextInput
@@ -211,19 +254,19 @@ export default function AssignPersonnelScreen() {
               numberOfLines={3}
             />
           </View>
-        </ScreenEntrance>
+        </ScreenEntrance>}
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
-      <View style={styles.bottomBar}>
+      {!loadError && <View style={styles.bottomBar}>
         <Button
           label="Confirm & Assign Task"
           variant="primary"
           onPress={handleAssign}
           loading={submitting}
-          disabled={!selectedPersonnelId}
+          disabled={!selectedPersonnelId || Boolean(existingAssignment)}
         />
-      </View>
+      </View>}
     </View>
   );
 }
@@ -231,6 +274,69 @@ export default function AssignPersonnelScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 10 },
+  errorCard: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 24,
+    paddingVertical: 30,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  errorTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+    marginTop: 12,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  errorDescription: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 11,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  existingAssignmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 10,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  existingAssignmentTitle: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
+    color: '#065F46',
+  },
+  existingAssignmentText: {
+    width: '100%',
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#047857',
+    marginTop: 8,
+  },
   ticketContextCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,

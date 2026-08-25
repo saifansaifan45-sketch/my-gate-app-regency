@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
@@ -33,10 +33,6 @@ export default function ManagerWorkforceApprovalsScreen() {
       return res.pendingWorkforce || [];
     },
   });
-
-  const onRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['manager-pending-workforce'] });
-  };
 
   const handleApprove = async (item: PendingWorkforceItem) => {
     setConfirmState({ type: 'approve', item });
