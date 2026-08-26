@@ -21,6 +21,10 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy for accurate IP detection behind load balancers/CDNs
+// In production, set to the number of proxies or specific subnet
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+
 
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
   ? process.env.CORS_ALLOWED_ORIGINS.split(',')

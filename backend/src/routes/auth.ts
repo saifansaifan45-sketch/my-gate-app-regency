@@ -13,18 +13,57 @@ const router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 30,
   message: { error: { message: 'Too many requests, please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
 });
 
-const strictAuthLimiter = rateLimit({
+// Login: 10 attempts per 15 min per IP+email combo
+const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { error: { message: 'Too many attempts, please try again later.' } },
+  max: 10,
+  message: { error: { message: 'Too many login attempts. Please try again in 15 minutes.' } },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    try {
+      const body = JSON.parse(req.body?.toString() || '{}');
+      const email = (body.email || '').toLowerCase().trim();
+      return email ? `${ip}:${email}` : ip;
+    } catch {
+      return ip;
+    }
+  },
+  skipSuccessfulRequests: true,
+});
+
+// Register: 5 per hour per IP (legitimate users rarely register more than once)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: { message: 'Too many registration attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
+});
+
+// Password reset: 3 per hour per IP (strict but not blocking)
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { error: { message: 'Too many password reset attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
 });
 
 const registerSchema = z.object({
@@ -112,7 +151,7 @@ function formatUserResponse(user: any) {
 // ----------------------------------------------------
 // 1. POST /auth/register (Step 1 — Pure Account Creation)
 // ----------------------------------------------------
-router.post('/register', strictAuthLimiter, async (req, res, _next) => {
+router.post('/register', registerLimiter, async (req, res, _next) => {
   try {
     const body = registerSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -299,7 +338,7 @@ router.post('/register', strictAuthLimiter, async (req, res, _next) => {
 // ----------------------------------------------------
 // 2. POST /auth/login
 // ----------------------------------------------------
-router.post('/login', strictAuthLimiter, async (req, res, _next) => {
+router.post('/login', loginLimiter, async (req, res, _next) => {
   try {
     const { email: rawEmail, password } = loginSchema.parse(req.body);
     const email = rawEmail.trim().toLowerCase();
@@ -903,7 +942,7 @@ router.post('/change-password', requireAuth, authLimiter, async (req: AuthReques
 // ----------------------------------------------------
 // 11. POST /auth/forgot-password
 // ----------------------------------------------------
-router.post('/forgot-password', strictAuthLimiter, async (req, res, _next) => {
+router.post('/forgot-password', passwordResetLimiter, async (req, res, _next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: { message: 'Email is required' } });
