@@ -817,3 +817,16 @@ model LostAndFoundItem {
 
   @@index([communityId, status, createdAt])
 }
+
+model IdempotencyKey {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  endpoint    String
+  userId      String
+  response    Json?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([userId, endpoint])
+  @@index([expiresAt])
+}

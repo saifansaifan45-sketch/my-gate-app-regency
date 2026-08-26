@@ -102,6 +102,16 @@ const visitorLifecycleTimer = setInterval(() => {
 }, 60_000);
 visitorLifecycleTimer.unref?.();
 
+// Clean up expired idempotency keys daily
+const idempotencyCleanupTimer = setInterval(async () => {
+  try {
+    await prisma.idempotencyKey.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  } catch (error) {
+    console.error('Idempotency key cleanup failed:', error);
+  }
+}, 24 * 60 * 60 * 1000);
+idempotencyCleanupTimer.unref?.();
+
 // Disabled feature: keep this unmounted until the lost-found backend is implemented.
 // app.use('/lost-found', lostFoundRoutes);
 

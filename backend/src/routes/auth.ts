@@ -32,6 +32,7 @@ const registerSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
   fullName: z.string().optional(),
   phoneNumber: z.string().optional(),
+  idempotencyKey: z.string().uuid().optional(),
   // Legacy / optional fields for backward compatibility
   floor: z.string().optional(),
   room: z.string().optional(),
@@ -115,10 +116,28 @@ router.post('/register', strictAuthLimiter, async (req, res, _next) => {
   try {
     const body = registerSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
+    const idempotencyKey = body.idempotencyKey;
+
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingKey = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existingKey) {
+        if (existingKey.response) {
+          return res.status(201).json(existingKey.response);
+        }
+        return res.status(409).json({ error: { message: 'Request is being processed, please wait.' } });
+      }
+    }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      return res.status(400).json({ error: { message: 'User already exists with this email address' } });
+      const response = { error: { message: 'User already exists with this email address' } };
+      if (idempotencyKey) {
+        await prisma.idempotencyKey.create({
+          data: { key: idempotencyKey, endpoint: '/auth/register', userId: existingUser.id, response, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+        });
+      }
+      return res.status(400).json(response);
     }
 
     const passwordHash = await bcrypt.hash(body.password, 10);
@@ -150,6 +169,13 @@ router.post('/register', strictAuthLimiter, async (req, res, _next) => {
         role: Role.RESIDENT,
       },
     });
+
+    // Store idempotency key if provided
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.create({
+        data: { key: idempotencyKey, endpoint: '/auth/register', userId: user.id, response: { id: user.id, email: user.email }, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+      });
+    }
 
     let _membership = null;
     let _createdOwnership: any = null;
@@ -248,13 +274,23 @@ router.post('/register', strictAuthLimiter, async (req, res, _next) => {
 
     const formatted = formatUserResponse(fullUser);
 
-    res.status(201).json({
+    const response = {
       accessToken,
       refreshToken,
       user: formatted,
       roles: formatted.roles,
       memberships: formatted.memberships,
-    });
+    };
+
+    // Update idempotency key with full response
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.update({
+        where: { key: idempotencyKey },
+        data: { response }
+      });
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     _next(error);
   }
