@@ -6,6 +6,7 @@ import { AppHeader } from '../../src/components/ui/AppHeader';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { ConfirmationModal } from '../../src/components/ui/ConfirmationModal';
+import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { theme } from '../../src/theme';
 import { useSession } from '../../src/store/auth';
@@ -30,6 +31,12 @@ export default function ResidencyRequestsScreen() {
     residencyId: string;
     residentName: string;
     action: 'pause' | 'resume' | 'revoke';
+  } | null>(null);
+  const [menuAction, setMenuAction] = useState<{
+    unitId: string;
+    residencyId: string;
+    residentName: string;
+    status: string;
   } | null>(null);
 
   const isOwner = hasOwnership();
@@ -256,34 +263,12 @@ export default function ResidencyRequestsScreen() {
                             {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && (
                               <TouchableOpacity
                                 style={styles.kebabBtn}
-                                onPress={() =>
-                                  Alert.alert(
-                                    'Manage Access',
-                                    `Manage access for ${req.user.firstName}`,
-                                    [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      {
-                                        text: req.status === 'PAUSED' ? 'Restore Access' : 'Pause Access',
-                                        onPress: () => setAccessAction({
-                                          unitId: group.unitId,
-                                          residencyId: req.id,
-                                          residentName: req.user.firstName || 'Resident',
-                                          action: req.status === 'PAUSED' ? 'resume' : 'pause',
-                                        }),
-                                      },
-                                      {
-                                        text: 'Revoke Permanently',
-                                        style: 'destructive',
-                                        onPress: () => setAccessAction({
-                                          unitId: group.unitId,
-                                          residencyId: req.id,
-                                          residentName: req.user.firstName || 'Resident',
-                                          action: 'revoke',
-                                        }),
-                                      },
-                                    ]
-                                  )
-                                }
+                                onPress={() => setMenuAction({
+                                  unitId: group.unitId,
+                                  residencyId: req.id,
+                                  residentName: req.user.firstName || 'Resident',
+                                  status: req.status
+                                })}
                               >
                                 <Feather name="more-horizontal" size={20} color={theme.colors.textTertiary} />
                               </TouchableOpacity>
@@ -304,6 +289,55 @@ export default function ResidencyRequestsScreen() {
           </ScreenEntrance>
         )}
       </ScrollView>
+
+      <BottomSheet visible={!!menuAction} onClose={() => setMenuAction(null)}>
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>Manage Access</Text>
+          <Text style={styles.sheetSubtitle}>{menuAction?.residentName}</Text>
+
+          <View style={styles.sheetOptions}>
+            <TouchableOpacity
+              style={styles.sheetOptionBtn}
+              onPress={() => {
+                const ma = menuAction;
+                setMenuAction(null);
+                if (ma) {
+                  setAccessAction({
+                    unitId: ma.unitId,
+                    residencyId: ma.residencyId,
+                    residentName: ma.residentName,
+                    action: ma.status === 'PAUSED' ? 'resume' : 'pause',
+                  });
+                }
+              }}
+            >
+              <Feather name={menuAction?.status === 'PAUSED' ? 'play' : 'pause'} size={20} color={theme.colors.textPrimary} />
+              <Text style={styles.sheetOptionText}>{menuAction?.status === 'PAUSED' ? 'Restore Access' : 'Pause Access'}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.sheetDivider} />
+
+            <TouchableOpacity
+              style={styles.sheetOptionBtn}
+              onPress={() => {
+                const ma = menuAction;
+                setMenuAction(null);
+                if (ma) {
+                  setAccessAction({
+                    unitId: ma.unitId,
+                    residencyId: ma.residencyId,
+                    residentName: ma.residentName,
+                    action: 'revoke',
+                  });
+                }
+              }}
+            >
+              <Feather name="slash" size={20} color={theme.colors.error} />
+              <Text style={[styles.sheetOptionText, { color: theme.colors.error }]}>Revoke Permanently</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheet>
 
       <ConfirmationModal
         visible={!!accessAction}
@@ -534,5 +568,51 @@ const styles = StyleSheet.create({
   },
   badgeErrorText: {
     color: theme.colors.error,
+  },
+
+  // Menu Sheet
+  sheetContent: {
+    backgroundColor: theme.colors.surface,
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  sheetTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
+    color: theme.colors.textPrimary,
+    marginBottom: 4,
+  },
+  sheetSubtitle: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: 24,
+  },
+  sheetOptions: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.05)',
+  },
+  sheetOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+  },
+  sheetOptionText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+  },
+  sheetDivider: {
+    height: 1,
+    backgroundColor: 'rgba(20, 61, 42, 0.05)',
   },
 });
