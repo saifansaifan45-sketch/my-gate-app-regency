@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
-import { Button } from '../../src/components/ui/Button';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { ConfirmationModal } from '../../src/components/ui/ConfirmationModal';
@@ -113,7 +112,7 @@ export default function ResidencyRequestsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: top }]}>
-      <AppHeader variant="subscreen" title="Residency & Verification" />
+      <AppHeader variant="subscreen" title="Verification & Access" />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}
@@ -123,65 +122,60 @@ export default function ResidencyRequestsScreen() {
         {/* 1. Tenant View: My Submitted Residency Requests */}
         <ScreenEntrance delay={50}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Residency Status</Text>
+            <Text style={styles.sectionTitle}>My Credential</Text>
 
             {myResidencies.length > 0 ? (
               myResidencies.map((r) => (
-                <View key={r.id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={[styles.iconBox, { backgroundColor: '#F3F8F5' }]}>
-                      <Feather name="home" size={20} color={theme.colors.primary} />
-                    </View>
-                    <View style={styles.cardHeaderText}>
-                      <Text style={styles.cardTitle}>Unit {r.unitNumber || user?.unitNumber || 'Unit'}</Text>
-                      <Text style={styles.cardSubtitle}>
-                        Role: {r.relationshipType}
-                      </Text>
+                <View key={r.id} style={styles.credentialCard}>
+                  <View style={styles.credTopRow}>
+                    <View>
+                      <Text style={styles.credUnit}>UNIT {r.unitNumber || user?.unitNumber || '--'}</Text>
+                      <Text style={styles.credRole}>{r.relationshipType}</Text>
                     </View>
                     <View
                       style={[
-                        styles.statusBadge,
+                        styles.badge,
                         r.status === 'ACTIVE'
-                          ? styles.statusActive
+                          ? styles.badgeActive
                           : r.status === 'PENDING'
-                          ? styles.statusPending
-                          : styles.statusRejected,
+                          ? styles.badgePending
+                          : styles.badgeError,
                       ]}
                     >
                       <Text
                         style={[
-                          styles.statusText,
+                          styles.badgeText,
                           r.status === 'ACTIVE'
-                            ? styles.statusActiveText
+                            ? styles.badgeActiveText
                             : r.status === 'PENDING'
-                            ? styles.statusPendingText
-                            : styles.statusRejectedText,
+                            ? styles.badgePendingText
+                            : styles.badgeErrorText,
                         ]}
                       >
-                        {r.status === 'PENDING' ? 'Waiting for Owner Approval' : r.status}
+                        {r.status === 'PENDING' ? 'AWAITING OWNER' : r.status}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={styles.divider} />
+                  <View style={styles.credDivider} />
 
-                  <Text style={styles.statusDescription}>
+                  <Text style={styles.credDesc}>
                     {r.status === 'ACTIVE'
-                      ? 'Verified & Active: You have full resident access to raise tickets, gate management, and services.'
+                      ? 'Verified credential. You have full resident access to raise tickets, gate management, and services.'
                       : r.status === 'PENDING'
-                      ? 'Pending Verification: The property owner has been notified and will verify your tenancy.'
+                      ? 'Verification pending. The property owner has been notified and will verify your tenancy.'
                       : r.status === 'PAUSED'
-                      ? 'Access Paused: Your resident access is temporarily paused by the property owner.'
+                      ? 'Access paused. Your resident credential is temporarily inactive.'
                       : r.status === 'REVOKED'
-                      ? 'Access Revoked: Your resident access was removed by the property owner. Contact them if this needs to be restored.'
-                      : 'Request Declined: Please contact your property owner or township management.'}
+                      ? 'Access revoked by the property owner.'
+                      : 'Request declined.'}
                   </Text>
                 </View>
               ))
             ) : (
-              <View style={styles.emptyCard}>
-                <Feather name="info" size={20} color={theme.colors.textSecondary} />
-                <Text style={styles.emptyText}>You do not have any pending residency requests.</Text>
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No active credentials</Text>
+                <Text style={styles.emptyDesc}>You do not have any pending or active residency requests.</Text>
               </View>
             )}
           </View>
@@ -191,118 +185,119 @@ export default function ResidencyRequestsScreen() {
         {isOwner && (
           <ScreenEntrance delay={100}>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Tenant Verification Requests</Text>
+              <Text style={styles.sectionTitle}>Verification Queue</Text>
 
               {loading ? (
                 <View style={{ gap: 12 }}>
-                  <Skeleton height={120} borderRadius={18} />
-                  <Skeleton height={120} borderRadius={18} />
+                  <Skeleton height={100} borderRadius={16} />
+                  <Skeleton height={100} borderRadius={16} />
                 </View>
               ) : incomingRequests.some((i) => i.residencies.length > 0) ? (
-                incomingRequests.map((group) =>
-                  group.residencies.map((req) => (
-                    <View key={req.id} style={styles.card}>
-                      <View style={styles.cardHeader}>
-                        <View style={[styles.iconBox, { backgroundColor: '#FFF3E0' }]}>
-                          <Feather name="user-check" size={20} color={theme.colors.accent} />
-                        </View>
-                        <View style={styles.cardHeaderText}>
-                          <Text style={styles.cardTitle}>
-                            {req.user.firstName} {req.user.lastName || ''}
-                          </Text>
-                          <Text style={styles.cardSubtitle}>
-                            Requesting Unit {group.unitNumber} ({req.relationshipType})
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            req.status === 'ACTIVE'
-                              ? styles.statusActive
-                              : req.status === 'PENDING' || req.status === 'PAUSED'
-                              ? styles.statusPending
-                              : styles.statusRejected,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.statusText,
-                              req.status === 'ACTIVE'
-                                ? styles.statusActiveText
-                                : req.status === 'PENDING' || req.status === 'PAUSED'
-                                ? styles.statusPendingText
-                                : styles.statusRejectedText,
-                            ]}
-                          >
-                            {req.status}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.applicantInfo}>
-                        Contact: {req.user.email} {req.user.phoneNumber ? `• ${req.user.phoneNumber}` : ''}
-                      </Text>
-
-                      {req.status === 'PENDING' && (
-                        <View style={styles.actionRow}>
-                          <Button
-                            label="Reject"
-                            variant="dangerOutline"
-                            icon="x"
-                            onPress={() => handleReject(group.unitId, req.id, req.user.firstName)}
-                            disabled={actionInProgress === req.id}
-                            loading={actionInProgress === req.id}
-                            style={{ flex: 1 }}
-                          />
-                          <Button
-                            label="Approve"
-                            icon="check"
-                            onPress={() => handleApprove(group.unitId, req.id, req.user.firstName)}
-                            disabled={actionInProgress === req.id}
-                            loading={actionInProgress === req.id}
-                            style={{ flex: 1 }}
-                          />
-                        </View>
-                      )}
-
-                      {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && (
-                        <View style={styles.actionRow}>
-                          <Button
-                            label={req.status === 'PAUSED' ? 'Restore access' : 'Pause access'}
-                            variant="outline"
-                            icon={req.status === 'PAUSED' ? 'play' : 'pause'}
-                            onPress={() => setAccessAction({
-                              unitId: group.unitId,
-                              residencyId: req.id,
-                              residentName: req.user.firstName || 'Resident',
-                              action: req.status === 'PAUSED' ? 'resume' : 'pause',
-                            })}
-                            disabled={actionInProgress === req.id}
-                            loading={actionInProgress === req.id && accessAction?.residencyId === req.id}
-                            style={{ flex: 1 }}
-                          />
-                          <Button
-                            label="Revoke"
-                            variant="dangerOutline"
-                            icon="slash"
-                            onPress={() => setAccessAction({
-                              unitId: group.unitId,
-                              residencyId: req.id,
-                              residentName: req.user.firstName || 'Resident',
-                              action: 'revoke',
-                            })}
-                            disabled={actionInProgress === req.id}
-                            style={{ flex: 1 }}
-                          />
-                        </View>
-                      )}
+                incomingRequests.map((group) => (
+                  <View key={group.unitId} style={styles.queueGroup}>
+                    <View style={styles.queueHeader}>
+                      <Text style={styles.queueUnitTitle}>UNIT {group.unitNumber}</Text>
                     </View>
-                  ))
-                )
+                    {group.residencies.map((req, idx) => (
+                      <View key={req.id} style={[styles.queueItem, idx > 0 && styles.queueItemBorder]}>
+                        <View style={styles.queueItemInfo}>
+                          <Text style={styles.queueItemName}>{req.user.firstName} {req.user.lastName || ''}</Text>
+                          <Text style={styles.queueItemMeta}>
+                            {req.relationshipType} • {req.user.email}
+                          </Text>
+                          {!!req.user.phoneNumber && (
+                            <Text style={styles.queueItemMeta}>{req.user.phoneNumber}</Text>
+                          )}
+                        </View>
+
+                        {req.status === 'PENDING' ? (
+                          <View style={styles.queueActionsInline}>
+                            <TouchableOpacity
+                              style={styles.actionBtnReject}
+                              onPress={() => handleReject(group.unitId, req.id, req.user.firstName)}
+                              disabled={actionInProgress === req.id}
+                            >
+                              <Feather name="x" size={18} color={theme.colors.error} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.actionBtnApprove}
+                              onPress={() => handleApprove(group.unitId, req.id, req.user.firstName)}
+                              disabled={actionInProgress === req.id}
+                            >
+                              <Feather name="check" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={styles.queueStatusActionRow}>
+                            <View
+                              style={[
+                                styles.badge,
+                                req.status === 'ACTIVE'
+                                  ? styles.badgeActive
+                                  : req.status === 'PAUSED'
+                                  ? styles.badgeWarning
+                                  : styles.badgeError,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.badgeText,
+                                  req.status === 'ACTIVE'
+                                    ? styles.badgeActiveText
+                                    : req.status === 'PAUSED'
+                                    ? styles.badgeWarningText
+                                    : styles.badgeErrorText,
+                                ]}
+                              >
+                                {req.status}
+                              </Text>
+                            </View>
+
+                            {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && (
+                              <TouchableOpacity
+                                style={styles.kebabBtn}
+                                onPress={() =>
+                                  Alert.alert(
+                                    'Manage Access',
+                                    `Manage access for ${req.user.firstName}`,
+                                    [
+                                      { text: 'Cancel', style: 'cancel' },
+                                      {
+                                        text: req.status === 'PAUSED' ? 'Restore Access' : 'Pause Access',
+                                        onPress: () => setAccessAction({
+                                          unitId: group.unitId,
+                                          residencyId: req.id,
+                                          residentName: req.user.firstName || 'Resident',
+                                          action: req.status === 'PAUSED' ? 'resume' : 'pause',
+                                        }),
+                                      },
+                                      {
+                                        text: 'Revoke Permanently',
+                                        style: 'destructive',
+                                        onPress: () => setAccessAction({
+                                          unitId: group.unitId,
+                                          residencyId: req.id,
+                                          residentName: req.user.firstName || 'Resident',
+                                          action: 'revoke',
+                                        }),
+                                      },
+                                    ]
+                                  )
+                                }
+                              >
+                                <Feather name="more-horizontal" size={20} color={theme.colors.textTertiary} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                ))
               ) : (
-                <View style={styles.emptyCard}>
-                  <Feather name="check-circle" size={20} color={theme.colors.primary} />
-                  <Text style={styles.emptyText}>No pending tenant verification requests for your properties.</Text>
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyTitle}>Queue is empty</Text>
+                  <Text style={styles.emptyDesc}>No pending verification requests for your properties.</Text>
                 </View>
               )}
             </View>
@@ -314,7 +309,7 @@ export default function ResidencyRequestsScreen() {
         visible={!!accessAction}
         onClose={() => setAccessAction(null)}
         onConfirm={handleAccessAction}
-        title={accessAction?.action === 'revoke' ? 'Revoke resident access?' : accessAction?.action === 'pause' ? 'Pause resident access?' : 'Restore resident access?'}
+        title={accessAction?.action === 'revoke' ? 'Revoke access?' : accessAction?.action === 'pause' ? 'Pause access?' : 'Restore access?'}
         message={accessAction?.action === 'revoke'
           ? `${accessAction.residentName} will lose access to this unit and will need to submit a new request to return.`
           : accessAction?.action === 'pause'
@@ -335,126 +330,209 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    gap: 20,
+    gap: 32,
   },
   section: {
-    gap: 12,
+    gap: 16,
   },
   sectionTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 16,
-    color: theme.colors.textPrimary,
-    marginLeft: 4,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  emptyText: {
-    flex: 1,
-    fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 13,
     color: theme.colors.textSecondary,
-    lineHeight: 18,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 4,
   },
-  cardHeader: {
+  
+  // Credentials (Tenant View)
+  credentialCard: {
+    backgroundColor: '#F7FAF8',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+  },
+  credTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  credUnit: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 20,
+    color: theme.colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  credRole: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: theme.colors.primary,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  credDivider: {
+    height: 1,
+    backgroundColor: 'rgba(20, 61, 42, 0.06)',
+    marginVertical: 16,
+  },
+  credDesc: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13.5,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+
+  // Empty states
+  emptyContainer: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.05)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    marginBottom: 4,
+  },
+  emptyDesc: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12.5,
+    color: theme.colors.textTertiary,
+    textAlign: 'center',
+  },
+
+  // Queue (Landlord View)
+  queueGroup: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    overflow: 'hidden',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  queueHeader: {
+    backgroundColor: 'rgba(20, 61, 42, 0.02)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(20, 61, 42, 0.06)',
+  },
+  queueUnitTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  queueItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
-  iconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+  queueItemBorder: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(20, 61, 42, 0.04)',
   },
-  cardHeaderText: {
+  queueItemInfo: {
     flex: 1,
+    paddingRight: 16,
   },
-  cardTitle: {
+  queueItemName: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 15,
     color: theme.colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  cardSubtitle: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 98,
-  },
-  statusActive: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusActiveText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
-    color: '#059669',
-  },
-  statusPending: {
-    backgroundColor: '#FFF7ED',
-  },
-  statusPendingText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
-    color: '#C2410C',
-  },
-  statusRejected: {
-    backgroundColor: '#FFEBEE',
-  },
-  statusRejectedText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
-    color: '#D32F2F',
-  },
-  statusText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginVertical: 12,
-  },
-  statusDescription: {
+  queueItemMeta: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 12.5,
     color: theme.colors.textSecondary,
     lineHeight: 18,
   },
-  applicantInfo: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12.5,
-    color: theme.colors.textSecondary,
-    marginTop: 10,
-    marginBottom: 14,
-  },
-  actionRow: {
+  
+  queueActionsInline: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtnApprove: {
+    backgroundColor: theme.colors.primary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionBtnReject: {
+    backgroundColor: theme.colors.errorBackground,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  queueStatusActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  kebabBtn: {
+    padding: 4,
+    marginRight: -4,
+  },
+
+  // Badges
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 99,
+  },
+  badgeText: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  badgeActive: {
+    backgroundColor: theme.colors.successBackground,
+  },
+  badgeActiveText: {
+    color: theme.colors.success,
+  },
+  badgePending: {
+    backgroundColor: theme.colors.surfaceAmber,
+  },
+  badgePendingText: {
+    color: theme.colors.accent,
+  },
+  badgeWarning: {
+    backgroundColor: theme.colors.surfaceAmber,
+  },
+  badgeWarningText: {
+    color: theme.colors.accent,
+  },
+  badgeError: {
+    backgroundColor: theme.colors.errorBackground,
+  },
+  badgeErrorText: {
+    color: theme.colors.error,
   },
 });
