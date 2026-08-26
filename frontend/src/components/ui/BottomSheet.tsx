@@ -34,7 +34,9 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,

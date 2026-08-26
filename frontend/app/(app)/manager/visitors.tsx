@@ -176,13 +176,13 @@ export default function GateOperationsScreen() {
             <Text style={styles.visitorName}>{v.visitorType === 'DELIVERY' || v.visitorType === 'CAB' ? (v.provider || v.name || v.visitorType) : v.name}</Text>
             <View style={styles.cardMetaRow}>
               <Text style={styles.cardMeta}>{TYPE_LABEL[v.visitorType]}</Text>
-              {unitLabel && (
+              {Boolean(unitLabel) && (
                 <>
                   <Text style={styles.cardMetaDot}>•</Text>
                   <Text style={styles.cardMeta}>Unit {unitLabel}</Text>
                 </>
               )}
-              {v.vehicleNumber && (
+              {Boolean(v.vehicleNumber) && (
                 <>
                   <Text style={styles.cardMetaDot}>•</Text>
                   <Text style={styles.cardMeta}>{v.vehicleNumber}</Text>

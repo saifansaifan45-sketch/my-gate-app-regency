@@ -101,7 +101,7 @@ export default function GateActivityLog() {
                   <Text style={styles.expiredBadgeText}>Expired</Text>
                 </View>
               ) : null}
-              {item.visitor.unitNumber && (
+              {Boolean(item.visitor.unitNumber) && (
                 <Text style={styles.unitText}>Unit {item.visitor.unitNumber}</Text>
               )}
             </View>

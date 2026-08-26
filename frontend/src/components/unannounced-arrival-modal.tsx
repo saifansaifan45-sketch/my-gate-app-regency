@@ -112,7 +112,6 @@ export function UnannouncedArrivalModal({
     <BottomSheet visible={visible} onClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardAvoiding}>
         <View style={styles.sheet}>
-          <View style={styles.grabber} />
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Unannounced Arrival</Text>
             <PremiumPressable style={styles.closeBtn} onPress={handleClose}>
@@ -250,9 +249,8 @@ export function UnannouncedArrivalModal({
 }
 
 const styles = StyleSheet.create({
-  keyboardAvoiding: { width: '100%', maxHeight: '90%' },
-  sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, maxHeight: '100%', shadowColor: '#081C11', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.16, shadowRadius: 22, elevation: 16 },
-  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 16 },
+  keyboardAvoiding: { width: '100%', maxHeight: '85%' },
+  sheet: { backgroundColor: theme.colors.surface, borderRadius: 28, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '100%', width: '100%', shadowColor: '#081C11', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 22, elevation: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 20, letterSpacing: -0.4, color: theme.colors.textPrimary },
   closeBtn: { width: 44, height: 44, borderRadius: 20, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' },

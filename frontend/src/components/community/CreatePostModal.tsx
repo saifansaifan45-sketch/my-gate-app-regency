@@ -57,8 +57,15 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
     }
   };
 
+  const actionButtons = (
+    <View style={styles.actionRow}>
+      <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
+      <Button label="Create Post" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
+    </View>
+  );
+
   return (
-    <CommunitySheet visible={visible} title="Create Post" onClose={handleClose}>
+    <CommunitySheet visible={visible} title="Create Post" onClose={handleClose} footer={created ? undefined : actionButtons}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
@@ -115,10 +122,6 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
             <Text style={styles.placeholderText}>Add a photo (coming soon)</Text>
           </View>
 
-          <View style={styles.actionRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
-            <Button label="Create Post" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
-          </View>
         </>
       )}
     </CommunitySheet>

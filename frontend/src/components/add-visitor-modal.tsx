@@ -326,7 +326,7 @@ export function AddVisitorModal({
                   autoCapitalize="characters"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
-                {vehicleError && <Text style={styles.errorText}>{vehicleError}</Text>}
+                {Boolean(vehicleError) && <Text style={styles.errorText}>{vehicleError}</Text>}
                 
                 <RNTextInput
                   style={[styles.input, phoneError && styles.inputError]}
@@ -336,7 +336,7 @@ export function AddVisitorModal({
                   keyboardType="phone-pad"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
-                {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+                {Boolean(phoneError) && <Text style={styles.errorText}>{phoneError}</Text>}
 
                 <View style={styles.infoCard}>
                   <View style={styles.infoIcon}>

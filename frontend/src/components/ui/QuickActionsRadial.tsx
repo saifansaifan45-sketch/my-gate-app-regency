@@ -67,7 +67,14 @@ export function QuickActionsRadial() {
     }
 
     AsyncStorage.getItem(storageKey).then((stored) => {
-      if (cancelled || !stored) return;
+      if (cancelled) return;
+      if (!stored) {
+        // No saved preferences yet – fall back to defaults.
+        const visible = defaults.filter((d) => d.visible).slice(0, 5);
+        const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
+        if (!cancelled) setActions(services);
+        return;
+      }
       try {
         const saved = JSON.parse(stored) as { id: string; visible: boolean }[];
         const defaultIds = new Set(defaults.map((d) => d.id));
@@ -77,7 +84,12 @@ export function QuickActionsRadial() {
         const visible = restored.filter((a) => a.visible).slice(0, 5);
         const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
         if (!cancelled && services.length > 0) setActions(services);
-      } catch { /* keep defaults */ }
+      } catch {
+        // Malformed storage – fall back to defaults.
+        const visible = defaults.filter((d) => d.visible).slice(0, 5);
+        const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
+        if (!cancelled) setActions(services);
+      }
     });
 
     return () => { cancelled = true; };

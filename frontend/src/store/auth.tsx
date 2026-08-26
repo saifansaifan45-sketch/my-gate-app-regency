@@ -218,22 +218,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const hasLeadershipAccess = useCallback((): boolean => {
+    if (!user) return false;
     const hasLeadershipMembership = hasApprovedMembership('LEADERSHIP');
-    const hasManagerMembership = hasApprovedMembership('MANAGER');
-    const hasWorkforceMembership = hasApprovedMembership('WORKFORCE');
-    const hasOwnerMembership = hasOwnerAccess();
-    const hasResidentMembership = hasResidentAccess();
-
-    return hasLeadershipMembership || hasManagerMembership || hasWorkforceMembership || hasOwnerMembership || hasResidentMembership;
-  }, [hasApprovedMembership, hasOwnerAccess, hasResidentAccess]);
+    const isLeadershipRole =
+      user.role === 'LEADERSHIP' ||
+      (Array.isArray(user.roles) && user.roles.includes('LEADERSHIP'));
+    return hasLeadershipMembership || isLeadershipRole;
+  }, [user, hasApprovedMembership]);
 
   const hasManagerAccess = useCallback((): boolean => {
-    return hasApprovedMembership('MANAGER');
-  }, [hasApprovedMembership]);
+    if (!user) return false;
+    return (
+      hasApprovedMembership('MANAGER') ||
+      user.role === 'MANAGER' ||
+      (Array.isArray(user.roles) && user.roles.includes('MANAGER'))
+    );
+  }, [user, hasApprovedMembership]);
 
   const hasWorkforceAccess = useCallback((): boolean => {
-    return hasApprovedMembership('WORKFORCE') || hasApprovedMembership('MANAGER') || hasApprovedMembership('LEADERSHIP');
-  }, [hasApprovedMembership]);
+    if (!user) return false;
+    return (
+      hasApprovedMembership('WORKFORCE') ||
+      hasApprovedMembership('MANAGER') ||
+      hasApprovedMembership('LEADERSHIP') ||
+      user.role === 'WORKFORCE' ||
+      user.role === 'MANAGER' ||
+      user.role === 'LEADERSHIP' ||
+      (Array.isArray(user.roles) &&
+        (user.roles.includes('WORKFORCE') ||
+          user.roles.includes('MANAGER') ||
+          user.roles.includes('LEADERSHIP')))
+    );
+  }, [user, hasApprovedMembership]);
 
   const isPendingApproval = useCallback((): boolean => {
     if (!user) return false;

@@ -8,6 +8,16 @@ import { Role, OwnershipStatus, ResidencyStatus, ResidencyType, MembershipStatus
 import { prisma } from '../prisma';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import {
+  isAccountLocked,
+  recordFailedAttempt,
+  recordSuccessfulLogin,
+  validateCaptcha,
+  generateCaptcha,
+  getAccountStatus,
+} from '../utils/loginSecurity';
+
+const lockoutDurationMs = 15 * 60 * 1000; // 15 minutes
 
 const router = Router();
 
@@ -17,9 +27,6 @@ const authLimiter = rateLimit({
   message: { error: { message: 'Too many requests, please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || 'unknown';
-  },
 });
 
 // Login: 10 attempts per 15 min per IP+email combo
@@ -29,11 +36,11 @@ const loginLimiter = rateLimit({
   message: { error: { message: 'Too many login attempts. Please try again in 15 minutes.' } },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
   keyGenerator: (req) => {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = req.ip || '127.0.0.1';
     try {
-      const body = JSON.parse(req.body?.toString() || '{}');
-      const email = (body.email || '').toLowerCase().trim();
+      const email = (req.body?.email || '').toLowerCase().trim();
       return email ? `${ip}:${email}` : ip;
     } catch {
       return ip;
@@ -49,9 +56,6 @@ const registerLimiter = rateLimit({
   message: { error: { message: 'Too many registration attempts. Please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || 'unknown';
-  },
 });
 
 // Password reset: 3 per hour per IP (strict but not blocking)
@@ -61,9 +65,6 @@ const passwordResetLimiter = rateLimit({
   message: { error: { message: 'Too many password reset attempts. Please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || 'unknown';
-  },
 });
 
 const registerSchema = z.object({
@@ -84,6 +85,8 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  captchaAnswer: z.string().optional(),
+  captchaToken: z.string().optional(),
 });
 
 const refreshSchema = z.object({
@@ -340,8 +343,44 @@ router.post('/register', registerLimiter, async (req, res, _next) => {
 // ----------------------------------------------------
 router.post('/login', loginLimiter, async (req, res, _next) => {
   try {
-    const { email: rawEmail, password } = loginSchema.parse(req.body);
+    const { email: rawEmail, password, captchaAnswer, captchaToken } = loginSchema.parse(req.body);
     const email = rawEmail.trim().toLowerCase();
+
+    // Check if account is locked
+    const lockStatus = isAccountLocked(email);
+    if (lockStatus.locked) {
+      const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
+      return res.status(429).json({
+        error: {
+          message: `Account temporarily locked. Please try again in ${remainingMinutes} minute(s).`,
+          locked: true,
+          remainingMs: lockStatus.remainingMs,
+        },
+      });
+    }
+
+    // Check if CAPTCHA is required
+    if (lockStatus.captchaRequired) {
+      if (!captchaAnswer || !captchaToken) {
+        // Return CAPTCHA challenge
+        const captcha = generateCaptcha(email);
+        return res.status(400).json({
+          error: {
+            message: 'CAPTCHA verification required',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+          },
+        });
+      }
+
+      // Validate CAPTCHA
+      if (!validateCaptcha(email, captchaAnswer, captchaToken)) {
+        return res.status(400).json({
+          error: { message: 'Invalid CAPTCHA answer. Please try again.' },
+        });
+      }
+    }
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -359,8 +398,62 @@ router.post('/login', loginLimiter, async (req, res, _next) => {
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      return res.status(401).json({ error: { message: 'Invalid email or password' } });
+      const result = recordFailedAttempt(email);
+
+      if (result.locked) {
+        return res.status(429).json({
+          error: {
+            message: 'Account temporarily locked due to too many failed attempts. Please try again in 15 minutes.',
+            locked: true,
+            remainingMs: lockoutDurationMs,
+          },
+        });
+      }
+
+      if (result.captchaRequired) {
+        const captcha = generateCaptcha(email);
+        return res.status(401).json({
+          error: {
+            message: 'Invalid email or password',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+            remainingAttempts: result.remainingAttempts,
+          },
+        });
+      }
+
+      return res.status(401).json({ error: { message: `Invalid email or password. ${result.remainingAttempts} attempt(s) remaining before temporary lockout.` } });
     }
+
+    // CAPTCHA validation for subsequent attempts
+    if (captchaAnswer && captchaToken) {
+      if (!validateCaptcha(email, captchaAnswer, captchaToken)) {
+        const failResult = recordFailedAttempt(email);
+        if (failResult.locked) {
+          return res.status(429).json({
+            error: {
+              message: 'Account temporarily locked due to too many failed attempts. Please try again in 15 minutes.',
+              locked: true,
+              remainingMs: lockoutDurationMs,
+            },
+          });
+        }
+        const captcha = generateCaptcha(email);
+        return res.status(401).json({
+          error: {
+            message: 'Invalid CAPTCHA answer. Please try again.',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+            remainingAttempts: failResult.remainingAttempts,
+          },
+        });
+      }
+    }
+
+    // Record successful login
+    recordSuccessfulLogin(email);
 
     const { accessToken, refreshToken } = generateTokens(user.id, user.tokenVersion);
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);
@@ -1050,6 +1143,49 @@ router.post('/reset-password', authLimiter, async (req, res, _next) => {
     }).catch(console.error);
 
     res.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (error) {
+    _next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 12. Admin: GET /auth/account-status/:email
+// ----------------------------------------------------
+router.get('/account-status/:email', requireAuth, async (req: AuthRequest, res, _next) => {
+  try {
+    // Only allow leadership or manager to view account status
+    if (req.user?.role !== Role.LEADERSHIP && req.user?.role !== Role.MANAGER) {
+      return res.status(403).json({ error: { message: 'Insufficient permissions' } });
+    }
+
+    const { email } = req.params as { email: string };
+    const status = getAccountStatus(email);
+    
+    res.json({ success: true, accountStatus: status });
+  } catch (error) {
+    _next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 13. Admin: POST /auth/unlock-account
+// ----------------------------------------------------
+router.post('/unlock-account', requireAuth, async (req: AuthRequest, res, _next) => {
+  try {
+    // Only allow leadership to unlock accounts
+    if (req.user?.role !== Role.LEADERSHIP) {
+      return res.status(403).json({ error: { message: 'Only leadership can unlock accounts' } });
+    }
+
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: { message: 'Email is required' } });
+    }
+
+    const { adminUnlockAccount } = await import('../utils/loginSecurity.js');
+    await adminUnlockAccount(email, req.user!.userId);
+    
+    res.json({ success: true, message: 'Account unlocked successfully' });
   } catch (error) {
     _next(error);
   }

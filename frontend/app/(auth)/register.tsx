@@ -219,21 +219,27 @@ export default function RegisterScreen() {
               />
 
               {/* Password */}
-              <Input
-                label="Password"
-                placeholder="At least 8 characters (letters & numbers)"
-                value={password}
-                onChangeText={(t) => handleChange('password', t, setPassword)}
-                onBlur={() => handleBlur('password', password)}
-                error={touched.password ? errors.password : ''}
-                secureTextEntry
-                containerStyle={styles.inputSpacing}
-              />
+              <View style={styles.inputSpacing}>
+                <Input
+                  label="Password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChangeText={(t) => handleChange('password', t, setPassword)}
+                  onBlur={() => handleBlur('password', password)}
+                  error={touched.password ? errors.password : ''}
+                  secureTextEntry
+                />
+                {!errors.password && (
+                  <Text style={styles.hintText}>
+                    At least 8 characters (letters & numbers)
+                  </Text>
+                )}
+              </View>
 
               {/* Confirm Password */}
               <Input
                 label="Confirm Password"
-                placeholder="Re-enter your password"
+                placeholder="••••••••"
                 value={confirmPassword}
                 onChangeText={(t) => handleChange('confirmPassword', t, setConfirmPassword)}
                 onBlur={() => handleBlur('confirmPassword', confirmPassword)}
@@ -381,6 +387,13 @@ const styles = StyleSheet.create({
   },
   inputSpacing: {
     marginBottom: 14,
+  },
+  hintText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: -8,
+    marginLeft: 4,
   },
   submitBtn: {
     marginTop: 8,

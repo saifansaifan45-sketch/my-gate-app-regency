@@ -232,7 +232,7 @@ export default function MaintenanceScreen() {
                     </View>
                   ) : null}
 
-                  {isPendingVerification && req.realId && (
+                  {isPendingVerification && Boolean(req.realId) && (
                     <View style={styles.verificationBox}>
                       <Text style={styles.verificationTitle}>Work completed. Is the issue resolved?</Text>
                       <View style={styles.verificationActions}>

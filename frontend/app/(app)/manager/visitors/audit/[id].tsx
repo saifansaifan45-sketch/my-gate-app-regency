@@ -61,19 +61,19 @@ export default function VisitorAuditScreen() {
               <Text style={styles.gridLabel}>Destination</Text>
               <Text style={styles.gridValue}>{visitor.unit?.unitNumber || 'Community'}</Text>
             </View>
-            {visitor.vehicleNumber && (
+            {Boolean(visitor.vehicleNumber) && (
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Vehicle</Text>
                 <Text style={styles.gridValue}>{visitor.vehicleNumber}</Text>
               </View>
             )}
-            {visitor.purpose && (
+            {Boolean(visitor.purpose) && (
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Purpose</Text>
                 <Text style={styles.gridValue}>{visitor.purpose}</Text>
               </View>
             )}
-            {visitor.handoffTimestamp && (
+            {Boolean(visitor.handoffTimestamp) && (
               <View style={styles.gridItem}>
                 <Text style={styles.gridLabel}>Handoff To</Text>
                 <Text style={styles.gridValue}>{visitor.handoffRecipientType}</Text>

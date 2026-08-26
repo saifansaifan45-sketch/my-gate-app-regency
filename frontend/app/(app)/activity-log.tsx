@@ -264,7 +264,7 @@ export default function ActivityLogScreen() {
                                   </Text>
                                 </View>
                               </View>
-                              {activity.unitNumber && (
+                              {Boolean(activity.unitNumber) && (
                                 <View style={styles.unitRow}>
                                   <Feather name="home" size={12} color={theme.colors.textSecondary} />
                                   <Text style={styles.unitText}>Unit {activity.unitNumber}</Text>

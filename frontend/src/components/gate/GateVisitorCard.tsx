@@ -81,7 +81,7 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
               <Text style={styles.metaText}>{typeMeta.label}</Text>
               <Text style={styles.metaDot}>•</Text>
               <Text style={styles.metaText}>{hostLabel ? `Host ${hostLabel}` : `Unit ${unitLabel}`}</Text>
-              {visitor.vehicleNumber && (
+              {Boolean(visitor.vehicleNumber) && (
                 <>
                   <Text style={styles.metaDot}>•</Text>
                   <Text style={styles.metaText}>{visitor.vehicleNumber}</Text>

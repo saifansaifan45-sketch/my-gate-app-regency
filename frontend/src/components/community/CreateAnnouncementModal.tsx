@@ -85,8 +85,15 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseA
     }
   };
 
+  const actionButtons = (
+    <View style={styles.actionRow}>
+      <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
+      <Button label="Publish" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
+    </View>
+  );
+
   return (
-    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose}>
+    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose} footer={created ? undefined : actionButtons}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
@@ -180,10 +187,6 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseA
             {CATEGORIES.map((item) => <PremiumPressable key={item} style={[styles.categoryChip, category === item && styles.categoryChipActive]} onPress={() => setCategory(item)}><Text style={[styles.categoryText, category === item && styles.categoryTextActive]}>{item.charAt(0) + item.slice(1).toLowerCase()}</Text></PremiumPressable>)}
           </View>
 
-          <View style={styles.actionRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
-            <Button label="Publish" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
-          </View>
         </>
       )}
     </CommunitySheet>

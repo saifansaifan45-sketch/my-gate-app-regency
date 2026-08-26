@@ -104,8 +104,15 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
     }
   };
 
+  const actionButtons = (
+    <View style={styles.actionRow}>
+      <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
+      <Button label="Create Poll" icon="pie-chart" onPress={handleSubmit} loading={submitting} disabled={!canSubmit} style={styles.actionBtnHalf} />
+    </View>
+  );
+
   return (
-    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose}>
+    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose} footer={created ? undefined : actionButtons}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
@@ -200,11 +207,6 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
           )}
 
           {hasDuplicates && <Text style={styles.hintError}>Options must be unique.</Text>}
-
-          <View style={styles.actionRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
-            <Button label="Create Poll" icon="pie-chart" onPress={handleSubmit} loading={submitting} disabled={!canSubmit} style={styles.actionBtnHalf} />
-          </View>
         </>
       )}
     </CommunitySheet>

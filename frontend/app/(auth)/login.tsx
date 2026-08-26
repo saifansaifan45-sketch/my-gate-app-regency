@@ -39,6 +39,10 @@ interface FormContentProps {
   setEmail: (v: string) => void;
   password: string;
   setPassword: (v: string) => void;
+  captchaRequired: boolean;
+  captchaQuestion: string;
+  captchaAnswer: string;
+  setCaptchaAnswer: (v: string) => void;
   errorMsg: string;
   setErrorMsg: (v: string) => void;
   touched: Record<string, boolean>;
@@ -50,7 +54,25 @@ interface FormContentProps {
   router: ReturnType<typeof useRouter>;
 }
 
-function FormContent({ email, setEmail, password, setPassword, errorMsg, setErrorMsg, touched, setTouched, fieldErrors, setFieldErrors, handleLogin, loading, router }: FormContentProps) {
+function FormContent({
+  email,
+  setEmail,
+  password,
+  setPassword,
+  captchaRequired,
+  captchaQuestion,
+  captchaAnswer,
+  setCaptchaAnswer,
+  errorMsg,
+  setErrorMsg,
+  touched,
+  setTouched,
+  fieldErrors,
+  setFieldErrors,
+  handleLogin,
+  loading,
+  router,
+}: FormContentProps) {
   const validateEmail = (v: string) => {
     const trimmed = v.trim();
     if (!trimmed) return 'Email address is required.';
@@ -125,6 +147,29 @@ function FormContent({ email, setEmail, password, setPassword, errorMsg, setErro
         />
       </View>
 
+      {/* Dynamic CAPTCHA Challenge when multiple failed attempts occur */}
+      {captchaRequired && (
+        <View style={styles.captchaBox}>
+          <View style={styles.captchaHeader}>
+            <Feather name="shield" size={15} color={theme.colors.primary} />
+            <Text style={styles.captchaLabel}>Security Verification</Text>
+          </View>
+          <Text style={styles.captchaQuestion}>{captchaQuestion || 'Solve the math problem to proceed'}</Text>
+          <Input
+            label=""
+            placeholder="Enter answer"
+            value={captchaAnswer}
+            onChangeText={(t) => {
+              setCaptchaAnswer(t);
+              if (errorMsg) setErrorMsg('');
+            }}
+            keyboardType="number-pad"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      )}
+
       <Button
         label="Login"
         onPress={handleLogin}
@@ -160,6 +205,10 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaQuestion, setCaptchaQuestion] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loginSucceeded, setLoginSucceeded] = useState(false);
@@ -401,6 +450,11 @@ export default function LoginScreen() {
       return;
     }
 
+    if (captchaRequired && !captchaAnswer.trim()) {
+      setErrorMsg('Please enter the security verification answer to continue.');
+      return;
+    }
+
     setErrorMsg('');
     setLoading(true);
 
@@ -411,10 +465,20 @@ export default function LoginScreen() {
         {
           email: email.trim().toLowerCase(),
           password,
+          captchaAnswer: captchaRequired ? captchaAnswer.trim() : undefined,
+          captchaToken: captchaRequired ? captchaToken : undefined,
         },
         { navigate: false },
       );
-    } catch (err: unknown) {
+    } catch (err: any) {
+      const errorData = err?.response?.data?.error;
+      if (errorData?.captchaRequired) {
+        setCaptchaRequired(true);
+        setCaptchaQuestion(errorData.captchaQuestion || '');
+        setCaptchaToken(errorData.captchaToken || '');
+        setCaptchaAnswer('');
+      }
+
       setErrorMsg(parseApiError(err, 'Unable to sign in. Please check your credentials.'));
       setLoading(false);
       return;
@@ -487,10 +551,46 @@ export default function LoginScreen() {
               >
                 {Platform.OS === 'web' ? (
                   <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} style={{ display: 'contents' }}>
-                    <FormContent email={email} setEmail={setEmail} password={password} setPassword={setPassword} errorMsg={errorMsg} setErrorMsg={setErrorMsg} touched={touched} setTouched={setTouched} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} handleLogin={handleLogin} loading={loading} router={router} />
+                    <FormContent
+                      email={email}
+                      setEmail={setEmail}
+                      password={password}
+                      setPassword={setPassword}
+                      captchaRequired={captchaRequired}
+                      captchaQuestion={captchaQuestion}
+                      captchaAnswer={captchaAnswer}
+                      setCaptchaAnswer={setCaptchaAnswer}
+                      errorMsg={errorMsg}
+                      setErrorMsg={setErrorMsg}
+                      touched={touched}
+                      setTouched={setTouched}
+                      fieldErrors={fieldErrors}
+                      setFieldErrors={setFieldErrors}
+                      handleLogin={handleLogin}
+                      loading={loading}
+                      router={router}
+                    />
                   </form>
                 ) : (
-                  <FormContent email={email} setEmail={setEmail} password={password} setPassword={setPassword} errorMsg={errorMsg} setErrorMsg={setErrorMsg} touched={touched} setTouched={setTouched} fieldErrors={fieldErrors} setFieldErrors={setFieldErrors} handleLogin={handleLogin} loading={loading} router={router} />
+                  <FormContent
+                    email={email}
+                    setEmail={setEmail}
+                    password={password}
+                    setPassword={setPassword}
+                    captchaRequired={captchaRequired}
+                    captchaQuestion={captchaQuestion}
+                    captchaAnswer={captchaAnswer}
+                    setCaptchaAnswer={setCaptchaAnswer}
+                    errorMsg={errorMsg}
+                    setErrorMsg={setErrorMsg}
+                    touched={touched}
+                    setTouched={setTouched}
+                    fieldErrors={fieldErrors}
+                    setFieldErrors={setFieldErrors}
+                    handleLogin={handleLogin}
+                    loading={loading}
+                    router={router}
+                  />
                 )}
               </Animated.View>
             </View>
@@ -637,16 +737,47 @@ const styles = StyleSheet.create({
 
   formCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: 24,
     paddingTop: 26,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
-    ...shadowBox('#143D2A', 0, 8, 0.08, 24, 2),
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    ...shadowBox('#143D2A', 0, 10, 0.07, 24, 4),
   },
 
   passwordField: {
+    marginBottom: 8,
+  },
+
+  captchaBox: {
+    backgroundColor: '#F7FAF7',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.1)',
+  },
+
+  captchaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+
+  captchaLabel: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 11.5,
+    color: theme.colors.primary,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+
+  captchaQuestion: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13.5,
+    color: theme.colors.textPrimary,
     marginBottom: 8,
   },
 
