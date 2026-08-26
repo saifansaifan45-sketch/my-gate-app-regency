@@ -82,10 +82,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
         ]}
       >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { height: dialogHeight }]}>
-        <View style={styles.handleRow}>
-          <View style={styles.handle} />
-        </View>
+        <View style={[styles.sheet, { maxHeight: dialogHeight }]}>
 
         <View style={styles.header}>
           <Text style={styles.title}>Edit quick actions</Text>
@@ -168,7 +165,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
