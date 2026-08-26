@@ -61,18 +61,19 @@ export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = fals
 
           <View style={styles.innerContent}>
             <View style={styles.iconContainer}>
-              <Feather name={error ? 'alert-circle' : latestRequest ? 'file-text' : 'check-circle'} size={26} color="#FFFFFF" />
+              <Feather name={error ? 'alert-circle' : latestRequest ? 'file-text' : 'check-circle'} size={24} color="#FFFFFF" />
             </View>
 
             <View style={styles.textColumn}>
               <Text style={styles.cardHeaderSmall}>My requests</Text>
-              <Text style={styles.statusTitle}>{title}</Text>
-              <Text style={styles.statusDescription}>{description}</Text>
+              <Text style={styles.statusTitle} numberOfLines={1}>{title}</Text>
+              <Text style={styles.statusDescription} numberOfLines={2}>{description}</Text>
             </View>
 
             <View style={styles.actionLinkWrap}>
-              <Text style={styles.actionLinkText}>View requests</Text>
-              <Feather name="chevron-right" size={15} color="#FFFFFF" />
+              <View style={styles.chevronBox}>
+                <Feather name="chevron-right" size={20} color="#FFFFFF" />
+              </View>
             </View>
           </View>
         </PremiumPressable>
@@ -119,52 +120,52 @@ const styles = StyleSheet.create({
   innerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   textColumn: {
     flex: 1,
+    paddingRight: 8,
   },
   cardHeaderSmall: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 11,
-    lineHeight: 16,
-    color: 'rgba(255, 255, 255, 0.65)',
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 10.5,
+    color: 'rgba(255, 255, 255, 0.7)',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   statusTitle: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 20,
-    lineHeight: 26,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
     color: '#FFFFFF',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
     marginBottom: 3,
   },
   statusDescription: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 12.5,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
     lineHeight: 18,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   actionLinkWrap: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    gap: 2,
-    paddingLeft: 6,
   },
-  actionLinkText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12.5,
-    color: 'rgba(255, 255, 255, 0.9)',
+  chevronBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
