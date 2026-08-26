@@ -212,87 +212,81 @@ export default function LeadershipOverviewScreen() {
           <Text style={styles.sectionTitle}>Community Overview</Text>
           {loading && !data ? (
             <>
-              <View style={styles.metricsRow}>
-                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
-                <View style={styles.metricsRowGap} />
-                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
-              </View>
-              <View style={styles.metricsRow}>
-                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
-                <View style={styles.metricsRowGap} />
-                <View style={styles.metricSkeletonCell}><Skeleton height={100} style={styles.skeletonRadius} /></View>
-              </View>
+              <Skeleton height={68} borderRadius={14} style={{ marginBottom: 10 }} />
+              <Skeleton height={68} borderRadius={14} style={{ marginBottom: 10 }} />
+              <Skeleton height={68} borderRadius={14} style={{ marginBottom: 10 }} />
+              <Skeleton height={68} borderRadius={14} />
             </>
           ) : (
-            <>
-              {/* Row 1 */}
-              <View style={styles.metricsRow}>
-                <PremiumPressable
-                  style={[styles.metricCard, { flex: 1 }]}
-                  onPress={() => router.push('/leadership/approvals')}
-                  accessibilityLabel={`${stats?.pendingWorkforce ?? 0} pending workforce`}
-                  accessibilityRole="button"
-                  scaleTo={0.96}
-                >
-                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.success.background }]}>
-                    <Feather name="user-plus" size={18} color={theme.status.success.foreground} />
-                  </View>
-                  <Text style={styles.metricValue}>{stats?.pendingWorkforce ?? 0}</Text>
-                  <Text style={styles.metricLabel}>Pending Workforce</Text>
-                </PremiumPressable>
+            <View style={styles.metricsStack}>
+              <PremiumPressable
+                style={styles.metricRowCard}
+                onPress={() => router.push('/leadership/approvals')}
+                accessibilityLabel={`${stats?.pendingWorkforce ?? 0} pending workforce`}
+                accessibilityRole="button"
+                scaleTo={0.98}
+              >
+                <View style={[styles.metricIconBox, { backgroundColor: theme.status.success.background }]}>
+                  <Feather name="user-plus" size={18} color={theme.status.success.foreground} />
+                </View>
+                <View style={styles.metricTextColumn}>
+                  <Text style={styles.metricRowLabel}>Pending Workforce</Text>
+                  <Text style={styles.metricRowValue}>{stats?.pendingWorkforce ?? 0}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+              </PremiumPressable>
 
-                <View style={styles.metricsRowGap} />
+              <PremiumPressable
+                style={styles.metricRowCard}
+                onPress={() => router.push('/leadership/approvals')}
+                accessibilityLabel={`${pendingManagersCount} pending approvals`}
+                accessibilityRole="button"
+                scaleTo={0.98}
+              >
+                <View style={[styles.metricIconBox, { backgroundColor: theme.status.warning.background }]}>
+                  <Feather name="clock" size={18} color={theme.status.warning.foreground} />
+                </View>
+                <View style={styles.metricTextColumn}>
+                  <Text style={styles.metricRowLabel}>Pending Approvals</Text>
+                  <Text style={[styles.metricRowValue, { color: theme.status.warning.foreground }]}>{pendingManagersCount}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+              </PremiumPressable>
 
-                <PremiumPressable
-                  style={[styles.metricCard, { flex: 1 }]}
-                  onPress={() => router.push('/leadership/approvals')}
-                  accessibilityLabel={`${pendingManagersCount} pending approvals`}
-                  accessibilityRole="button"
-                  scaleTo={0.96}
-                >
-                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.warning.background }]}>
-                    <Feather name="clock" size={18} color={theme.status.warning.foreground} />
-                  </View>
-                  <Text style={[styles.metricValue, { color: theme.status.warning.foreground }]}>{pendingManagersCount}</Text>
-                  <Text style={styles.metricLabel}>Pending Approvals</Text>
-                </PremiumPressable>
-              </View>
+              <PremiumPressable
+                style={styles.metricRowCard}
+                onPress={() => router.push('/leadership/approvals')}
+                accessibilityLabel={`${stats?.totalPersonnel ?? 0} active workforce members`}
+                accessibilityRole="button"
+                scaleTo={0.98}
+              >
+                <View style={[styles.metricIconBox, { backgroundColor: theme.status.info.background }]}>
+                  <Feather name="users" size={18} color={theme.status.info.foreground} />
+                </View>
+                <View style={styles.metricTextColumn}>
+                  <Text style={styles.metricRowLabel}>Active Workforce</Text>
+                  <Text style={styles.metricRowValue}>{stats?.totalPersonnel ?? 0}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+              </PremiumPressable>
 
-              <View style={styles.metricsRowGap} />
-
-              {/* Row 2 */}
-              <View style={styles.metricsRow}>
-                <PremiumPressable
-                  style={[styles.metricCard, { flex: 1 }]}
-                  onPress={() => router.push('/leadership/approvals')}
-                  accessibilityLabel={`${stats?.totalPersonnel ?? 0} active workforce members`}
-                  accessibilityRole="button"
-                  scaleTo={0.96}
-                >
-                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.info.background }]}>
-                    <Feather name="users" size={18} color={theme.status.info.foreground} />
-                  </View>
-                  <Text style={styles.metricValue}>{stats?.totalPersonnel ?? 0}</Text>
-                  <Text style={styles.metricLabel}>Active Workforce</Text>
-                </PremiumPressable>
-
-                <View style={styles.metricsRowGap} />
-
-                <PremiumPressable
-                  style={[styles.metricCard, { flex: 1 }]}
-                  onPress={() => router.push('/leadership/tickets')}
-                  accessibilityLabel={`${stats?.activeTickets ?? 0} active issues`}
-                  accessibilityRole="button"
-                  scaleTo={0.96}
-                >
-                  <View style={[styles.metricIconBox, { backgroundColor: theme.status.danger.background }]}>
-                    <Feather name="tool" size={18} color={theme.status.danger.foreground} />
-                  </View>
-                  <Text style={styles.metricValue}>{stats?.activeTickets ?? 0}</Text>
-                  <Text style={styles.metricLabel}>Active Issues</Text>
-                </PremiumPressable>
-              </View>
-            </>
+              <PremiumPressable
+                style={styles.metricRowCard}
+                onPress={() => router.push('/leadership/tickets')}
+                accessibilityLabel={`${stats?.activeTickets ?? 0} active issues`}
+                accessibilityRole="button"
+                scaleTo={0.98}
+              >
+                <View style={[styles.metricIconBox, { backgroundColor: theme.status.danger.background }]}>
+                  <Feather name="tool" size={18} color={theme.status.danger.foreground} />
+                </View>
+                <View style={styles.metricTextColumn}>
+                  <Text style={styles.metricRowLabel}>Active Issues</Text>
+                  <Text style={styles.metricRowValue}>{stats?.activeTickets ?? 0}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+              </PremiumPressable>
+            </View>
           )}
         </ScreenEntrance>
 
@@ -595,49 +589,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.primary,
   },
-  metricsRow: {
+  metricsStack: {
+    gap: 10,
+  },
+  metricRowCard: {
     flexDirection: 'row',
-    marginBottom: 12,
-  },
-  metricsRowGap: {
-    width: 12,
-  },
-  metricSkeletonCell: {
-    flex: 1,
-  },
-  skeletonRadius: {
-    borderRadius: 14,
-  },
-  metricCard: {
+    alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    gap: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 1,
   },
   metricIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  metricValue: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 24,
-    letterSpacing: -0.5,
+  metricTextColumn: {
+    flex: 1,
+  },
+  metricRowLabel: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
     marginBottom: 2,
   },
-  metricLabel: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12.5,
-    color: theme.colors.textSecondary,
+  metricRowValue: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.4,
   },
   summaryCard: {
     ...cardSurface,
