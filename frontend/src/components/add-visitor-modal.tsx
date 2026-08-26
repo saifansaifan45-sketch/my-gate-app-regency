@@ -102,7 +102,6 @@ export function AddVisitorModal({
       setDurationPreset(15);
       setName('');
       setPhone('');
-      setPurpose('');
       setVehicleNumber('');
       setOrderReference('');
       setGeneratedPass(null);
@@ -117,7 +116,7 @@ export function AddVisitorModal({
   const canSubmit = () => {
     if (isExternal && !activeProvider.trim()) return false;
     if (!isExternal && !name.trim()) return false;
-    if (visitorType === 'SERVICE' && !purpose.trim()) return false;
+    if (!purpose.trim()) return false;
     if (phoneError || vehicleError) return false;
     if (customDuration && (parseInt(customDuration) < 5 || parseInt(customDuration) > 10080)) return false;
     return true;
@@ -317,6 +316,15 @@ export function AddVisitorModal({
                     placeholderTextColor={theme.colors.textSecondary}
                   />
                 )}
+                
+                <Text style={styles.fieldLabel}>Purpose of visit <Text style={styles.required}>*</Text></Text>
+                <RNTextInput
+                  style={styles.input}
+                  placeholder="e.g. Plumber, Meeting, Delivery"
+                  value={purpose}
+                  onChangeText={setPurpose}
+                  placeholderTextColor={theme.colors.textSecondary}
+                />
                 
                 <RNTextInput
                   style={[styles.input, vehicleError && styles.inputError]}
