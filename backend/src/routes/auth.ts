@@ -3,12 +3,29 @@ import { sendEmail, generateResetToken } from '../utils/email';
 import { Router, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { Role, OwnershipStatus, ResidencyStatus, ResidencyType, MembershipStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: { message: 'Too many requests, please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const strictAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: { message: 'Too many attempts, please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const registerSchema = z.object({
   email: z.string().email('Valid email address is required'),
@@ -94,7 +111,7 @@ function formatUserResponse(user: any) {
 // ----------------------------------------------------
 // 1. POST /auth/register (Step 1 — Pure Account Creation)
 // ----------------------------------------------------
-router.post('/register', async (req, res, _next) => {
+router.post('/register', strictAuthLimiter, async (req, res, _next) => {
   try {
     const body = registerSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -246,7 +263,7 @@ router.post('/register', async (req, res, _next) => {
 // ----------------------------------------------------
 // 2. POST /auth/login
 // ----------------------------------------------------
-router.post('/login', async (req, res, _next) => {
+router.post('/login', strictAuthLimiter, async (req, res, _next) => {
   try {
     const { email: rawEmail, password } = loginSchema.parse(req.body);
     const email = rawEmail.trim().toLowerCase();
@@ -624,7 +641,7 @@ router.post('/onboarding/employee', requireAuth, async (req: AuthRequest, res: R
 // ----------------------------------------------------
 // 6. POST /auth/refresh
 // ----------------------------------------------------
-router.post('/refresh', async (req, res, _next) => {
+router.post('/refresh', authLimiter, async (req, res, _next) => {
   try {
     const { refreshToken } = refreshSchema.parse(req.body);
 
@@ -800,7 +817,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-router.post('/change-password', requireAuth, async (req: AuthRequest, res, _next) => {
+router.post('/change-password', requireAuth, authLimiter, async (req: AuthRequest, res, _next) => {
   try {
     const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
     const userId = req.user!.userId;
@@ -850,7 +867,7 @@ router.post('/change-password', requireAuth, async (req: AuthRequest, res, _next
 // ----------------------------------------------------
 // 11. POST /auth/forgot-password
 // ----------------------------------------------------
-router.post('/forgot-password', async (req, res, _next) => {
+router.post('/forgot-password', strictAuthLimiter, async (req, res, _next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: { message: 'Email is required' } });
@@ -902,7 +919,7 @@ router.post('/forgot-password', async (req, res, _next) => {
 // ----------------------------------------------------
 // 12. POST /auth/reset-password
 // ----------------------------------------------------
-router.post('/reset-password', async (req, res, _next) => {
+router.post('/reset-password', authLimiter, async (req, res, _next) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword || newPassword.length < 8) {
