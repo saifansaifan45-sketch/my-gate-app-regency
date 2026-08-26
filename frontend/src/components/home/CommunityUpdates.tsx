@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   },
   innerContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   iconContainer: {
     width: 40,
