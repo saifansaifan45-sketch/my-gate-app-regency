@@ -52,7 +52,7 @@ async function getOwnedUnit(userId: string) {
   return ownership?.unitId || null;
 }
 
-async function getOwnerRecordId<T extends { id: string; unitId: string }>(
+async function getOwnerRecordId<T extends { id: string; unitId: string; relationship?: string }>(
   model: { findUnique: (args: { where: { id: string } }) => Promise<T | null> },
   id: string,
   userId: string
