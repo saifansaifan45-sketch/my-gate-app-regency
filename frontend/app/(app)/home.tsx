@@ -1,6 +1,6 @@
 import { QUICK_ACTION_VISUALS, SERVICE_CATALOG } from '../../src/registry/services';
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Animated, View, StyleSheet, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { ScrollView, View, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -125,12 +125,6 @@ export default function HomeScreen() {
   // The hero follows the device's local time and refreshes on each minute boundary.
   const [currentPeriod, setCurrentPeriod] = useState(getTimePeriod());
   const heroSurfaceColor = getHeroSurfaceColor(currentPeriod);
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const heroTranslateY = scrollY.interpolate({
-    inputRange: [0, 180],
-    outputRange: [0, -18],
-    extrapolate: 'clamp',
-  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -394,17 +388,13 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Animated.ScrollView
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
         alwaysBounceVertical={false}
         overScrollMode="never"
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
+
         refreshControl={
           <RefreshControl
             refreshing={isHomeFetching && !isHomeLoading}
@@ -414,7 +404,7 @@ export default function HomeScreen() {
         }
       >
         {/* Dynamic Hero Header Section */}
-        <Animated.View style={[styles.heroWrapper, { backgroundColor: heroSurfaceColor, transform: [{ translateY: heroTranslateY }] }]}>
+        <View style={[styles.heroWrapper, { backgroundColor: heroSurfaceColor }]}>
           <TimeBasedBackground currentPeriod={currentPeriod} />
 
           <ScreenEntrance delay={50}>
@@ -433,7 +423,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/my-home')}
             />
           </ScreenEntrance>
-        </Animated.View>
+        </View>
 
         {/* Body Sections */}
         <ScreenEntrance delay={125} distance={28} style={[styles.bodyWrapper, { paddingBottom: bottomClearance + 20 }]}>
@@ -523,7 +513,7 @@ export default function HomeScreen() {
             </ScreenEntrance>
           )}
         </ScreenEntrance>
-      </Animated.ScrollView>
+      </ScrollView>
 
       {/* Quick Actions Editor Modal */}
       <QuickActionsEditorModal
@@ -569,6 +559,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+
   scrollContent: {
     paddingBottom: 0,
   },
