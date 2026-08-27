@@ -20,7 +20,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function MaintenanceScreen() {
   const router = useRouter();
-  const { bottom, bottomClearance } = useScreenInsets(false);
+  const { top, bottom, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'my' | 'all'>('my');
@@ -145,7 +145,7 @@ export default function MaintenanceScreen() {
         );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Maintenance"

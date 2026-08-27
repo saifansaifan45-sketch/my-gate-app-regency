@@ -19,7 +19,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function LeadershipApprovalsScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'managers' | 'workforce' | 'history'>('managers');
@@ -135,7 +135,7 @@ export default function LeadershipApprovalsScreen() {
   const stats = overviewData?.stats;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Approval Center"

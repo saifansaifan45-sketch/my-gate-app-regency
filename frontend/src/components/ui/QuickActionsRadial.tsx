@@ -18,10 +18,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
-const ACTION_SIZE = 64;
+const ACTION_SIZE = 60;
 const ACTION_RADIUS = ACTION_SIZE / 2;
-const ORBIT_RADIUS = 110;
-const CENTER_BUTTON_SIZE = 60;
+const ORBIT_RADIUS = 100;
+const CENTER_BUTTON_SIZE = 56;
 
 const DEFAULT_VISIBLE = ['add-visitor', 'help-desk', 'announcements', 'maintenance'];
 
@@ -35,10 +35,10 @@ interface RadialAction {
 }
 
 function getArcSpan(count: number): number {
-  if (count <= 2) return Math.PI * 0.35;
-  if (count <= 3) return Math.PI * 0.5;
-  if (count <= 4) return Math.PI * 0.65;
-  return Math.PI * 0.8;
+  if (count <= 2) return Math.PI * 0.4;
+  if (count <= 3) return Math.PI * 0.55;
+  if (count <= 4) return Math.PI * 0.7;
+  return Math.PI * 0.85;
 }
 
 function getRoleDefaults(role?: string): string[] {
@@ -60,12 +60,8 @@ export function QuickActionsRadial() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const insets = useSafeAreaInsets();
 
-  // Center button sits at top:-22 inside a 62px tab-bar slot, so its
-  // screen-center is ~(insets.bottom + 54) from the screen bottom.
-  // The radial container is (ORBIT_RADIUS+ACTION_SIZE)*2 = 348px tall,
-  // so we set bottom so that container_center == button_center.
+  // Center button sits at top:-8 inside a 58px tab-bar slot
   const RADIAL_CONTAINER_SIZE = (ORBIT_RADIUS + ACTION_SIZE) * 2;
-  const radialBottom = Math.max(insets.bottom, 10) + 54 - RADIAL_CONTAINER_SIZE / 2;
 
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const centerScale = useRef(new Animated.Value(1)).current;
@@ -106,6 +102,17 @@ export function QuickActionsRadial() {
       }
       try {
         const saved = JSON.parse(stored) as { id: string; visible: boolean }[];
+        if (!Array.isArray(saved) || saved.length === 0) {
+          const visible = defaults.filter((d) => d.visible).slice(0, 5);
+          const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
+          if (!cancelled) {
+            setActions(services);
+            setPrefsLoaded(true);
+          }
+          return;
+        }
+
+        // Handle both formats: { id, visible } and QuickActionItem { id, icon, label, bgColor, iconColor, visible }
         const savedIds = new Set(saved.map((a) => a.id));
         const currentRoleIds = new Set(defaults.map((d) => d.id));
 
@@ -373,13 +380,12 @@ export function QuickActionsRadial() {
   }, [radialActions, closeMenu, router]);
 
   const toggleMenu = useCallback(() => {
-    if (!prefsLoaded) return;
     if (menuVisible.current) {
       closeMenu();
     } else {
       openMenu();
     }
-  }, [openMenu, closeMenu, prefsLoaded]);
+  }, [openMenu, closeMenu]);
 
   const interpolateRotation = centerRotation.interpolate({
     inputRange: [0, 1],
@@ -394,12 +400,10 @@ export function QuickActionsRadial() {
           accessibilityLabel="Quick actions"
           onPress={toggleMenu}
           style={styles.centerPressable}
-          disabled={!prefsLoaded}
         >
           <Animated.View
             style={[
               styles.centerButton,
-              !prefsLoaded && styles.centerButtonLoading,
               {
                 transform: [
                   { scale: centerScale },
@@ -408,10 +412,10 @@ export function QuickActionsRadial() {
               },
             ]}
           >
-            <Feather name={prefsLoaded ? 'plus' : 'loader'} size={28} color="#FFFFFF" />
+            <Feather name="plus" size={28} color="#FFFFFF" />
           </Animated.View>
         </Pressable>
-        <Text style={[styles.centerLabel, !prefsLoaded && styles.centerLabelLoading]}>Actions</Text>
+        <Text style={styles.centerLabel}>Actions</Text>
       </View>
 
       <Modal visible={isOpen} transparent statusBarTranslucent onRequestClose={() => closeMenu()}>
@@ -419,7 +423,7 @@ export function QuickActionsRadial() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => closeMenu()} />
 
           {/* Radial menu container – centered on the quick-actions button */}
-          <View style={[styles.radialContainer, { bottom: radialBottom }]}>
+          <View style={styles.radialContainer}>
             {/* Expanding ring */}
             <Animated.View
               style={[
@@ -504,18 +508,17 @@ export function QuickActionsRadial() {
 
 const styles = StyleSheet.create({
   centerSlot: {
-    width: 64,
+    flex: 1,
+    height: 58,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
-    paddingBottom: 2,
+    justifyContent: 'center',
     position: 'relative',
   },
   centerPressable: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    top: -22,
+    top: -8,
   },
   centerButton: {
     width: CENTER_BUTTON_SIZE,
@@ -540,6 +543,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: theme.colors.primary,
     letterSpacing: -0.05,
+    marginTop: 2,
   },
   centerLabelLoading: {
     opacity: 0.5,
@@ -552,11 +556,11 @@ const styles = StyleSheet.create({
   },
   radialContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: '50%',
+    bottom: 100,
     width: (ORBIT_RADIUS + ACTION_SIZE) * 2,
     height: (ORBIT_RADIUS + ACTION_SIZE) * 2,
-    alignSelf: 'center',
+    marginLeft: -(ORBIT_RADIUS + ACTION_SIZE),
     alignItems: 'center',
     justifyContent: 'center',
   },

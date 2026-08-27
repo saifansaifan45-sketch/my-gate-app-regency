@@ -61,7 +61,7 @@ export function AppHeader({
             <View style={styles.centeredLogoContainer}>
               <Image
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
-                source={require('../../../assets/regency-salma-typographic-logo.png')}
+                source={require('../../../assets/Logo.avif')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

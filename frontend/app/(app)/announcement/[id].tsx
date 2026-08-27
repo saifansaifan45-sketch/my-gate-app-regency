@@ -18,7 +18,7 @@ export default function AnnouncementDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { bottomClearance } = useScreenInsets(true);
+  const { top, bottomClearance } = useScreenInsets(true);
   
   const announcementId = Array.isArray(id) ? id[0] : id;
 
@@ -48,7 +48,7 @@ export default function AnnouncementDetailScreen() {
 
   if (!announcementId) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: top }]}>
         <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <EmptyState icon="file-text" title="Not Found" description="The announcement ID is missing." />
       </View>
@@ -57,7 +57,7 @@ export default function AnnouncementDetailScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: top }]}>
         <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -69,7 +69,7 @@ export default function AnnouncementDetailScreen() {
   if (isError || !data?.announcement) {
     const errorMsg = (error as any)?.response?.data?.error?.message || 'Could not load announcement';
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: top }]}>
         <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
         <View style={styles.centerContainer}>
           <EmptyState 
@@ -108,7 +108,7 @@ export default function AnnouncementDetailScreen() {
   const categoryLabel = announcement.category ? announcement.category.charAt(0) + announcement.category.slice(1).toLowerCase() : 'Update';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Announcement" onBackPress={() => smartBack(router, '/announcements')} />
       
       <ScrollView 

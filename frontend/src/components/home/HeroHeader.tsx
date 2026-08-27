@@ -63,7 +63,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         <View style={styles.topBar}>
           <View style={styles.logoContainer}>
             <Image
-              source={require('../../../assets/regency-salma-typographic-logo.png')}
+              source={require('../../../assets/Logo.avif')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -206,9 +206,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   logoContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -219,11 +219,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 5,
+    overflow: 'hidden',
   },
   logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
   },
   topRightColumn: {
     alignItems: 'flex-end',

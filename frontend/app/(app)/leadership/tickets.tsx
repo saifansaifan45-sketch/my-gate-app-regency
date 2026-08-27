@@ -48,7 +48,7 @@ function statusMeta(ticket: LeadershipTicketItem) {
 
 export default function LeadershipTicketsScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [tickets, setTickets] = useState<LeadershipTicketItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]['id']>('ALL');
   const [loading, setLoading] = useState(true);
@@ -87,7 +87,7 @@ export default function LeadershipTicketsScreen() {
   const resolvedCount = tickets.filter((ticket) => ticket.resolved).length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Tickets Raised"
