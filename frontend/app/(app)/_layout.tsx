@@ -500,6 +500,7 @@ export default function AppLayout() {
         <Tabs.Screen name="activity-log" options={{ href: null }} />
         <Tabs.Screen name="help-desk" options={{ href: null }} />
         <Tabs.Screen name="family-members" options={{ href: null }} />
+        <Tabs.Screen name="community-hub" options={{ href: null }} />
         <Tabs.Screen name="profile-settings" options={{ href: null }} />
         <Tabs.Screen name="residency-requests" options={{ href: null }} />
         <Tabs.Screen name="visitors/index" options={{ href: null }} />

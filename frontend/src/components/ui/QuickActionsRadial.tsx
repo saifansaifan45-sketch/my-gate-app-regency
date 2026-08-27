@@ -5,7 +5,6 @@ import {
   Animated,
   Pressable,
   Platform,
-  Dimensions,
   Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -15,10 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVICE_CATALOG, QUICK_ACTION_VISUALS, ServiceEntry } from '../../registry/services';
 import { useSession } from '../../store/auth';
 import { theme } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ACTION_SIZE = 64;
 const ACTION_RADIUS = ACTION_SIZE / 2;
 const ORBIT_RADIUS = 110;
@@ -43,6 +42,14 @@ export function QuickActionsRadial() {
   const [radialActions, setRadialActions] = useState<RadialAction[]>([]);
   const [visitorPassConfig, setVisitorPassConfig] = useState<{ visitorType: 'GUEST' | 'CAB' | 'DELIVERY'; title: string } | null>(null);
   const [isSOSVisible, setIsSOSVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  // Center button sits at top:-22 inside a 62px tab-bar slot, so its
+  // screen-center is ~(insets.bottom + 54) from the screen bottom.
+  // The radial container is (ORBIT_RADIUS+ACTION_SIZE)*2 = 348px tall,
+  // so we set bottom so that container_center == button_center.
+  const RADIAL_CONTAINER_SIZE = (ORBIT_RADIUS + ACTION_SIZE) * 2;
+  const radialBottom = Math.max(insets.bottom, 10) + 54 - RADIAL_CONTAINER_SIZE / 2;
 
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const centerScale = useRef(new Animated.Value(1)).current;
@@ -99,8 +106,8 @@ export function QuickActionsRadial() {
   useEffect(() => {
     if (actions.length === 0) return;
     const count = actions.length;
-    const startAngle = -Math.PI / 2 - (Math.PI * 0.6);
-    const endAngle = -Math.PI / 2 + (Math.PI * 0.6);
+    const startAngle = -Math.PI / 2 - (Math.PI * 0.45);
+    const endAngle = -Math.PI / 2 + (Math.PI * 0.45);
     const angleStep = count > 1 ? (endAngle - startAngle) / (count - 1) : 0;
 
     const items: RadialAction[] = actions.map((service, i) => ({
@@ -373,8 +380,8 @@ export function QuickActionsRadial() {
         <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => closeMenu()} />
 
-          {/* Radial menu container - positioned above the tab bar */}
-          <View style={styles.radialContainer}>
+          {/* Radial menu container – centered on the quick-actions button */}
+          <View style={[styles.radialContainer, { bottom: radialBottom }]}>
             {/* Expanding ring */}
             <Animated.View
               style={[
@@ -501,10 +508,11 @@ const styles = StyleSheet.create({
   },
   radialContainer: {
     position: 'absolute',
-    bottom: 80,
-    left: SCREEN_WIDTH / 2 - ORBIT_RADIUS - ACTION_SIZE,
+    left: 0,
+    right: 0,
     width: (ORBIT_RADIUS + ACTION_SIZE) * 2,
     height: (ORBIT_RADIUS + ACTION_SIZE) * 2,
+    alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
   },
