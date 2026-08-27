@@ -565,6 +565,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 10,
+    overflow: 'visible',
+    zIndex: 50,
   },
   tabBarContainer: {
     backgroundColor: theme.colors.background,
@@ -575,6 +577,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 6,
     height: 62,
+    overflow: 'visible',
+    zIndex: 50,
   },
   tabItem: {
     flex: 1,

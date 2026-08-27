@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -18,9 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
-const ACTION_SIZE = 60;
+const ACTION_SIZE = 56;
 const ACTION_RADIUS = ACTION_SIZE / 2;
-const ORBIT_RADIUS = 100;
+const ORBIT_RADIUS = 132;
 const CENTER_BUTTON_SIZE = 56;
 
 const DEFAULT_VISIBLE = ['add-visitor', 'help-desk', 'announcements', 'maintenance'];
@@ -35,10 +35,10 @@ interface RadialAction {
 }
 
 function getArcSpan(count: number): number {
-  if (count <= 2) return Math.PI * 0.4;
-  if (count <= 3) return Math.PI * 0.55;
-  if (count <= 4) return Math.PI * 0.7;
-  return Math.PI * 0.85;
+  if (count <= 2) return Math.PI * 0.45;
+  if (count <= 3) return Math.PI * 0.68;
+  if (count <= 4) return Math.PI * 0.88;
+  return Math.PI * 1.02;
 }
 
 function getRoleDefaults(role?: string): string[] {
@@ -49,19 +49,21 @@ function getRoleDefaults(role?: string): string[] {
   });
 }
 
+function getInitialServices(role?: string): ServiceEntry[] {
+  const roleDefaults = getRoleDefaults(role);
+  return SERVICE_CATALOG.filter((s) =>
+    s.availableRoles.includes(role || '') && roleDefaults.includes(s.id)
+  ).slice(0, 5);
+}
+
 export function QuickActionsRadial() {
   const router = useRouter();
   const { user } = useSession();
   const [isOpen, setIsOpen] = useState(false);
-  const [actions, setActions] = useState<ServiceEntry[]>([]);
-  const [radialActions, setRadialActions] = useState<RadialAction[]>([]);
+  const [actions, setActions] = useState<ServiceEntry[]>(() => getInitialServices(user?.role));
   const [visitorPassConfig, setVisitorPassConfig] = useState<{ visitorType: 'GUEST' | 'CAB' | 'DELIVERY'; title: string } | null>(null);
   const [isSOSVisible, setIsSOSVisible] = useState(false);
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const insets = useSafeAreaInsets();
-
-  // Center button sits at top:-8 inside a 58px tab-bar slot
-  const RADIAL_CONTAINER_SIZE = (ORBIT_RADIUS + ACTION_SIZE) * 2;
 
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const centerScale = useRef(new Animated.Value(1)).current;
@@ -70,7 +72,7 @@ export function QuickActionsRadial() {
   const ringOpacity = useRef(new Animated.Value(0)).current;
   const menuVisible = useRef(false);
 
-  // Load quick action preferences
+  // Load quick action preferences from storage
   useEffect(() => {
     let cancelled = false;
     const roleDefaults = getRoleDefaults(user?.role);
@@ -82,9 +84,8 @@ export function QuickActionsRadial() {
     if (!storageKey) {
       const visible = defaults.filter((d) => d.visible).slice(0, 5);
       const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-      if (!cancelled) {
+      if (!cancelled && services.length > 0) {
         setActions(services);
-        setPrefsLoaded(true);
       }
       return () => { cancelled = true; };
     }
@@ -94,9 +95,8 @@ export function QuickActionsRadial() {
       if (!stored) {
         const visible = defaults.filter((d) => d.visible).slice(0, 5);
         const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-        if (!cancelled) {
+        if (!cancelled && services.length > 0) {
           setActions(services);
-          setPrefsLoaded(true);
         }
         return;
       }
@@ -105,14 +105,12 @@ export function QuickActionsRadial() {
         if (!Array.isArray(saved) || saved.length === 0) {
           const visible = defaults.filter((d) => d.visible).slice(0, 5);
           const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-          if (!cancelled) {
+          if (!cancelled && services.length > 0) {
             setActions(services);
-            setPrefsLoaded(true);
           }
           return;
         }
 
-        // Handle both formats: { id, visible } and QuickActionItem { id, icon, label, bgColor, iconColor, visible }
         const savedIds = new Set(saved.map((a) => a.id));
         const currentRoleIds = new Set(defaults.map((d) => d.id));
 
@@ -128,14 +126,12 @@ export function QuickActionsRadial() {
         const services = merged.map((id) => SERVICE_CATALOG.find((s) => s.id === id)!).filter(Boolean);
         if (!cancelled && services.length > 0) {
           setActions(services);
-          setPrefsLoaded(true);
         }
       } catch {
         const visible = defaults.filter((d) => d.visible).slice(0, 5);
         const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-        if (!cancelled) {
+        if (!cancelled && services.length > 0) {
           setActions(services);
-          setPrefsLoaded(true);
         }
       }
     });
@@ -143,16 +139,16 @@ export function QuickActionsRadial() {
     return () => { cancelled = true; };
   }, [user?.id, user?.role]);
 
-  // Create radial action items when actions change
-  useEffect(() => {
-    if (actions.length === 0) return;
-    const count = actions.length;
+  // Create radial action items with memoized animated values
+  const radialActions: RadialAction[] = useMemo(() => {
+    const effectiveActions = actions.length > 0 ? actions : getInitialServices(user?.role);
+    const count = effectiveActions.length;
     const arcSpan = getArcSpan(count);
     const startAngle = -Math.PI / 2 - arcSpan / 2;
     const endAngle = -Math.PI / 2 + arcSpan / 2;
     const angleStep = count > 1 ? (endAngle - startAngle) / (count - 1) : 0;
 
-    const items: RadialAction[] = actions.map((service, i) => ({
+    return effectiveActions.map((service, i) => ({
       service,
       angle: count === 1 ? -Math.PI / 2 : startAngle + angleStep * i,
       x: new Animated.Value(0),
@@ -160,8 +156,7 @@ export function QuickActionsRadial() {
       scale: new Animated.Value(0),
       opacity: new Animated.Value(0),
     }));
-    setRadialActions(items);
-  }, [actions]);
+  }, [actions, user?.role]);
 
   const openMenu = useCallback(() => {
     if (menuVisible.current) return;
@@ -180,80 +175,80 @@ export function QuickActionsRadial() {
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 280,
+        duration: 130,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.sequence([
         Animated.spring(ringScale, {
-          toValue: 1.3,
-          friction: 6,
-          tension: 100,
+          toValue: 1.2,
+          friction: 7,
+          tension: 180,
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(ringScale, {
           toValue: 1,
-          friction: 8,
-          tension: 120,
+          friction: 9,
+          tension: 200,
           useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
       Animated.timing(ringOpacity, {
-        toValue: 0.15,
-        duration: 200,
+        toValue: 0.18,
+        duration: 100,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(centerRotation, {
         toValue: 1,
         friction: 8,
-        tension: 80,
+        tension: 160,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(centerScale, {
-        toValue: 0.85,
-        friction: 6,
-        tension: 150,
+        toValue: 0.9,
+        friction: 7,
+        tension: 220,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
 
-    // Phase 2: Items spring outward with stagger
+    // Phase 2: Items spring outward along orbit with crisp stagger
     radialActions.forEach((action, index) => {
       const targetX = Math.cos(action.angle) * ORBIT_RADIUS;
       const targetY = Math.sin(action.angle) * ORBIT_RADIUS;
 
       Animated.parallel([
         Animated.sequence([
-          Animated.delay(60 + index * 55),
+          Animated.delay(15 + index * 20),
           Animated.spring(action.x, {
             toValue: targetX,
             friction: 7,
-            tension: 90,
+            tension: 180,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(60 + index * 55),
+          Animated.delay(15 + index * 20),
           Animated.spring(action.y, {
             toValue: targetY,
             friction: 7,
-            tension: 90,
+            tension: 180,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(80 + index * 55),
+          Animated.delay(20 + index * 20),
           Animated.spring(action.scale, {
             toValue: 1,
-            friction: 5,
-            tension: 120,
+            friction: 6,
+            tension: 200,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(80 + index * 55),
+          Animated.delay(20 + index * 20),
           Animated.timing(action.opacity, {
             toValue: 1,
-            duration: 150,
+            duration: 90,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -264,16 +259,16 @@ export function QuickActionsRadial() {
   const closeMenu = useCallback((onComplete?: () => void) => {
     if (!menuVisible.current) return;
 
-    // Collapse items inward with reverse stagger
+    // Fast collapse inward
     radialActions.forEach((action, index) => {
-      const delay = (radialActions.length - 1 - index) * 40;
+      const delay = (radialActions.length - 1 - index) * 12;
       Animated.parallel([
         Animated.sequence([
           Animated.delay(delay),
           Animated.spring(action.x, {
             toValue: 0,
             friction: 8,
-            tension: 160,
+            tension: 260,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -282,7 +277,7 @@ export function QuickActionsRadial() {
           Animated.spring(action.y, {
             toValue: 0,
             friction: 8,
-            tension: 160,
+            tension: 260,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -291,7 +286,7 @@ export function QuickActionsRadial() {
           Animated.spring(action.scale, {
             toValue: 0,
             friction: 8,
-            tension: 160,
+            tension: 260,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -299,39 +294,39 @@ export function QuickActionsRadial() {
           Animated.delay(delay),
           Animated.timing(action.opacity, {
             toValue: 0,
-            duration: 100,
+            duration: 60,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
       ]).start();
     });
 
-    // Collapse center, fade backdrop
+    // Fast collapse center, fade backdrop
     Animated.parallel([
       Animated.spring(centerScale, {
         toValue: 1,
         friction: 8,
-        tension: 120,
+        tension: 200,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(centerRotation, {
         toValue: 0,
-        duration: 250,
+        duration: 100,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(ringOpacity, {
         toValue: 0,
-        duration: 200,
+        duration: 90,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(ringScale, {
         toValue: 0,
-        duration: 200,
+        duration: 90,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 220,
+        duration: 100,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
@@ -342,42 +337,24 @@ export function QuickActionsRadial() {
   }, [radialActions, centerScale, centerRotation, ringOpacity, ringScale, backdropOpacity]);
 
   const handleActionPress = useCallback((service: ServiceEntry) => {
-    // Animate the pressed item
-    const action = radialActions.find((a) => a.service.id === service.id);
-    if (action) {
-      Animated.sequence([
-        Animated.spring(action.scale, {
-          toValue: 1.3,
-          friction: 5,
-          tension: 200,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.spring(action.scale, {
-          toValue: 0,
-          friction: 8,
-          tension: 160,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-      ]).start();
+    // 1. Immediately trigger destination action for zero felt latency
+    if (service.id === 'sos') {
+      setIsSOSVisible(true);
+    } else if (service.id === 'add-visitor') {
+      setVisitorPassConfig({ visitorType: 'GUEST', title: 'Approve Entries' });
+    } else if (service.id === 'cab-alert') {
+      setVisitorPassConfig({ visitorType: 'CAB', title: 'Approve Entries' });
+    } else if (service.id === 'delivery') {
+      setVisitorPassConfig({ visitorType: 'DELIVERY', title: 'Approve Entries' });
+    } else if (service.id === 'house-help') {
+      router.push({ pathname: '/services/raise-issue', params: { category: 'Custom', description: 'I need house help' } });
+    } else {
+      router.push(service.route);
     }
 
-    closeMenu(() => {
-      // Execute action after menu closes
-      if (service.id === 'sos') {
-        setIsSOSVisible(true);
-      } else if (service.id === 'add-visitor') {
-        setVisitorPassConfig({ visitorType: 'GUEST', title: 'Approve Entries' });
-      } else if (service.id === 'cab-alert') {
-        setVisitorPassConfig({ visitorType: 'CAB', title: 'Approve Entries' });
-      } else if (service.id === 'delivery') {
-        setVisitorPassConfig({ visitorType: 'DELIVERY', title: 'Approve Entries' });
-      } else if (service.id === 'house-help') {
-        router.push({ pathname: '/services/raise-issue', params: { category: 'Custom', description: 'I need house help' } });
-      } else {
-        router.push(service.route);
-      }
-    });
-  }, [radialActions, closeMenu, router]);
+    // 2. Instantly dismiss radial menu
+    closeMenu();
+  }, [closeMenu, router]);
 
   const toggleMenu = useCallback(() => {
     if (menuVisible.current) {
@@ -399,6 +376,7 @@ export function QuickActionsRadial() {
           accessibilityRole="button"
           accessibilityLabel="Quick actions"
           onPress={toggleMenu}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
           style={styles.centerPressable}
         >
           <Animated.View
@@ -412,7 +390,7 @@ export function QuickActionsRadial() {
               },
             ]}
           >
-            <Feather name="plus" size={28} color="#FFFFFF" />
+            <Feather name="plus" size={26} color="#FFFFFF" />
           </Animated.View>
         </Pressable>
         <Text style={styles.centerLabel}>Actions</Text>
@@ -422,9 +400,9 @@ export function QuickActionsRadial() {
         <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => closeMenu()} />
 
-          {/* Radial menu container – centered on the quick-actions button */}
-          <View style={styles.radialContainer}>
-            {/* Expanding ring */}
+          {/* Radial menu container – elevated and centered above bottom nav */}
+          <View style={[styles.radialContainer, { bottom: Math.max(insets.bottom + 38, 48) }]}>
+            {/* Expanding orbit ring */}
             <Animated.View
               style={[
                 styles.ring,
@@ -435,7 +413,16 @@ export function QuickActionsRadial() {
               ]}
             />
 
-            {/* Action items */}
+            {/* Center close button inside radial modal */}
+            <Pressable
+              style={styles.modalCenterClose}
+              onPress={() => closeMenu()}
+              accessibilityLabel="Close actions menu"
+            >
+              <Feather name="x" size={24} color="#FFFFFF" />
+            </Pressable>
+
+            {/* Action items with generous separation */}
             {radialActions.map((action) => {
               const isEmergency = action.service.isEmergency;
               const visuals = isEmergency ? QUICK_ACTION_VISUALS.emergency : QUICK_ACTION_VISUALS.standard;
@@ -463,7 +450,7 @@ export function QuickActionsRadial() {
                     onPress={() => handleActionPress(action.service)}
                     onPressIn={() => {
                       Animated.spring(action.scale, {
-                        toValue: 0.88,
+                        toValue: 0.9,
                         friction: 6,
                         tension: 200,
                         useNativeDriver: Platform.OS !== 'web',
@@ -482,11 +469,15 @@ export function QuickActionsRadial() {
                   >
                     <Feather
                       name={action.service.icon as any}
-                      size={26}
+                      size={24}
                       color={visuals.icon}
                     />
                   </Pressable>
-                  <Text style={styles.actionLabel}>{action.service.label}</Text>
+                  <View style={styles.labelPill}>
+                    <Text style={styles.actionLabel} numberOfLines={1}>
+                      {action.service.label}
+                    </Text>
+                  </View>
                 </Animated.View>
               );
             })}
@@ -513,27 +504,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'visible',
+    zIndex: 100,
   },
   centerPressable: {
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    top: -8,
+    top: -12,
+    zIndex: 100,
   },
   centerButton: {
     width: CENTER_BUTTON_SIZE,
     height: CENTER_BUTTON_SIZE,
     borderRadius: CENTER_BUTTON_SIZE / 2,
     backgroundColor: theme.colors.primary,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: theme.colors.primary,
+    shadowColor: '#143D2A',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
   },
   centerButtonLoading: {
     opacity: 0.6,
@@ -543,21 +539,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: theme.colors.primary,
     letterSpacing: -0.05,
-    marginTop: 2,
+    marginTop: 18,
   },
   centerLabelLoading: {
     opacity: 0.5,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(10, 25, 18, 0.65)',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
   radialContainer: {
     position: 'absolute',
     left: '50%',
-    bottom: 100,
     width: (ORBIT_RADIUS + ACTION_SIZE) * 2,
     height: (ORBIT_RADIUS + ACTION_SIZE) * 2,
     marginLeft: -(ORBIT_RADIUS + ACTION_SIZE),
@@ -570,14 +565,31 @@ const styles = StyleSheet.create({
     height: ORBIT_RADIUS * 2 + ACTION_SIZE,
     borderRadius: (ORBIT_RADIUS * 2 + ACTION_SIZE) / 2,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     backgroundColor: 'transparent',
+  },
+  modalCenterClose: {
+    position: 'absolute',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1E293B',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 20,
   },
   actionItem: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    width: ACTION_SIZE + 30,
+    width: 96,
   },
   actionButton: {
     width: ACTION_SIZE,
@@ -586,21 +598,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
+  },
+  labelPill: {
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 12,
+    maxWidth: 96,
   },
   actionLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 9,
+    fontSize: 10.5,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.1,
   },
 });
+
