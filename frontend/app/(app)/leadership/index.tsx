@@ -14,11 +14,28 @@ import { useSession } from '../../../src/store/auth';
 import { leadershipApi, LeadershipOverviewResponse, PendingManagerItem } from '../../../src/api/leadership';
 import { cardSystem, cardSurface } from '../../../src/components/ui/cardSystem';
 import { homeLayout } from '../../../src/components/home/homeSurface';
+import { useResponsive } from '../../../src/hooks/useResponsive';
+import { getTimePeriod, getTimeGreeting } from '../../../src/components/home/TimeBasedBackground';
 
 export default function LeadershipOverviewScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
+  const { pagePadding, isTablet, containerWidth } = useResponsive();
   const { user, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasManagerAccess, hasWorkforceAccess, hasApprovedMembership } = useSession();
+
+  const [currentPeriod, setCurrentPeriod] = useState(getTimePeriod());
+  const greeting = getTimeGreeting(currentPeriod);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentPeriod(getTimePeriod());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const METRIC_COLS = 2;
+  const GRID_GAP = 12;
+  const metricItemWidth = (containerWidth - pagePadding * 2 - GRID_GAP * (METRIC_COLS - 1)) / METRIC_COLS;
 
   const [data, setData] = useState<LeadershipOverviewResponse | null>(null);
   const [pendingList, setPendingList] = useState<PendingManagerItem[]>([]);
@@ -145,24 +162,22 @@ export default function LeadershipOverviewScreen() {
           </View>
         )}
 
-        {/* Hero Section with Parallax */}
-        <Animated.View style={[styles.heroWrapper, { transform: [{ translateY: heroTranslateY }] }]}>
-          <ScreenEntrance delay={40}>
-            <View style={styles.heroCard}>
-              <View style={styles.heroBadge}>
-                <Feather name="shield" size={13} color={theme.colors.onPrimary} />
-                <Text style={styles.heroBadgeText}>TOWNSHIP LEADERSHIP</Text>
-              </View>
-              <Text style={styles.heroTitle}>Good day, {displayName}</Text>
-              <Text style={styles.heroSub}>
-                Regency Salma Governance &amp; Operational Oversight
-              </Text>
+        {/* Operations Hub Banner */}
+        <ScreenEntrance delay={40}>
+          <View style={styles.hubBanner}>
+            <View style={styles.roleTag}>
+              <Feather name="shield" size={13} color="#FFFFFF" />
+              <Text style={styles.roleTagText}>REGENCY SALMA</Text>
             </View>
-          </ScreenEntrance>
-        </Animated.View>
+            <Text style={styles.hubTitle}>{greeting} {displayName}</Text>
+            <Text style={styles.hubSubtitle}>
+              Leadership Governance &amp; Operational Oversight
+            </Text>
+          </View>
+        </ScreenEntrance>
 
         {/* Body Sections */}
-        <View style={[styles.bodyWrapper, { paddingBottom: bottomClearance + 40 }]}>
+        <View style={[styles.bodyWrapper, { paddingHorizontal: pagePadding, paddingBottom: bottomClearance + 40 }]}>
         {isViewOnly && (
           <ScreenEntrance delay={60} animation="rise" distance={10}>
             <View style={styles.infoCard}>

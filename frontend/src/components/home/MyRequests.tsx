@@ -8,6 +8,8 @@ import { TicketItem } from '../../api/manager';
 import { homeLayout } from './homeSurface';
 import { theme } from '../../theme';
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 interface MyRequestsProps {
   requests: TicketItem[];
   loading?: boolean;
@@ -30,6 +32,7 @@ const getStatusLabel = (status: TicketItem['status']) => {
 };
 
 export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = false, error = false, onPress }) => {
+  const { pagePadding } = useResponsive();
   const latestRequest = requests[0];
   const summary = `${requests.length} active request${requests.length === 1 ? '' : 's'}`;
   const title = error ? 'Requests unavailable' : latestRequest ? summary : 'All caught up';
@@ -40,7 +43,7 @@ export const MyRequests: React.FC<MyRequestsProps> = ({ requests, loading = fals
       : 'Your maintenance requests will appear here.';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       {loading ? (
         <View style={styles.loadingCard} accessibilityLabel="Loading maintenance requests">
           <Skeleton width="36%" height={13} borderRadius={7} />

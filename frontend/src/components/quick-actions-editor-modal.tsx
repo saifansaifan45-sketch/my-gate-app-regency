@@ -292,10 +292,10 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 100,
   },
   saveBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 100,
   },
 });

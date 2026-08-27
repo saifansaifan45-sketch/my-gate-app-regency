@@ -66,11 +66,14 @@ const createQuickActions = (role?: string): QuickActionItem[] =>
       visible: DEFAULT_VISIBLE_QUICK_ACTIONS.includes(service.id),
     }));
 
+import { useResponsive } from '../../src/hooks/useResponsive';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { canPerformResidentAction, reasonMessage } = useResidenceAuth();
   const insets = useSafeAreaInsets();
   const { bottomClearance } = useScreenInsets(true);
+  const { pagePadding } = useResponsive();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -493,7 +496,7 @@ export default function HomeScreen() {
           {/* Leadership Governance */}
           {isLeadership && (
             <ScreenEntrance animation="rise" delay={240} distance={10}>
-              <View style={styles.leadershipSection}>
+              <View style={[styles.leadershipSection, { paddingHorizontal: pagePadding }]}>
                 <Text style={styles.leadershipSectionTitle}>Leadership</Text>
                 <PremiumPressable
                   style={styles.leadershipCard}

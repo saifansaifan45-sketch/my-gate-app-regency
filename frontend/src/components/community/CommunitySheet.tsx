@@ -13,9 +13,10 @@ interface CommunitySheetProps {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  scrollable?: boolean;
 }
 
-export function CommunitySheet({ visible, title, subtitle, onClose, children, footer }: CommunitySheetProps) {
+export function CommunitySheet({ visible, title, subtitle, onClose, children, footer, scrollable = true }: CommunitySheetProps) {
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -30,9 +31,13 @@ export function CommunitySheet({ visible, title, subtitle, onClose, children, fo
             </PremiumPressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
+          {scrollable ? (
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {children}
+            </ScrollView>
+          ) : (
+            children
+          )}
 
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>

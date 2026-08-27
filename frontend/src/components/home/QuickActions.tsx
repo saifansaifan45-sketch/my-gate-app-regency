@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
 import { homeLayout } from './homeSurface';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export interface ActionItemConfig {
   id: string;
@@ -19,25 +20,28 @@ interface QuickActionsProps {
   onEditPress: () => void;
 }
 
-const CHIP_SIZE = 60;
-const CHIP_RADIUS = 18;
-const ICON_SIZE = 28;
-const ITEMS_PER_ROW = 4;
-const GRID_GAP = 8;
-
 export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress }) => {
-  const { width: screenWidth } = useWindowDimensions();
-  const containerPadding = homeLayout.pagePadding * 2;
-  const availableWidth = screenWidth - containerPadding;
-  const itemWidth = (availableWidth - GRID_GAP * (ITEMS_PER_ROW - 1)) / ITEMS_PER_ROW;
+  const {
+    containerWidth,
+    pagePadding,
+    quickActionCols,
+    quickActionGap,
+    chipSize,
+    chipRadius,
+    iconSize,
+    isTablet,
+  } = useResponsive();
+
+  const availableWidth = containerWidth - pagePadding * 2;
+  const itemWidth = (availableWidth - quickActionGap * (quickActionCols - 1)) / quickActionCols;
 
   const rows: ActionItemConfig[][] = [];
-  for (let i = 0; i < actions.length; i += ITEMS_PER_ROW) {
-    rows.push(actions.slice(i, i + ITEMS_PER_ROW));
+  for (let i = 0; i < actions.length; i += quickActionCols) {
+    rows.push(actions.slice(i, i + quickActionCols));
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>Quick actions</Text>
         <PremiumPressable
@@ -50,9 +54,9 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress
         </PremiumPressable>
       </View>
 
-      <View style={styles.grid}>
+      <View style={[styles.grid, { gap: quickActionGap }]}>
         {rows.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.gridRow}>
+          <View key={rowIndex} style={[styles.gridRow, { gap: quickActionGap }]}>
             {row.map((action) => (
               <PremiumPressable
                 key={action.id}
@@ -62,10 +66,23 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ actions, onEditPress
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
               >
-                <View style={[styles.iconBox, { backgroundColor: action.iconBgColor }]}>
-                  <Feather name={action.icon} size={ICON_SIZE} color={action.iconColor} />
+                <View
+                  style={[
+                    styles.iconBox,
+                    {
+                      width: chipSize,
+                      height: chipSize,
+                      borderRadius: chipRadius,
+                      backgroundColor: action.iconBgColor,
+                    },
+                  ]}
+                >
+                  <Feather name={action.icon} size={iconSize} color={action.iconColor} />
                 </View>
-                <Text style={styles.actionLabel} numberOfLines={2}>
+                <Text
+                  style={[styles.actionLabel, isTablet && styles.actionLabelTablet]}
+                  numberOfLines={2}
+                >
                   {action.label}
                 </Text>
               </PremiumPressable>
@@ -99,31 +116,32 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   grid: {
-    gap: GRID_GAP,
+    gap: 8,
   },
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    gap: GRID_GAP,
+    gap: 8,
   },
   actionIcon: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 6,
     paddingVertical: 4,
   },
   iconBox: {
-    width: CHIP_SIZE,
-    height: CHIP_SIZE,
-    borderRadius: CHIP_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#111827',
     textAlign: 'center',
+    lineHeight: 15,
+  },
+  actionLabelTablet: {
+    fontSize: 12.5,
     lineHeight: 16,
   },
 });

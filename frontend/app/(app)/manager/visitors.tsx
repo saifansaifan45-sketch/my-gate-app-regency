@@ -354,16 +354,16 @@ export default function GateOperationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  inviteButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8 },
+  inviteButton: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.primary, borderRadius: 100, paddingHorizontal: 11, paddingVertical: 8 },
   inviteButtonText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
   metricsGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: cardSystem.pagePadding, paddingTop: 16, paddingBottom: 4 },
   metricItem: { flex: 1, alignItems: 'center', backgroundColor: '#F9FAFB', marginHorizontal: 4, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   metricVal: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 2 },
   metricLbl: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 10, color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  viewModeTabs: { flexDirection: 'row', paddingHorizontal: cardSystem.pagePadding, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  viewTabActive: { borderBottomColor: theme.colors.primary },
+  viewModeTabs: { flexDirection: 'row', paddingHorizontal: cardSystem.pagePadding, paddingTop: 10, paddingBottom: 10, gap: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  viewTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  viewTabActive: { borderBottomColor: theme.colors.primary, backgroundColor: '#F3F8F5' },
   viewTabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textSecondary },
   viewTabTextActive: { color: theme.colors.primary },
 
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 12 },
-  auditBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, gap: 6 },
+  auditBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, gap: 6 },
   auditBtnText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary },
 
   // OTP Modal
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   errorCard: { alignItems: 'center', backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 16, padding: 24 },
   errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#92400E', marginTop: 10 },
   errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: '#B45309', marginTop: 4, textAlign: 'center' },
-  retryBtn: { backgroundColor: '#B45309', borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
+  retryBtn: { backgroundColor: '#B45309', borderRadius: 100, paddingHorizontal: 16, paddingVertical: 9, marginTop: 14 },
   retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 12, color: '#FFFFFF' },
   emptyCard: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 28, marginTop: 8 },
   emptyTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginTop: 10 },

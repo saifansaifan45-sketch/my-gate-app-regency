@@ -147,9 +147,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cancelBtn: {
-    borderRadius: 14,
+    borderRadius: 100,
   },
   confirmBtn: {
-    borderRadius: 14,
+    borderRadius: 100,
   },
 });

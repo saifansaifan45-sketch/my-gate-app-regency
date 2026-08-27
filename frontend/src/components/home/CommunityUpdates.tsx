@@ -8,6 +8,8 @@ import { homeLayout } from './homeSurface';
 import { CommunityAnnouncement } from '../../api/community';
 import { theme } from '../../theme';
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 interface CommunityUpdatesProps {
   announcements: CommunityAnnouncement[];
   loading?: boolean;
@@ -44,8 +46,9 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   onViewAllPress,
   onAnnouncementPress,
   onCreateNotice,
-  currentUserId,
+  currentUserId: _currentUserId,
 }) => {
+  const { pagePadding } = useResponsive();
   const latest = announcements[0];
   const count = announcements.length;
   const hasUnread = announcements.some((item) => !item.isRead);
@@ -53,7 +56,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
         <View style={styles.skeletonCard} accessibilityLabel="Loading community updates">
           <View style={styles.skeletonTopRow}>
             <Skeleton width={80} height={20} borderRadius={6} />
@@ -70,7 +73,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
   // If no announcements are present
   if (!latest) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
         <PremiumPressable
           style={styles.emptyCard}
           onPress={onViewAllPress}
@@ -112,7 +115,7 @@ export const CommunityUpdates: React.FC<CommunityUpdatesProps> = ({
     : 'Township Leadership';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       <PremiumPressable
         style={styles.card}
         onPress={() => (onAnnouncementPress ? onAnnouncementPress(latest) : onViewAllPress())}

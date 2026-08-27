@@ -393,9 +393,12 @@ import { useQuery } from '@tanstack/react-query';
 import { notificationsApi } from '../../src/api/notifications';
 import { EmergencySOSAlertModal } from '../../src/components/emergency-sos-alert-modal';
 
+import { useResponsive } from '../../src/hooks/useResponsive';
+
 export default function AppLayout() {
   useRoleGuard();
   const { user, isLoading, isAuthenticated, hasManagerAccess, hasWorkforceAccess, hasLeadershipAccess } = useSession();
+  const { maxAppWidth } = useResponsive();
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
 
   const { data: notifData, refetch } = useQuery({
@@ -477,9 +480,9 @@ export default function AppLayout() {
           onComplete={handleWelcomeComplete}
         />
       )}
-      {/* Constrain every tab screen to the same centered 440px column as the
-          auth screens so large web viewports never stretch content edge-to-edge. */}
-      <View style={styles.appFrame}>
+      {/* Constrain every tab screen to a responsive column optimized for phone,
+          iPad and tablet viewports without edge-to-edge stretching. */}
+      <View style={[styles.appFrame, { maxWidth: maxAppWidth }]}>
         <Tabs
           tabBar={(props) => <CustomTabBar {...props} />}
           screenOptions={{
@@ -552,7 +555,6 @@ const styles = StyleSheet.create({
   appFrame: {
     flex: 1,
     width: '100%',
-    maxWidth: 440,
   },
   tabBarWrapper: {
     backgroundColor: theme.colors.background,

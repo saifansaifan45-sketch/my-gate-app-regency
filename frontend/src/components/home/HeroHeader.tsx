@@ -15,6 +15,8 @@ interface HeroHeaderProps {
   onProfilePress: () => void;
 }
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 export const HeroHeader: React.FC<HeroHeaderProps> = ({
   displayName,
   period,
@@ -25,6 +27,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   const greeting = getTimeGreeting(period);
   const avatarLetter = (displayName.charAt(0) || 'R').toUpperCase();
   const [rolesOpen, setRolesOpen] = useState(false);
+  const { pagePadding } = useResponsive();
 
   const {
     user,
@@ -56,7 +59,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
 
   return (
     <>
-      <View style={[styles.container, { paddingTop: Math.max(topInset + 6, 22) }]}>
+      <View style={[styles.container, { paddingHorizontal: pagePadding, paddingTop: Math.max(topInset + 6, 22) }]}>
         <View style={styles.topBar}>
           <View style={styles.logoContainer}>
             <Image

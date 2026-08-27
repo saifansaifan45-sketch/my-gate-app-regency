@@ -6,6 +6,8 @@ import { PremiumPressable } from '../ui/PremiumPressable';
 import { VisitorApprovalCard, VisitorApproval } from '../visitor-approval-card';
 import { homeLayout } from './homeSurface';
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 interface GateStatusCardProps {
   pendingVisitor: VisitorApproval | null;
   onApprove: (id: string) => void;
@@ -21,9 +23,11 @@ export const GateStatusCard: React.FC<GateStatusCardProps> = ({
   onDismiss,
   onViewActivityPress,
 }) => {
+  const { pagePadding } = useResponsive();
+
   if (pendingVisitor) {
     return (
-      <View style={[styles.container, styles.containerPending]}>
+      <View style={[styles.container, styles.containerPending, { paddingHorizontal: pagePadding }]}>
         <VisitorApprovalCard
           visitor={pendingVisitor}
           onApprove={onApprove}
@@ -35,7 +39,7 @@ export const GateStatusCard: React.FC<GateStatusCardProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       <PremiumPressable
         style={styles.card}
         onPress={onViewActivityPress}
@@ -106,52 +110,52 @@ const styles = StyleSheet.create({
   innerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
   },
   shieldIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   textColumn: {
     flex: 1,
+    paddingRight: 8,
   },
   cardHeaderSmall: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 11,
-    lineHeight: 16,
-    color: 'rgba(255, 255, 255, 0.65)',
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 10.5,
+    color: 'rgba(255, 255, 255, 0.7)',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   statusTitle: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 20,
-    lineHeight: 26,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
     color: '#FFFFFF',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
     marginBottom: 3,
   },
   statusDescription: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 12.5,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
     lineHeight: 18,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   actionLinkWrap: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    gap: 2,
-    paddingLeft: 6,
   },
-  actionLinkText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12.5,
-    color: 'rgba(255, 255, 255, 0.9)',
+  chevronBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

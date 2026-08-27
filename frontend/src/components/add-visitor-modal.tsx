@@ -229,7 +229,11 @@ export function AddVisitorModal({
               </View>
             ) : (
               <View style={styles.formBody}>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                style={styles.formScroll}
+              >
                 <Text style={styles.fieldLabel}>Type of Arrival</Text>
                 <View style={styles.typeRow}>
                   {['GUEST', 'CAB', 'DELIVERY', 'SERVICE'].map((type) => (
@@ -362,16 +366,18 @@ export function AddVisitorModal({
                 </View>
               </ScrollView>
 
-              <Button
-                label={managerMode
-                  ? (requiresOtp ? 'Create guest invite' : 'Create visitor invite')
-                  : (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry')}
-                icon="shield"
-                onPress={handleCreate}
-                loading={submitting}
-                disabled={!canSubmit() || submitting}
-                style={styles.actionBtn}
-              />
+              <View style={styles.formFooter}>
+                <Button
+                  label={managerMode
+                    ? (requiresOtp ? 'Create guest invite' : 'Create visitor invite')
+                    : (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry')}
+                  icon="shield"
+                  onPress={handleCreate}
+                  loading={submitting}
+                  disabled={!canSubmit() || submitting}
+                  style={styles.actionBtn}
+                />
+              </View>
               </View>
             )}
         </View>
@@ -419,5 +425,8 @@ const styles = StyleSheet.create({
   otpWarning: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
   actionBtn: { width: '100%', marginBottom: 8 },
   formBody: { flex: 1 },
+  formScroll: { flex: 1 },
+  scrollContent: { paddingBottom: 12 },
+  formFooter: { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 12 },
   required: { color: '#DC2626' },
 });

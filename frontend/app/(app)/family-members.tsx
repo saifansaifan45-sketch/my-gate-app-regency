@@ -1,7 +1,17 @@
 import { Feather } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord, PermanentPassRecord } from '../../src/api/household';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -371,77 +381,222 @@ export default function FamilyMembersScreen() {
       </ScrollView>
 
       {/* ── Issue Pass Modal ── */}
-      <Modal visible={passFormVisible} transparent animationType="fade" onRequestClose={() => setPassFormVisible(false)}>
-        <View style={styles.overlay}><View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>Issue a gate pass</Text>
-          <Text style={styles.sheetSubtitle}>This pass is valid for 28 days. The family member can enter without OTP or pre-approval.</Text>
-          <View style={styles.field}><Text style={styles.fieldLabel}>Name *</Text><TextInput style={styles.input} value={passForm.name} onChangeText={(v) => setPassForm((c) => ({ ...c, name: v }))} placeholder="e.g. Amina Bello" placeholderTextColor={theme.colors.textSecondary} /></View>
-          <View style={styles.field}><Text style={styles.fieldLabel}>Phone</Text><TextInput style={styles.input} value={passForm.phone} onChangeText={(v) => setPassForm((c) => ({ ...c, phone: v }))} placeholder="Optional" placeholderTextColor={theme.colors.textSecondary} keyboardType="phone-pad" /></View>
-          <View style={styles.field}><Text style={styles.fieldLabel}>Vehicle number</Text><TextInput style={styles.input} value={passForm.vehicleNumber} onChangeText={(v) => setPassForm((c) => ({ ...c, vehicleNumber: v.toUpperCase() }))} placeholder="Optional" placeholderTextColor={theme.colors.textSecondary} autoCapitalize="characters" /></View>
-          <View style={styles.sheetActions}>
-            <Button label="Cancel" variant="outline" onPress={() => setPassFormVisible(false)} style={styles.cancelButton} />
-            <Button label="Issue pass" onPress={() => { if (!passForm.name.trim()) { showToast({ title: 'Name required', message: 'Enter the family member name.', type: 'warning' }); return; } createPassMutation.mutate(); }} loading={createPassMutation.isPending} style={styles.saveButton} />
-          </View>
-        </View></View>
+      <Modal visible={passFormVisible} transparent animationType="fade" onRequestClose={() => setPassFormVisible(false)} statusBarTranslucent>
+        <View style={[styles.modalOverlay, { paddingTop: Math.max(top, 16), paddingBottom: Math.max(bottomClearance + 16, 24) }]}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setPassFormVisible(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+            <View style={styles.dialogCard}>
+              <View style={styles.dialogHeader}>
+                <View style={styles.dialogHeaderCopy}>
+                  <Text style={styles.dialogTitle}>Issue a Gate Pass</Text>
+                  <Text style={styles.dialogSubtitle}>28-day validity · Entry without OTP or pre-approval</Text>
+                </View>
+                <PremiumPressable
+                  style={styles.dialogCloseBtn}
+                  onPress={() => setPassFormVisible(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Feather name="x" size={18} color={theme.colors.textSecondary} />
+                </PremiumPressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.dialogBody} contentContainerStyle={styles.dialogBodyContent}>
+                <View style={styles.passInfoPill}>
+                  <View style={styles.passInfoIcon}>
+                    <Feather name="shield" size={18} color={theme.colors.primary} />
+                  </View>
+                  <Text style={styles.passInfoText}>
+                    This pass enables continuous access for trusted household members for 28 days without one-time codes.
+                  </Text>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Name <Text style={styles.requiredStar}>*</Text></Text>
+                  <TextInput
+                    style={styles.input}
+                    value={passForm.name}
+                    onChangeText={(v) => setPassForm((c) => ({ ...c, name: v }))}
+                    placeholder="e.g. Amina Bello"
+                    placeholderTextColor={theme.colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Phone number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={passForm.phone}
+                    onChangeText={(v) => setPassForm((c) => ({ ...c, phone: v }))}
+                    placeholder="Optional (e.g. +234 800 000 0000)"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Vehicle number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={passForm.vehicleNumber}
+                    onChangeText={(v) => setPassForm((c) => ({ ...c, vehicleNumber: v.toUpperCase() }))}
+                    placeholder="Optional (e.g. ABC-123XY)"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={styles.dialogFooter}>
+                <Button label="Cancel" variant="outline" onPress={() => setPassFormVisible(false)} style={styles.footerBtnCancel} />
+                <Button
+                  label="Issue Pass"
+                  icon="shield"
+                  onPress={() => {
+                    if (!passForm.name.trim()) {
+                      showToast({ title: 'Name required', message: 'Enter the family member name.', type: 'warning' });
+                      return;
+                    }
+                    createPassMutation.mutate();
+                  }}
+                  loading={createPassMutation.isPending}
+                  style={styles.footerBtnSubmit}
+                />
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
-      {/* ── Renew Confirmation ── */}
-      <Modal visible={Boolean(renewTarget)} transparent animationType="fade" onRequestClose={() => setRenewTarget(null)}>
-        <View style={styles.overlay}>
-          <View style={styles.deleteModal}>
-            <Text style={styles.deleteTitle}>Renew pass?</Text>
-            <Text style={styles.deleteMessage}>This will reset the pass for another 28 days from today.</Text>
-            <View style={styles.deleteActions}>
-              <Button label="Cancel" variant="outline" onPress={() => setRenewTarget(null)} style={styles.cancelButton} />
-              <Button label="Renew" onPress={() => { if (renewTarget) renewPassMutation.mutate(renewTarget); }} loading={renewPassMutation.isPending} style={{ flex: 1, backgroundColor: '#059669' }} />
+      {/* ── Renew Confirmation Modal ── */}
+      <Modal visible={Boolean(renewTarget)} transparent animationType="fade" onRequestClose={() => setRenewTarget(null)} statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setRenewTarget(null)} />
+          <View style={styles.confirmDialogCard}>
+            <View style={[styles.confirmIconBox, { backgroundColor: '#E8F5E9' }]}>
+              <Feather name="refresh-cw" size={24} color="#059669" />
+            </View>
+            <Text style={styles.confirmTitle}>Renew Gate Pass?</Text>
+            <Text style={styles.confirmMessage}>This will reset the pass for another 28 days of seamless gate access from today.</Text>
+            <View style={styles.confirmActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setRenewTarget(null)} style={styles.confirmBtnCancel} />
+              <Button
+                label="Renew Pass"
+                onPress={() => { if (renewTarget) renewPassMutation.mutate(renewTarget); }}
+                loading={renewPassMutation.isPending}
+                style={[styles.confirmBtnSubmit, { backgroundColor: '#059669' }]}
+              />
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ── Delete Pass Confirmation ── */}
-      <Modal visible={Boolean(deletePassTarget)} transparent animationType="fade" onRequestClose={() => setDeletePassTarget(null)}>
-        <View style={styles.overlay}>
-          <View style={styles.deleteModal}>
-            <Text style={styles.deleteTitle}>Remove pass?</Text>
-            <Text style={styles.deleteMessage}>{deletePassTarget ? `Remove the permanent pass for ${deletePassTarget.name}? They will need OTP or pre-approval to enter.` : ''}</Text>
-            <View style={styles.deleteActions}>
-              <Button label="Cancel" variant="outline" onPress={() => setDeletePassTarget(null)} style={styles.cancelButton} />
-              <Button label="Remove" onPress={() => { if (deletePassTarget) deletePassMutation.mutate(deletePassTarget.id); }} loading={deletePassMutation.isPending} style={styles.deleteConfirmBtn} />
+      {/* ── Delete Pass Confirmation Modal ── */}
+      <Modal visible={Boolean(deletePassTarget)} transparent animationType="fade" onRequestClose={() => setDeletePassTarget(null)} statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setDeletePassTarget(null)} />
+          <View style={styles.confirmDialogCard}>
+            <View style={[styles.confirmIconBox, { backgroundColor: '#FEE2E2' }]}>
+              <Feather name="trash-2" size={24} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmTitle}>Remove Gate Pass?</Text>
+            <Text style={styles.confirmMessage}>
+              {deletePassTarget ? `Remove the permanent pass for ${deletePassTarget.name}? They will need OTP or pre-approval for future entries.` : ''}
+            </Text>
+            <View style={styles.confirmActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setDeletePassTarget(null)} style={styles.confirmBtnCancel} />
+              <Button
+                label="Remove"
+                onPress={() => { if (deletePassTarget) deletePassMutation.mutate(deletePassTarget.id); }}
+                loading={deletePassMutation.isPending}
+                style={[styles.confirmBtnSubmit, { backgroundColor: '#DC2626' }]}
+              />
             </View>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)}>
-        <View style={styles.overlay}><View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>Add a {activeTab === 'members' ? 'family member' : activeTab.slice(0, -1)}</Text>
-          <Text style={styles.sheetSubtitle}>{activeTab === 'vehicles' ? 'This lets security recognise an authorised vehicle.' : activeTab === 'pets' ? 'A simple record helps the community support every member of your household.' : `Relationships are recorded relative to ${residentName}, so every family record stays unambiguous.`}</Text>
-          {activeTab === 'members' ? (
-            <View style={styles.relationshipContext}>
-              <Feather name="users" size={16} color={theme.colors.primary} />
-              <Text style={styles.relationshipContextText}>{form.relationship.trim() ? `${form.relationship.trim()} of ${residentName}` : `For example: Father of ${residentName}`}</Text>
+      {/* ── Add Record Modal (Members / Vehicles / Pets) ── */}
+      <Modal visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)} statusBarTranslucent>
+        <View style={[styles.modalOverlay, { paddingTop: Math.max(top, 16), paddingBottom: Math.max(bottomClearance + 16, 24) }]}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setFormVisible(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+            <View style={styles.dialogCard}>
+              <View style={styles.dialogHeader}>
+                <View style={styles.dialogHeaderCopy}>
+                  <Text style={styles.dialogTitle}>Add a {activeTab === 'members' ? 'Family Member' : activeTab === 'vehicles' ? 'Vehicle' : 'Pet'}</Text>
+                  <Text style={styles.dialogSubtitle}>
+                    {activeTab === 'vehicles'
+                      ? 'Register your vehicle for automated gate recognition'
+                      : activeTab === 'pets'
+                      ? 'Keep your household records up to date'
+                      : `Relationships recorded relative to ${residentName}`}
+                  </Text>
+                </View>
+                <PremiumPressable
+                  style={styles.dialogCloseBtn}
+                  onPress={() => setFormVisible(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Feather name="x" size={18} color={theme.colors.textSecondary} />
+                </PremiumPressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.dialogBody} contentContainerStyle={styles.dialogBodyContent}>
+                {activeTab === 'members' ? (
+                  <View style={styles.relationshipContext}>
+                    <Feather name="users" size={16} color={theme.colors.primary} />
+                    <Text style={styles.relationshipContextText}>
+                      {form.relationship.trim() ? `${form.relationship.trim()} of ${residentName}` : `e.g. Father of ${residentName}`}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {Object.keys(EMPTY_FORMS[activeTab]).map((key) => (
+                  <View key={key} style={styles.field}>
+                    <Text style={styles.fieldLabel}>
+                      {key === 'relationship' ? `Relationship to ${residentName} *` : fieldLabel(key)}
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      value={form[key]}
+                      onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))}
+                      placeholder={key === 'relationship' ? 'e.g. Father, Mother, Spouse' : undefined}
+                      placeholderTextColor={theme.colors.textSecondary}
+                      autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'}
+                      keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+
+              <View style={styles.dialogFooter}>
+                <Button label="Cancel" variant="outline" onPress={() => setFormVisible(false)} style={styles.footerBtnCancel} />
+                <Button label="Save Record" onPress={submit} loading={addMutation.isPending} style={styles.footerBtnSubmit} />
+              </View>
             </View>
-          ) : null}
-          {Object.keys(EMPTY_FORMS[activeTab]).map((key) => <View key={key} style={styles.field}><Text style={styles.fieldLabel}>{key === 'relationship' ? `Relationship to ${residentName} *` : fieldLabel(key)}</Text><TextInput style={styles.input} value={form[key]} onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))} placeholder={key === 'relationship' ? 'e.g. Father, Mother, Spouse' : undefined} placeholderTextColor={theme.colors.textSecondary} autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'} keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'} /></View>)}
-          <View style={styles.sheetActions}><Button label="Cancel" variant="outline" onPress={() => setFormVisible(false)} style={styles.cancelButton} /><Button label="Save record" onPress={submit} loading={addMutation.isPending} style={styles.saveButton} /></View>
-        </View></View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
-      <Modal visible={Boolean(deleteTarget)} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
-        <View style={styles.overlay}>
-          <View style={styles.deleteModal}>
-            <Text style={styles.deleteTitle}>Remove record?</Text>
-            <Text style={styles.deleteMessage}>Are you sure you want to remove?</Text>
-            <View style={styles.deleteActions}>
-              <Button label="Cancel" variant="outline" onPress={() => setDeleteTarget(null)} style={styles.cancelButton} />
+      {/* ── Delete Record Confirmation Modal ── */}
+      <Modal visible={Boolean(deleteTarget)} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)} statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setDeleteTarget(null)} />
+          <View style={styles.confirmDialogCard}>
+            <View style={[styles.confirmIconBox, { backgroundColor: '#FEE2E2' }]}>
+              <Feather name="trash-2" size={24} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmTitle}>Remove {deleteTarget?.type === 'members' ? 'Family Member' : deleteTarget?.type === 'vehicles' ? 'Vehicle' : 'Pet'}?</Text>
+            <Text style={styles.confirmMessage}>
+              {deleteTarget ? `Are you sure you want to remove ${deleteTarget.title}? Security gate records will be updated immediately.` : ''}
+            </Text>
+            <View style={styles.confirmActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setDeleteTarget(null)} style={styles.confirmBtnCancel} />
               <Button
                 label={removeMutation.isPending ? 'Removing...' : 'Remove'}
                 onPress={() => { if (deleteTarget) removeMutation.mutate({ type: deleteTarget.type, id: deleteTarget.id }); }}
                 loading={removeMutation.isPending}
-                style={styles.deleteConfirmBtn}
+                style={[styles.confirmBtnSubmit, { backgroundColor: '#DC2626' }]}
               />
             </View>
           </View>
@@ -457,15 +612,235 @@ function fieldLabel(key: string) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background }, content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
-  intro: { flexDirection: 'row', backgroundColor: '#EDF6F0', padding: 16, borderRadius: 16, marginBottom: 22 }, introIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#D6EBDD', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, introCopy: { flex: 1 }, introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, introText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: '#52705F' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
+  intro: { flexDirection: 'row', backgroundColor: '#EDF6F0', padding: 16, borderRadius: 16, marginBottom: 22 },
+  introIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#D6EBDD', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  introCopy: { flex: 1 },
+  introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 },
+  introText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: '#52705F' },
   tabScroll: { marginBottom: 28 },
   tabBar: { paddingHorizontal: cardSystem.pagePadding, gap: 10, alignItems: 'center' },
-  tab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#ECECE5' }, tabSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card }, tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary }, tabTextSelected: { color: '#FFFFFF' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary }, sectionMeta: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }, addButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 12, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4 }, addButtonDisabled: { backgroundColor: '#E7E7E1' }, addButtonText: { fontFamily: 'PlusJakartaSans_700Bold', color: '#FFFFFF', fontSize: 13 }, addButtonTextDisabled: { color: theme.colors.textSecondary }, loader: { paddingVertical: 48, alignItems: 'center' },
-  recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card }, recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 }, vehicleIcon: { backgroundColor: '#FFF3D6' }, petIcon: { backgroundColor: '#FCE7F3' }, recordInfo: { flex: 1 }, recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 98, marginTop: 4 }, statusPaused: { backgroundColor: '#FEF3C7' }, statusRevoked: { backgroundColor: '#FEE2E2' }, statusBadgeText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10 }, statusPausedText: { color: '#92400E' }, statusRevokedText: { color: '#DC2626' },
-  actionButtons: { flexDirection: 'row', gap: 4 }, actionButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }, removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,24,39,0.42)' }, sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 }, handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 18 }, sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 21, color: theme.colors.textPrimary, marginBottom: 5 }, sheetSubtitle: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 18 }, relationshipContext: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EDF6F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }, relationshipContextText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary }, field: { marginBottom: 10 }, fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 }, input: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary }, sheetActions: { flexDirection: 'row', gap: 10, marginTop: 6 }, cancelButton: { flex: 1 }, saveButton: { flex: 1.3 },
-  deleteModal: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 20, marginHorizontal: 20, marginTop: 'auto', marginBottom: 40, ...theme.shadows.floating }, deleteTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary, marginBottom: 6 }, deleteMessage: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 14, lineHeight: 20, color: theme.colors.textSecondary, marginBottom: 18 }, deleteActions: { flexDirection: 'row', gap: 10 }, deleteConfirmBtn: { flex: 1, backgroundColor: '#DC2626' },
+  tab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#ECECE5' },
+  tabSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card },
+  tabText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textSecondary },
+  tabTextSelected: { color: '#FFFFFF' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: theme.colors.textPrimary },
+  sectionMeta: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
+  addButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 100, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  addButtonDisabled: { backgroundColor: '#E7E7E1' },
+  addButtonText: { fontFamily: 'PlusJakartaSans_700Bold', color: '#FFFFFF', fontSize: 13 },
+  addButtonTextDisabled: { color: theme.colors.textSecondary },
+  loader: { paddingVertical: 48, alignItems: 'center' },
+  recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card },
+  recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  vehicleIcon: { backgroundColor: '#FFF3D6' },
+  petIcon: { backgroundColor: '#FCE7F3' },
+  recordInfo: { flex: 1 },
+  recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 },
+  recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 98, marginTop: 4 },
+  statusPaused: { backgroundColor: '#FEF3C7' },
+  statusRevoked: { backgroundColor: '#FEE2E2' },
+  statusBadgeText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10 },
+  statusPausedText: { color: '#92400E' },
+  statusRevokedText: { color: '#DC2626' },
+  actionButtons: { flexDirection: 'row', gap: 4 },
+  actionButton: { width: 34, height: 34, borderRadius: 100, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+
+  // Standard Centered Modal Design (matching AddVisitorModal / Impeccable system)
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(17, 24, 39, 0.48)',
+  },
+  keyboardView: {
+    width: '100%',
+    maxWidth: 500,
+  },
+  dialogCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
+    maxHeight: 620,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  dialogHeaderCopy: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  dialogTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 19,
+    letterSpacing: -0.3,
+    color: theme.colors.textPrimary,
+    marginBottom: 3,
+  },
+  dialogSubtitle: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: theme.colors.textSecondary,
+  },
+  dialogCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dialogBody: {
+    maxHeight: 400,
+  },
+  dialogBodyContent: {
+    paddingVertical: 4,
+  },
+  passInfoPill: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EDF6F0',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  passInfoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#D6EBDD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  passInfoText: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#2D5A43',
+  },
+  relationshipContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EDF6F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  relationshipContextText: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: theme.colors.primary,
+  },
+  field: {
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12.5,
+    color: theme.colors.textPrimary,
+    marginBottom: 6,
+  },
+  requiredStar: {
+    color: '#DC2626',
+  },
+  input: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    backgroundColor: '#FFFFFF',
+  },
+  dialogFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  footerBtnCancel: {
+    flex: 1,
+  },
+  footerBtnSubmit: {
+    flex: 1.4,
+  },
+
+  // Confirmation Alert Dialog Cards
+  confirmDialogCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  confirmIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
+    color: theme.colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  confirmMessage: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: theme.colors.textSecondary,
+    marginBottom: 20,
+    textAlign: 'center',
+    paddingHorizontal: 6,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  confirmBtnCancel: {
+    flex: 1,
+  },
+  confirmBtnSubmit: {
+    flex: 1.2,
+  },
 });

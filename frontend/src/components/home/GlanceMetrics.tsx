@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
 import { homeLayout, homeSurface } from './homeSurface';
 import { theme } from '../../theme';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export interface GlanceCardItem {
   key: string;
@@ -20,8 +21,6 @@ interface GlanceMetricsProps {
   onViewAllPress: () => void;
 }
 
-const GRID_GAP = 8;
-const COLS = 3;
 const metricSurfaces: Record<GlanceCardItem['key'], string> = {
   visitors: theme.colors.surfaceGreen,
   deliveries: theme.colors.surfaceAmber,
@@ -29,13 +28,13 @@ const metricSurfaces: Record<GlanceCardItem['key'], string> = {
 };
 
 export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPress }) => {
-  const { width: screenWidth } = useWindowDimensions();
-  const containerPadding = homeLayout.pagePadding * 2;
-  const availableWidth = screenWidth - containerPadding;
-  const itemWidth = (availableWidth - GRID_GAP * (COLS - 1)) / COLS;
+  const { containerWidth, pagePadding, glanceGap, isTablet } = useResponsive();
+  const availableWidth = containerWidth - pagePadding * 2;
+  const numCards = Math.max(cards.length, 1);
+  const itemWidth = (availableWidth - glanceGap * (numCards - 1)) / numCards;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>Today at a glance</Text>
         <PremiumPressable
@@ -49,21 +48,40 @@ export const GlanceMetrics: React.FC<GlanceMetricsProps> = ({ cards, onViewAllPr
         </PremiumPressable>
       </View>
 
-      <View style={styles.grid}>
-        {cards.slice(0, COLS).map((card) => (
+      <View style={[styles.grid, { gap: glanceGap }]}>
+        {cards.map((card) => (
           <PremiumPressable
             key={card.key}
-            style={[homeSurface, styles.card, { width: itemWidth, backgroundColor: metricSurfaces[card.key] || theme.colors.surface }]}
+            style={[
+              homeSurface,
+              styles.card,
+              isTablet && styles.cardTablet,
+              {
+                width: itemWidth,
+                backgroundColor: metricSurfaces[card.key] || theme.colors.surface,
+              },
+            ]}
             onPress={card.onPress}
             scaleTo={0.96}
             accessibilityRole="button"
             accessibilityLabel={`${card.label}: ${card.count}`}
           >
-            <Text style={styles.label} numberOfLines={2}>{card.label}</Text>
-            <Text style={[styles.count, { color: card.countColor }]} numberOfLines={1}>
+            <Text style={[styles.label, isTablet && styles.labelTablet]} numberOfLines={2}>
+              {card.label}
+            </Text>
+            <Text
+              style={[
+                styles.count,
+                isTablet && styles.countTablet,
+                { color: card.countColor },
+              ]}
+              numberOfLines={1}
+            >
               {card.count}
             </Text>
-            <Text style={styles.subtitle}>{card.subtitle}</Text>
+            <Text style={[styles.subtitle, isTablet && styles.subtitleTablet]} numberOfLines={1}>
+              {card.subtitle}
+            </Text>
           </PremiumPressable>
         ))}
       </View>
@@ -95,17 +113,27 @@ const styles = StyleSheet.create({
   },
   grid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
   },
   card: {
     padding: 12,
     minHeight: 90,
     justifyContent: 'space-between',
   },
+  cardTablet: {
+    padding: 16,
+    minHeight: 104,
+    borderRadius: 18,
+  },
   label: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
     color: theme.colors.textSecondary,
+    marginBottom: 6,
+  },
+  labelTablet: {
+    fontSize: 13,
     marginBottom: 8,
   },
   count: {
@@ -115,9 +143,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 2,
   },
+  countTablet: {
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: -0.6,
+  },
   subtitle: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 11,
     color: theme.colors.textTertiary,
+  },
+  subtitleTablet: {
+    fontSize: 12,
   },
 });
