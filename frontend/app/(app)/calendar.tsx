@@ -23,7 +23,7 @@ const toDateStr = (year: number, month: number, day: number) => `${year}-${pad(m
 const toLocalDateStr = (date: Date) => toDateStr(date.getFullYear(), date.getMonth(), date.getDate());
 
 export default function CalendarScreen() {
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const events = useCalendarEvents();
 
   const todayStr = toLocalDateStr(new Date());
@@ -98,7 +98,7 @@ export default function CalendarScreen() {
   })();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader variant="subscreen" title="Community Calendar" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}>
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
   calendarCard: { padding: 22, borderRadius: 18, marginBottom: 24 },
   monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  monthNavBtn: { width: 36, height: 36, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  monthNavBtn: { width: 36, height: 36, borderRadius: 100, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   monthNavBtnDisabled: { opacity: 0.4 },
   monthTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
   weekDays: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },

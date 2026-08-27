@@ -51,6 +51,7 @@ export function CommunityCreateMenu({ visible, onClose, onCreatePoll, onCreateAn
         title="Create"
         subtitle="Start a poll or publish an official community update."
         onClose={onClose}
+        scrollable={false}
       >
         <View style={styles.menu}>
           {actions.map((action) => (

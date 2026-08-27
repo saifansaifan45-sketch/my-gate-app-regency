@@ -4,16 +4,19 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 interface PropertySelectorProps {
   unitNumber?: string;
   onPress: () => void;
 }
 
 export const PropertySelector: React.FC<PropertySelectorProps> = ({ unitNumber, onPress }) => {
+  const { pagePadding } = useResponsive();
   const displayUnit = unitNumber ? `${unitNumber} • My Home` : 'Select Home';
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingHorizontal: pagePadding }]}>
       <PremiumPressable
         style={styles.pillContainer}
         onPress={onPress}

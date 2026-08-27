@@ -502,22 +502,13 @@ export default function RelationshipOnboardingScreen() {
                 <View style={styles.unitPillGrid}>
                   {POPULAR_UNITS.map((u) => {
                     const isSelected = residentFlat === u;
-                    const unitStatus = unitsWithOwnership.find((unit) => unit.unitNumber === u);
-                    const isTaken = unitStatus?.hasOwner && unitStatus?.unitNumber !== user?.unitNumber;
                     return (
                       <TouchableOpacity
                         key={u}
-                        style={[styles.unitPill, isSelected && styles.unitPillActive, isTaken && styles.unitPillDisabled]}
-                        onPress={() => {
-                          if (isTaken) {
-                            showToast({ title: 'Unit Unavailable', message: 'The Flat already has a owner.', type: 'error' });
-                            return;
-                          }
-                          setResidentFlat(u);
-                        }}
-                        disabled={isTaken}
+                        style={[styles.unitPill, isSelected && styles.unitPillActive]}
+                        onPress={() => setResidentFlat(u)}
                       >
-                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive, isTaken && styles.unitPillTextDisabled]}>{u}</Text>
+                        <Text style={[styles.unitPillText, isSelected && styles.unitPillTextActive]}>{u}</Text>
                       </TouchableOpacity>
                     );
                   })}

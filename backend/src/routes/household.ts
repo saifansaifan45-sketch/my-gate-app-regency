@@ -52,7 +52,7 @@ async function getOwnedUnit(userId: string) {
   return ownership?.unitId || null;
 }
 
-async function getOwnerRecordId<T extends { id: string; unitId: string }>(
+async function getOwnerRecordId<T extends { id: string; unitId: string; relationship?: string }>(
   model: { findUnique: (args: { where: { id: string } }) => Promise<T | null> },
   id: string,
   userId: string
@@ -347,4 +347,136 @@ router.delete('/help/:id', requireVerifiedResidence, async (req: AuthRequest, re
     await prisma.householdHelp.delete({ where: { id: String(id) } });
     res.status(204).send();
   } catch(error) { next(error); }
+});
+
+// ----------------------------------------------------
+// Permanent Passes (Family / Frequent Visitor Access)
+// ----------------------------------------------------
+// 28-day passes that bypass OTP at the gate. One-tap check-in.
+
+const PASS_DURATION_DAYS = 28;
+
+const permanentPassSchema = z.object({
+  name: z.string().trim().min(2, 'Name is required'),
+  phone: z.string().trim().max(40).optional(),
+  vehicleNumber: z.string().trim().max(40).optional(),
+  purpose: z.string().trim().max(240).optional(),
+  householdMemberId: z.string().uuid().optional(),
+});
+
+// GET /household/permanent-passes
+router.get('/permanent-passes', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const unitId = await getAccessibleUnit(req.user!.userId);
+    if (!unitId) return res.json({ passes: [] });
+
+    const passes = await prisma.permanentPass.findMany({
+      where: { unitId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Auto-expire passes past their validity window
+    const now = new Date();
+    const expiredIds = passes
+      .filter((p) => p.status === 'ACTIVE' && p.validUntil < now)
+      .map((p) => p.id);
+
+    if (expiredIds.length > 0) {
+      await prisma.permanentPass.updateMany({
+        where: { id: { in: expiredIds } },
+        data: { status: 'EXPIRED' },
+      });
+      for (const p of passes) {
+        if (expiredIds.includes(p.id)) p.status = 'EXPIRED';
+      }
+    }
+
+    const ownerUnitId = await getOwnedUnit(req.user!.userId);
+    res.json({ passes, canManage: ownerUnitId === unitId });
+  } catch (error) { next(error); }
+});
+
+// POST /household/permanent-passes
+router.post('/permanent-passes', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const unitId = await getOwnedUnit(req.user!.userId);
+    if (!unitId) return res.status(403).json({ error: { message: 'Only the active property owner can issue permanent passes.' } });
+
+    const data = permanentPassSchema.parse(req.body);
+    const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (!unit) return res.status(404).json({ error: { message: 'Unit not found.' } });
+
+    const now = new Date();
+    const validUntil = new Date(now.getTime() + PASS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+
+    const pass = await prisma.permanentPass.create({
+      data: {
+        name: data.name,
+        phone: data.phone || null,
+        vehicleNumber: data.vehicleNumber || null,
+        purpose: data.purpose || 'Family member access',
+        householdMemberId: data.householdMemberId || null,
+        unitId,
+        communityId: unit.communityId,
+        createdById: req.user!.userId,
+        validFrom: now,
+        validUntil,
+      },
+    });
+
+    res.status(201).json({ pass });
+  } catch (error) { next(error); }
+});
+
+// POST /household/permanent-passes/:id/renew
+router.post('/permanent-passes/:id/renew', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const unitId = await getOwnedUnit(req.user!.userId);
+    if (!unitId) return res.status(403).json({ error: { message: 'Only the active property owner can renew passes.' } });
+
+    const pass = await prisma.permanentPass.findFirst({ where: { id, unitId } });
+    if (!pass) return res.status(404).json({ error: { message: 'Pass not found.' } });
+
+    const now = new Date();
+    const validUntil = new Date(now.getTime() + PASS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+
+    const updated = await prisma.permanentPass.update({
+      where: { id },
+      data: { status: 'ACTIVE', validFrom: now, validUntil, useCount: 0 },
+    });
+
+    res.json({ pass: updated });
+  } catch (error) { next(error); }
+});
+
+// PATCH /household/permanent-passes/:id/status
+router.patch('/permanent-passes/:id/status', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const unitId = await getOwnedUnit(req.user!.userId);
+    if (!unitId) return res.status(403).json({ error: { message: 'Only the active property owner can manage passes.' } });
+
+    const { status } = z.object({ status: z.enum(['ACTIVE', 'PAUSED', 'EXPIRED']) }).parse(req.body);
+    const pass = await prisma.permanentPass.findFirst({ where: { id, unitId } });
+    if (!pass) return res.status(404).json({ error: { message: 'Pass not found.' } });
+
+    const updated = await prisma.permanentPass.update({ where: { id }, data: { status } });
+    res.json({ pass: updated });
+  } catch (error) { next(error); }
+});
+
+// DELETE /household/permanent-passes/:id
+router.delete('/permanent-passes/:id', requireVerifiedResidence, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const unitId = await getOwnedUnit(req.user!.userId);
+    if (!unitId) return res.status(403).json({ error: { message: 'Only the active property owner can delete passes.' } });
+
+    const pass = await prisma.permanentPass.findFirst({ where: { id, unitId } });
+    if (!pass) return res.status(404).json({ error: { message: 'Pass not found.' } });
+
+    await prisma.permanentPass.delete({ where: { id } });
+    res.status(204).send();
+  } catch (error) { next(error); }
 });

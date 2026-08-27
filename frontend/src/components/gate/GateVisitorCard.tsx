@@ -31,11 +31,14 @@ const TYPE_META: Record<string, { icon: keyof typeof Feather.glyphMap; color: st
   DELIVERY: { icon: 'package', color: '#A16207', bg: '#FFF3D6', label: 'Delivery' },
   SERVICE: { icon: 'briefcase', color: '#7C3AED', bg: '#F3E8FF', label: 'Service' },
   OTHER: { icon: 'user', color: '#6B7280', bg: '#F3F4F6', label: 'Other' },
+  PERMANENT: { icon: 'key', color: '#7C2D12', bg: '#FFF7ED', label: 'Family Pass' },
 };
 
 export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onRecordArrival: _onRecordArrival, onApprove, onReject, hostActionPending, checkInPending, checkOutPending }: GateVisitorCardProps) {
+  const isPermanent = visitor.isPermanentPass === true;
+  const displayType = isPermanent ? 'PERMANENT' : visitor.visitorType;
   const meta = STATUS_STYLE[visitor.status] || STATUS_STYLE.PENDING;
-  const typeMeta = TYPE_META[visitor.visitorType] || TYPE_META.OTHER;
+  const typeMeta = TYPE_META[displayType] || TYPE_META.OTHER;
   const name = visitor.provider || visitor.name;
   const unitLabel = visitor.unit?.unitNumber || '—';
   const hostLabel = visitor.hostUser
@@ -49,7 +52,10 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
 
   const handleAction = () => {
     if (visitor.status === 'APPROVED') {
-      if (visitor.requiresOtp) {
+      if (isPermanent) {
+        // Permanent pass: one-tap check-in via the dedicated endpoint
+        onCheckIn(`pp-${visitor.permanentPassId || visitor.id}`);
+      } else if (visitor.requiresOtp) {
         // OTP handled by parent via modal
         onCheckIn(visitor.id);
       } else {
@@ -81,7 +87,7 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
               <Text style={styles.metaText}>{typeMeta.label}</Text>
               <Text style={styles.metaDot}>•</Text>
               <Text style={styles.metaText}>{hostLabel ? `Host ${hostLabel}` : `Unit ${unitLabel}`}</Text>
-              {visitor.vehicleNumber && (
+              {Boolean(visitor.vehicleNumber) && (
                 <>
                   <Text style={styles.metaDot}>•</Text>
                   <Text style={styles.metaText}>{visitor.vehicleNumber}</Text>

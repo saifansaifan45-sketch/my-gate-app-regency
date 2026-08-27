@@ -41,10 +41,10 @@ export const getTimeGreeting = (period: TimePeriod): string => {
 };
 
 const PERIOD_IMAGES: Record<TimePeriod, ImageSourcePropType> = {
-  morning: require('../../../assets/morning.png'),
-  afternoon: require('../../../assets/afternoon.png'),
-  evening: require('../../../assets/evening.png'),
-  night: require('../../../assets/night.png'),
+  morning: require('../../../assets/morning.avif'),
+  afternoon: require('../../../assets/afternoon.avif'),
+  evening: require('../../../assets/evening.avif'),
+  night: require('../../../assets/night.avif'),
 };
 
 // Sampled from the dominant light in each approved hero asset. This is the

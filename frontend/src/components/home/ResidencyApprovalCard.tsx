@@ -8,6 +8,8 @@ import { UnitResidencyRecord } from '../../api/properties';
 import { theme } from '../../theme';
 import { homeLayout } from './homeSurface';
 
+import { useResponsive } from '../../hooks/useResponsive';
+
 export interface PendingResidencyRequest {
   unitId: string;
   unitNumber: string;
@@ -32,6 +34,7 @@ export function ResidencyApprovalCard({
   onReject,
   onReviewAll,
 }: ResidencyApprovalCardProps) {
+  const { pagePadding } = useResponsive();
   if (requests.length === 0) return null;
 
   const request = requests[0];
@@ -40,7 +43,7 @@ export function ResidencyApprovalCard({
   const hasMore = requests.length > 1;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: pagePadding }]}>
       <View style={styles.headingRow}>
         <View>
           <Text style={styles.heading}>Residency requests</Text>

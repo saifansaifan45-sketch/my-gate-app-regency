@@ -102,7 +102,6 @@ export function AddVisitorModal({
       setDurationPreset(15);
       setName('');
       setPhone('');
-      setPurpose('');
       setVehicleNumber('');
       setOrderReference('');
       setGeneratedPass(null);
@@ -117,7 +116,7 @@ export function AddVisitorModal({
   const canSubmit = () => {
     if (isExternal && !activeProvider.trim()) return false;
     if (!isExternal && !name.trim()) return false;
-    if (visitorType === 'SERVICE' && !purpose.trim()) return false;
+    if (!purpose.trim()) return false;
     if (phoneError || vehicleError) return false;
     if (customDuration && (parseInt(customDuration) < 5 || parseInt(customDuration) > 10080)) return false;
     return true;
@@ -195,10 +194,9 @@ export function AddVisitorModal({
         <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.keyboardView, { height: dialogHeight }]}
+        style={[styles.keyboardView, { maxHeight: dialogHeight }]}
       >
         <View style={styles.sheet}>
-            <View style={styles.grabber} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{generatedPass ? 'Entry Pass Ready' : title || 'Approve Entries'}</Text>
               <PremiumPressable style={styles.closeBtn} onPress={onClose}>
@@ -231,7 +229,11 @@ export function AddVisitorModal({
               </View>
             ) : (
               <View style={styles.formBody}>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                style={styles.formScroll}
+              >
                 <Text style={styles.fieldLabel}>Type of Arrival</Text>
                 <View style={styles.typeRow}>
                   {['GUEST', 'CAB', 'DELIVERY', 'SERVICE'].map((type) => (
@@ -318,6 +320,15 @@ export function AddVisitorModal({
                   />
                 )}
                 
+                <Text style={styles.fieldLabel}>Purpose of visit <Text style={styles.required}>*</Text></Text>
+                <RNTextInput
+                  style={styles.input}
+                  placeholder="e.g. Plumber, Meeting, Delivery"
+                  value={purpose}
+                  onChangeText={setPurpose}
+                  placeholderTextColor={theme.colors.textSecondary}
+                />
+                
                 <RNTextInput
                   style={[styles.input, vehicleError && styles.inputError]}
                   placeholder="Vehicle number (optional)"
@@ -326,7 +337,7 @@ export function AddVisitorModal({
                   autoCapitalize="characters"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
-                {vehicleError && <Text style={styles.errorText}>{vehicleError}</Text>}
+                {Boolean(vehicleError) && <Text style={styles.errorText}>{vehicleError}</Text>}
                 
                 <RNTextInput
                   style={[styles.input, phoneError && styles.inputError]}
@@ -336,7 +347,7 @@ export function AddVisitorModal({
                   keyboardType="phone-pad"
                   placeholderTextColor={theme.colors.textSecondary}
                 />
-                {phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+                {Boolean(phoneError) && <Text style={styles.errorText}>{phoneError}</Text>}
 
                 <View style={styles.infoCard}>
                   <View style={styles.infoIcon}>
@@ -355,16 +366,18 @@ export function AddVisitorModal({
                 </View>
               </ScrollView>
 
-              <Button
-                label={managerMode
-                  ? (requiresOtp ? 'Create guest invite' : 'Create visitor invite')
-                  : (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry')}
-                icon="shield"
-                onPress={handleCreate}
-                loading={submitting}
-                disabled={!canSubmit() || submitting}
-                style={styles.actionBtn}
-              />
+              <View style={styles.formFooter}>
+                <Button
+                  label={managerMode
+                    ? (requiresOtp ? 'Create guest invite' : 'Create visitor invite')
+                    : (requiresOtp ? 'Generate guest pass' : 'Pre-approve entry')}
+                  icon="shield"
+                  onPress={handleCreate}
+                  loading={submitting}
+                  disabled={!canSubmit() || submitting}
+                  style={styles.actionBtn}
+                />
+              </View>
               </View>
             )}
         </View>
@@ -375,10 +388,10 @@ export function AddVisitorModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 16 },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
   keyboardView: { width: '100%', maxWidth: 520 },
-  sheet: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
+  sheet: { backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 12 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
@@ -412,5 +425,8 @@ const styles = StyleSheet.create({
   otpWarning: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
   actionBtn: { width: '100%', marginBottom: 8 },
   formBody: { flex: 1 },
+  formScroll: { flex: 1 },
+  scrollContent: { paddingBottom: 12 },
+  formFooter: { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 12 },
   required: { color: '#DC2626' },
 });

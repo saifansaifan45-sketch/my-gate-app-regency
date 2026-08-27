@@ -20,7 +20,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 export default function RaiseIssueScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; description?: string }>();
-  const { bottom, bottomClearance } = useScreenInsets(false);
+  const { top, bottom, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState(params.category || ISSUE_CATEGORIES[0].id);
@@ -70,7 +70,7 @@ export default function RaiseIssueScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Help Desk"

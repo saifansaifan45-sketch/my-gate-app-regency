@@ -14,7 +14,7 @@ import { parseApiError } from '../../../src/utils/api-error';
 
 export default function LeadershipCreateAnnouncementScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [title, setTitle] = useState('');
@@ -70,7 +70,7 @@ export default function LeadershipCreateAnnouncementScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Broadcast Notice"

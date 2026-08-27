@@ -11,6 +11,8 @@ import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { leadershipApi, LeadershipTicketItem } from '../../../src/api/leadership';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
 import { theme } from '../../../src/theme';
+import { smartBack } from '../../../src/navigation/history';
+import { useRouter } from 'expo-router';
 
 const FILTERS = [
   { id: 'ALL', label: 'All tickets' },
@@ -45,7 +47,8 @@ function statusMeta(ticket: LeadershipTicketItem) {
 }
 
 export default function LeadershipTicketsScreen() {
-  const { bottomClearance } = useScreenInsets(false);
+  const router = useRouter();
+  const { top, bottomClearance } = useScreenInsets(false);
   const [tickets, setTickets] = useState<LeadershipTicketItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]['id']>('ALL');
   const [loading, setLoading] = useState(true);
@@ -84,8 +87,13 @@ export default function LeadershipTicketsScreen() {
   const resolvedCount = tickets.filter((ticket) => ticket.resolved).length;
 
   return (
-    <View style={styles.container}>
-      <AppHeader variant="tabroot" title="Tickets" showNotification={false} />
+    <View style={[styles.container, { paddingTop: top }]}>
+      <AppHeader
+        variant="subscreen"
+        title="Tickets Raised"
+        onBackPress={() => smartBack(router, '/leadership')}
+        showNotification={false}
+      />
 
       <View style={styles.summaryRow}>
         <View>
@@ -98,7 +106,7 @@ export default function LeadershipTicketsScreen() {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <View style={styles.filterRow}>
         {FILTERS.map((filter) => {
           const selected = activeFilter === filter.id;
           return (
@@ -114,7 +122,7 @@ export default function LeadershipTicketsScreen() {
             </PremiumPressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 32 }]}
@@ -187,8 +195,8 @@ const styles = StyleSheet.create({
   summaryMetric: { alignItems: 'flex-end' },
   summaryValue: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: theme.colors.textPrimary },
   summaryLabel: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: theme.colors.textSecondary },
-  filterRow: { paddingHorizontal: cardSystem.pagePadding, gap: 8, paddingBottom: 12 },
-  filterChip: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+  filterRow: { flexDirection: 'row', paddingHorizontal: cardSystem.pagePadding, gap: 8, paddingBottom: 12 },
+  filterChip: { flex: 1, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 100, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
   filterChipSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   filterTextSelected: { color: '#FFFFFF' },
@@ -197,7 +205,7 @@ const styles = StyleSheet.create({
   ticketCard: { backgroundColor: theme.colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: theme.colors.border, ...theme.shadows.card },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
   category: { flex: 1, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 100 },
   statusText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 10 },
   ticketTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 17, lineHeight: 23, color: theme.colors.textPrimary, marginBottom: 6 },
   ticketDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginBottom: 15 },
@@ -207,6 +215,6 @@ const styles = StyleSheet.create({
   errorCard: { alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: 18, padding: 28, borderWidth: 1, borderColor: theme.colors.border },
   errorTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: theme.colors.textPrimary, marginTop: 12, marginBottom: 5 },
   errorDescription: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, marginBottom: 16 },
-  retryButton: { backgroundColor: theme.colors.primary, borderRadius: 11, paddingHorizontal: 16, paddingVertical: 10 },
+  retryButton: { backgroundColor: theme.colors.primary, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 10 },
   retryText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: '#FFFFFF' },
 });

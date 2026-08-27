@@ -12,15 +12,15 @@ interface CommunitySheetProps {
   subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
+  footer?: React.ReactNode;
+  scrollable?: boolean;
 }
 
-export function CommunitySheet({ visible, title, subtitle, onClose, children }: CommunitySheetProps) {
+export function CommunitySheet({ visible, title, subtitle, onClose, children, footer, scrollable = true }: CommunitySheetProps) {
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.sheet}>
-          <View style={styles.grabber} />
-
           <View style={styles.sheetHeader}>
             <View style={styles.titleWrap}>
               <Text style={styles.sheetTitle}>{title}</Text>
@@ -31,9 +31,15 @@ export function CommunitySheet({ visible, title, subtitle, onClose, children }: 
             </PremiumPressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
+          {scrollable ? (
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {children}
+            </ScrollView>
+          ) : (
+            children
+          )}
+
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
       </KeyboardAvoidingView>
     </BottomSheet>
@@ -43,20 +49,17 @@ export function CommunitySheet({ visible, title, subtitle, onClose, children }: 
 const styles = StyleSheet.create({
   sheet: {
     backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderRadius: 28,
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 40,
-    maxHeight: '90%',
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 1,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-    marginBottom: 16,
+    maxHeight: '85%',
+    width: '100%',
+    shadowColor: '#081C11',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 16,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -87,5 +90,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingTop: 16,
+    marginTop: 8,
   },
 });

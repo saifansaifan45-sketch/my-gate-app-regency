@@ -636,6 +636,38 @@ router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Res
       return { ...rest, unit, requiresOtp: visitorRequiresOtp(v) };
     });
 
+    // Include active permanent passes as always-available entries
+    const permanentPasses = await prisma.permanentPass.findMany({
+      where: {
+        communityId,
+        status: 'ACTIVE',
+        validUntil: { gt: new Date() },
+        ...(unitLabel ? { unit: { unitNumber: { startsWith: unitLabel } } } : {}),
+      },
+      include: {
+        unit: true,
+      },
+    });
+
+    const permanentPassEntries = permanentPasses.map((pp) => ({
+      id: `pp-${pp.id}`,
+      name: pp.name,
+      phone: isSecurityGuard ? undefined : pp.phone,
+      vehicleNumber: pp.vehicleNumber,
+      visitorType: 'GUEST' as const,
+      status: 'APPROVED' as const,
+      isPreApproved: true,
+      requiresOtp: false,
+      isPermanentPass: true,
+      permanentPassId: pp.id,
+      validFrom: pp.validFrom,
+      validUntil: pp.validUntil,
+      unit: isSecurityGuard && pp.unit ? { unitNumber: pp.unit.unitNumber } : pp.unit,
+      purpose: pp.purpose,
+      createdAt: pp.createdAt,
+      updatedAt: pp.updatedAt,
+    }));
+
     const pending = sanitized.filter((v) => v.status === VisitorStatus.PENDING);
     const approved = sanitized.filter((v) => v.status === VisitorStatus.APPROVED);
     const checkedIn = sanitized.filter((v) => v.status === VisitorStatus.CHECKED_IN);
@@ -650,10 +682,12 @@ router.get('/gate', requireWorkforceOrManager, async (req: AuthRequest, res: Res
         checkedIn: checkedIn.length,
         checkedOut: checkedOut.length,
         expired: expired.length,
+        permanentPasses: permanentPassEntries.length,
       },
       pending,
       approved,
       checkedIn,
+      permanentPasses: permanentPassEntries,
       // Keep one aggregate queue for Management and Gate Operations consumers.
       visitors: [...checkedIn, ...approved, ...pending],
     });
@@ -1173,6 +1207,103 @@ router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (r
          : null;
        return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current ? sanitizeVisitor(current) : null } });
     }
+    console.error(error);
+    next(error);
+  }
+});
+
+// ----------------------------------------------------
+// POST /visitors/permanent-pass/:passId/check-in (Gate – One-Tap)
+// Creates a Visitor record from a PermanentPass and checks in immediately.
+// No OTP required.
+// ----------------------------------------------------
+router.post('/permanent-pass/:passId/check-in', requireWorkforceOrManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { passId } = req.params;
+    if (!passId || typeof passId !== 'string') {
+      return res.status(400).json({ error: { message: 'Invalid pass ID' } });
+    }
+    const userId = req.user!.userId;
+
+    const pass = await prisma.permanentPass.findUnique({ where: { id: passId }, include: { unit: true } });
+    if (!pass || !(await verifySecurityMembership(userId, pass.communityId))) {
+      return res.status(404).json({ error: { message: 'Permanent pass not found' } });
+    }
+
+    if (pass.status !== 'ACTIVE') {
+      return res.status(400).json({ error: { message: 'This pass is not active' } });
+    }
+    if (new Date() > pass.validUntil) {
+      return res.status(400).json({ error: { message: 'This pass has expired. Ask the resident to renew it.' } });
+    }
+
+    // Create a Visitor record and check in immediately
+    const now = new Date();
+    const checkInWindow = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2-hour window
+
+    const visitor = await prisma.$transaction(async (tx) => {
+      const v = await tx.visitor.create({
+        data: {
+          name: pass.name,
+          phone: pass.phone,
+          vehicleNumber: pass.vehicleNumber,
+          purpose: pass.purpose || 'Family member access',
+          visitorType: 'GUEST',
+          status: 'CHECKED_IN',
+          isPreApproved: true,
+          createdById: pass.createdById,
+          unitId: pass.unitId,
+          communityId: pass.communityId,
+          validFrom: now,
+          validUntil: checkInWindow,
+          checkInTime: now,
+        },
+        include: { unit: true },
+      });
+
+      await tx.permanentPass.update({
+        where: { id: passId },
+        data: { lastUsedAt: now, useCount: { increment: 1 } },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          communityId: pass.communityId,
+          actorId: userId,
+          action: 'VISITOR_CHECK_IN',
+          metadata: { visitorId: v.id, permanentPassId: passId, source: 'PERMANENT_PASS' },
+        },
+      });
+
+      return v;
+    });
+
+    // Notify residents
+    if (pass.unitId) {
+      const residents = await prisma.user.findMany({
+        where: {
+          OR: [
+            { residencies: { some: { unitId: pass.unitId, status: 'ACTIVE' } } },
+            { ownerships: { some: { unitId: pass.unitId, status: 'ACTIVE' } } },
+          ],
+        },
+      });
+      if (residents.length > 0) {
+        await prisma.notification.createMany({
+          data: residents.map((r) => ({
+            userId: r.id,
+            type: 'VISITOR_ARRIVAL',
+            title: 'Family Member Arrived',
+            message: `${pass.name} has arrived at the gate.`,
+            metadata: { visitorId: visitor.id },
+          })),
+        });
+      }
+    }
+
+    const { otp: _, ...visitorData } = visitor;
+    res.json({ success: true, visitor: visitorData });
+  } catch (error) {
     console.error(error);
     next(error);
   }

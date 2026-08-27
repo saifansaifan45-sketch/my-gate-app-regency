@@ -69,6 +69,8 @@ export interface AuthResponse {
 export interface LoginPayload {
   email: string;
   password: string;
+  captchaAnswer?: string;
+  captchaToken?: string;
 }
 
 export interface RegisterPayload {
@@ -102,6 +104,8 @@ export const authApi = {
     const res = await api.post<AuthResponse>('/auth/login', {
       email: payload.email.trim().toLowerCase(),
       password: payload.password,
+      captchaAnswer: payload.captchaAnswer,
+      captchaToken: payload.captchaToken,
     });
     return res.data;
   },

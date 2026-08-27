@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -12,18 +12,30 @@ import { useScreenInsets } from '../../../src/hooks/useScreenInsets';
 import { theme } from '../../../src/theme';
 import { useSession } from '../../../src/store/auth';
 import { managerApi, DashboardData, PendingWorkforceItem } from '../../../src/api/manager';
-import { cardSystem } from '../../../src/components/ui/cardSystem';
+import { useResponsive } from '../../../src/hooks/useResponsive';
 import { useQuery } from '@tanstack/react-query';
+import { getTimePeriod, getTimeGreeting } from '../../../src/components/home/TimeBasedBackground';
 
 export default function ManagerDashboardScreen() {
   const router = useRouter();
   const { top, bottomClearance } = useScreenInsets(false);
   const { hasManagerAccess, hasResidentAccess, hasOwnerAccess } = useSession();
-  const { width: screenWidth } = useWindowDimensions();
+  const { containerWidth, pagePadding, isTablet } = useResponsive();
+
+  const [currentPeriod, setCurrentPeriod] = useState(getTimePeriod());
+  const greeting = getTimeGreeting(currentPeriod);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentPeriod(getTimePeriod());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const GRID_GAP = 12;
   const METRIC_COLS = 2;
-  const metricItemWidth = (screenWidth - cardSystem.pagePadding * 2 - GRID_GAP * (METRIC_COLS - 1)) / METRIC_COLS;
+  const availableWidth = containerWidth - pagePadding * 2;
+  const metricItemWidth = (availableWidth - GRID_GAP * (METRIC_COLS - 1)) / METRIC_COLS;
 
   // Security Guard: Only users with approved MANAGER can enter
   React.useEffect(() => {
@@ -80,7 +92,7 @@ export default function ManagerDashboardScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]}
+        contentContainerStyle={[styles.content, { paddingHorizontal: pagePadding, paddingBottom: bottomClearance + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         {(dashError || workforceError) && (
@@ -107,7 +119,7 @@ export default function ManagerDashboardScreen() {
               <Feather name="shield" size={13} color="#FFFFFF" />
               <Text style={styles.roleTagText}>REGENCY SALMA</Text>
             </View>
-            <Text style={styles.hubTitle}>Good morning, Manager</Text>
+            <Text style={styles.hubTitle}>{greeting} Manager</Text>
             <Text style={styles.hubSubtitle}>
               Facility & Staff Operations
             </Text>
@@ -150,44 +162,52 @@ export default function ManagerDashboardScreen() {
           <Text style={styles.sectionTitle}>Operations Metrics</Text>
           {loading && !data ? (
             <View style={styles.metricsGrid}>
-              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
-              <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              <View style={styles.metricsRow}>
+                <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+                <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              </View>
+              <View style={styles.metricsRow}>
+                <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+                <Skeleton width={metricItemWidth} height={90} style={{ borderRadius: 14 }} />
+              </View>
             </View>
           ) : (
             <View style={styles.metricsGrid}>
-              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push({ pathname: '/manager/tickets', params: { status: 'OPEN' } })} scaleTo={0.96}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Feather name="alert-circle" size={18} color="#D97706" />
-                </View>
-                <Text style={[styles.metricValue, { color: '#D97706' }]}>{stats?.pendingTickets || 0}</Text>
-                <Text style={styles.metricLabel}>Open Tickets</Text>
-              </PremiumPressable>
+              <View style={styles.metricsRow}>
+                <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push({ pathname: '/manager/tickets', params: { status: 'OPEN' } })} scaleTo={0.96}>
+                  <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Feather name="alert-circle" size={18} color="#D97706" />
+                  </View>
+                  <Text style={[styles.metricValue, { color: '#D97706' }]}>{stats?.pendingTickets || 0}</Text>
+                  <Text style={styles.metricLabel}>Open Tickets</Text>
+                </PremiumPressable>
 
-              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <Feather name="clock" size={18} color="#2563EB" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.assignedTasks || 0}</Text>
-                <Text style={styles.metricLabel}>Assigned Tasks</Text>
-              </PremiumPressable>
+                <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+                  <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Feather name="clock" size={18} color="#2563EB" />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.assignedTasks || 0}</Text>
+                  <Text style={styles.metricLabel}>Assigned Tasks</Text>
+                </PremiumPressable>
+              </View>
 
-              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#F3E8FF' }]}>
-                  <Feather name="activity" size={18} color="#7C3AED" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.inProgressTasks || 0}</Text>
-                <Text style={styles.metricLabel}>In Progress</Text>
-              </PremiumPressable>
+              <View style={styles.metricsRow}>
+                <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+                  <View style={[styles.metricIconBox, { backgroundColor: '#F3E8FF' }]}>
+                    <Feather name="activity" size={18} color="#7C3AED" />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.inProgressTasks || 0}</Text>
+                  <Text style={styles.metricLabel}>In Progress</Text>
+                </PremiumPressable>
 
-              <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
-                <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
-                  <Feather name="check-circle" size={18} color="#059669" />
-                </View>
-                <Text style={styles.metricValue}>{stats?.completedTasks || 0}</Text>
-                <Text style={styles.metricLabel}>Completed Tasks</Text>
-              </PremiumPressable>
+                <PremiumPressable style={[styles.metricCard, { width: metricItemWidth }]} onPress={() => router.push('/manager/tasks')} scaleTo={0.96}>
+                  <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
+                    <Feather name="check-circle" size={18} color="#059669" />
+                  </View>
+                  <Text style={styles.metricValue}>{stats?.completedTasks || 0}</Text>
+                  <Text style={styles.metricLabel}>Completed Tasks</Text>
+                </PremiumPressable>
+              </View>
             </View>
           )}
         </ScreenEntrance>
@@ -362,7 +382,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    paddingHorizontal: cardSystem.pagePadding,
     paddingTop: 12,
   },
   notifBtn: {
@@ -489,10 +508,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   metricCard: {
     backgroundColor: '#FFFFFF',

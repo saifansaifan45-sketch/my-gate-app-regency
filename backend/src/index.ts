@@ -21,6 +21,10 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy for accurate IP detection behind load balancers/CDNs
+// In production, set to the number of proxies or specific subnet
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+
 
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
   ? process.env.CORS_ALLOWED_ORIGINS.split(',')
@@ -101,6 +105,16 @@ const visitorLifecycleTimer = setInterval(() => {
   reconcileVisitorLifecycle().catch((error) => console.error('Visitor lifecycle reconciliation failed:', error));
 }, 60_000);
 visitorLifecycleTimer.unref?.();
+
+// Clean up expired idempotency keys daily
+const idempotencyCleanupTimer = setInterval(async () => {
+  try {
+    await prisma.idempotencyKey.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  } catch (error) {
+    console.error('Idempotency key cleanup failed:', error);
+  }
+}, 24 * 60 * 60 * 1000);
+idempotencyCleanupTimer.unref?.();
 
 // Disabled feature: keep this unmounted until the lost-found backend is implemented.
 // app.use('/lost-found', lostFoundRoutes);

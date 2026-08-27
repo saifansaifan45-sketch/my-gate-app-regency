@@ -104,8 +104,15 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
     }
   };
 
+  const actionButtons = (
+    <View style={styles.actionRow}>
+      <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
+      <Button label="Create Poll" icon="pie-chart" onPress={handleSubmit} loading={submitting} disabled={!canSubmit} style={styles.actionBtnHalf} />
+    </View>
+  );
+
   return (
-    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose}>
+    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose} footer={created ? undefined : actionButtons}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
@@ -200,11 +207,6 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
           )}
 
           {hasDuplicates && <Text style={styles.hintError}>Options must be unique.</Text>}
-
-          <View style={styles.actionRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
-            <Button label="Create Poll" icon="pie-chart" onPress={handleSubmit} loading={submitting} disabled={!canSubmit} style={styles.actionBtnHalf} />
-          </View>
         </>
       )}
     </CommunitySheet>
@@ -225,10 +227,10 @@ const styles = StyleSheet.create({
   },
   audienceSection: { marginTop: 4, marginBottom: 12 },
   audienceHint: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: -3, marginBottom: 8 },
-  audienceRow: { flexDirection: 'row', gap: 8 },
-  audienceChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+  audienceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  audienceChip: { flex: 1, minWidth: 95, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 42, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
   audienceChipActive: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
-  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary },
+  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   audienceTextActive: { color: theme.colors.primary },
   scopeNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EEF8F1', borderRadius: 12, padding: 12, marginBottom: 14 },
   scopeNoteText: { flex: 1, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12, lineHeight: 17, color: theme.colors.primary },

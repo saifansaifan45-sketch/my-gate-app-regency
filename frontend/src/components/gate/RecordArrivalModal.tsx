@@ -168,10 +168,9 @@ export function RecordArrivalModal({
       <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.keyboardView, { height: dialogHeight }]}
+        style={[styles.keyboardView, { maxHeight: dialogHeight }]}
       >
         <View style={styles.sheet}>
-          <View style={styles.grabber} />
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Record a new arrival</Text>
             <PremiumPressable style={styles.closeBtn} onPress={onClose}>
@@ -358,10 +357,10 @@ export function RecordArrivalModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 16 },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
   keyboardView: { width: '100%', maxWidth: 520 },
-  sheet: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
+  sheet: { backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 12 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },

@@ -25,6 +25,15 @@ const CATEGORIES: { id: string; label: string }[] = [
   { id: 'MAINTENANCE', label: 'Maintenance' },
 ];
 
+const CATEGORY_COLORS: Record<string, { bg: string; selected: string }> = {
+  PLUMBER: { bg: '#EFF6FF', selected: '#2563EB' },
+  ELECTRICIAN: { bg: '#FFFBEB', selected: '#D97706' },
+  CLEANER: { bg: '#ECFDF5', selected: '#059669' },
+  SECURITY: { bg: '#F1F5F9', selected: '#475569' },
+  GARDENER: { bg: '#F0FDF4', selected: '#16A34A' },
+  MAINTENANCE: { bg: '#F5F3FF', selected: '#7C3AED' },
+};
+
 export default function PersonnelListScreen() {
   const router = useRouter();
   const { top, bottomClearance } = useScreenInsets(false);
@@ -92,7 +101,7 @@ export default function PersonnelListScreen() {
       setNewName('');
       setNewPhone('');
       fetchPersonnel();
-      Alert.alert('Personnel Added', 'Staff member added. Mark attendance before assigning work.');
+      Alert.alert('Staff Added', 'Staff member added. Mark attendance before assigning work.');
     } catch {
       Alert.alert('Error', 'Failed to create personnel.');
     } finally {
@@ -250,11 +259,11 @@ export default function PersonnelListScreen() {
         )}
       </ScrollView>
 
-      {/* Add Personnel Modal */}
+      {/* Add Staff Modal */}
       <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Personnel</Text>
+            <Text style={styles.modalTitle}>Add Staff</Text>
             <Text style={styles.modalSubtitle}>Enter details for the new staff member.</Text>
 
             <Text style={styles.inputLabel}>Full Name</Text>
@@ -281,10 +290,11 @@ export default function PersonnelListScreen() {
               {(['PLUMBER', 'ELECTRICIAN', 'CLEANER', 'SECURITY', 'GARDENER', 'MAINTENANCE'] as PersonnelCategory[]).map(
                 (cat) => {
                   const selected = newCategory === cat;
+                  const colors = CATEGORY_COLORS[cat] || { bg: '#F3F4F6', selected: theme.colors.primary };
                   return (
                     <PremiumPressable
                       key={cat}
-                      style={[styles.pickerPill, selected && styles.pickerPillSelected]}
+                      style={[styles.pickerPill, { backgroundColor: selected ? colors.selected : colors.bg }]}
                       onPress={() => setNewCategory(cat)}
                     >
                       <Text style={[styles.pickerPillText, selected && styles.pickerPillTextSelected]}>
@@ -301,11 +311,11 @@ export default function PersonnelListScreen() {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </PremiumPressable>
               <Button
-                label="Create Personnel"
+                label="Add Staff"
                 variant="primary"
                 onPress={handleAddPersonnel}
                 loading={adding}
-                style={{ flex: 1.2 }}
+                style={{ flex: 1 }}
               />
             </View>
           </View>
@@ -455,6 +465,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: 22,
+    maxWidth: 420,
+    alignSelf: 'center',
+    width: '100%',
   },
   modalTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -497,10 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 98,
-    backgroundColor: '#F3F4F6',
-  },
-  pickerPillSelected: {
-    backgroundColor: theme.colors.primary,
   },
   pickerPillText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',

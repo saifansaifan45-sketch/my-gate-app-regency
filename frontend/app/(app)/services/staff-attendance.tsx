@@ -14,7 +14,7 @@ import { managerApi, AttendanceRecord, AttendanceSummary } from '../../../src/ap
 
 export default function StaffAttendanceScreen() {
   const router = useRouter();
-  const { bottomClearance } = useScreenInsets(false);
+  const { top, bottomClearance } = useScreenInsets(false);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +75,7 @@ export default function StaffAttendanceScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <AppHeader
         variant="subscreen"
         title="Staff Attendance"

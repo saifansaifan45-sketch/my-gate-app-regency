@@ -85,8 +85,15 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseA
     }
   };
 
+  const actionButtons = (
+    <View style={styles.actionRow}>
+      <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
+      <Button label="Publish" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
+    </View>
+  );
+
   return (
-    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose}>
+    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose} footer={created ? undefined : actionButtons}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
@@ -180,10 +187,6 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseA
             {CATEGORIES.map((item) => <PremiumPressable key={item} style={[styles.categoryChip, category === item && styles.categoryChipActive]} onPress={() => setCategory(item)}><Text style={[styles.categoryText, category === item && styles.categoryTextActive]}>{item.charAt(0) + item.slice(1).toLowerCase()}</Text></PremiumPressable>)}
           </View>
 
-          <View style={styles.actionRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} style={styles.actionBtnHalf} />
-            <Button label="Publish" icon="send" onPress={handleSubmit} loading={submitting} style={styles.actionBtnHalf} />
-          </View>
         </>
       )}
     </CommunitySheet>
@@ -222,21 +225,23 @@ const styles = StyleSheet.create({
   },
   audienceSection: { marginBottom: 18 },
   audienceHint: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: -3, marginBottom: 8 },
-  audienceRow: { flexDirection: 'row', gap: 8 },
-  audienceChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+  audienceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  audienceChip: { flex: 1, minWidth: 95, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 42, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
   audienceChipActive: { borderColor: theme.colors.primary, backgroundColor: '#EEF8F1' },
-  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary },
+  audienceText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   audienceTextActive: { color: theme.colors.primary },
   priorityRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 18,
   },
   priorityChip: {
     flex: 1,
+    minWidth: 90,
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 14,
     borderWidth: 1.5,
   },

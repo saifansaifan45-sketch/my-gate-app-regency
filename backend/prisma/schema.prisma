@@ -266,6 +266,7 @@ model User {
   householdPets           HouseholdPet[]     @relation("HouseholdPetCreator")
   personnelProfile        Personnel?         @relation("UserPersonnel")
   householdHelps          HouseholdHelp[]    @relation("HouseholdHelpCreator")
+  permanentPasses         PermanentPass[]    @relation("PermanentPassCreator")
   attendanceConfirmations Attendance[]       @relation("AttendanceConfirmer")
 }
 
@@ -287,6 +288,7 @@ model Community {
   householdVehicles HouseholdVehicle[]
   householdPets     HouseholdPet[]
   householdHelps    HouseholdHelp[]
+  permanentPasses   PermanentPass[]
   announcements     Announcement[]
   lostAndFoundItems LostAndFoundItem[]
 }
@@ -371,6 +373,33 @@ model HouseholdHelp {
   @@index([communityId])
 }
 
+model PermanentPass {
+  id              String   @id @default(uuid())
+  unitId          String
+  communityId     String
+  createdById     String
+  name            String
+  phone           String?
+  vehicleNumber   String?
+  purpose         String?  @default("Family member access")
+  householdMemberId String?
+  status          String   @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED
+  validFrom       DateTime @default(now())
+  validUntil      DateTime
+  lastUsedAt      DateTime?
+  useCount        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation("PermanentPassCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@index([communityId])
+  @@index([status, validUntil])
+}
+
 model Unit {
   id                String             @id @default(uuid())
   communityId       String
@@ -390,6 +419,7 @@ model Unit {
   householdVehicles HouseholdVehicle[]
   householdPets     HouseholdPet[]
   householdHelps    HouseholdHelp[]
+  permanentPasses   PermanentPass[]
   polls             Poll[]
 
   @@unique([communityId, unitNumber])
@@ -816,4 +846,17 @@ model LostAndFoundItem {
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([communityId, status, createdAt])
+}
+
+model IdempotencyKey {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  endpoint    String
+  userId      String
+  response    Json?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([userId, endpoint])
+  @@index([expiresAt])
 }

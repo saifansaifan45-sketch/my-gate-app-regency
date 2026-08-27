@@ -393,9 +393,12 @@ import { useQuery } from '@tanstack/react-query';
 import { notificationsApi } from '../../src/api/notifications';
 import { EmergencySOSAlertModal } from '../../src/components/emergency-sos-alert-modal';
 
+import { useResponsive } from '../../src/hooks/useResponsive';
+
 export default function AppLayout() {
   useRoleGuard();
   const { user, isLoading, isAuthenticated, hasManagerAccess, hasWorkforceAccess, hasLeadershipAccess } = useSession();
+  const { maxAppWidth } = useResponsive();
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
 
   const { data: notifData, refetch } = useQuery({
@@ -477,9 +480,9 @@ export default function AppLayout() {
           onComplete={handleWelcomeComplete}
         />
       )}
-      {/* Constrain every tab screen to the same centered 440px column as the
-          auth screens so large web viewports never stretch content edge-to-edge. */}
-      <View style={styles.appFrame}>
+      {/* Constrain every tab screen to a responsive column optimized for phone,
+          iPad and tablet viewports without edge-to-edge stretching. */}
+      <View style={[styles.appFrame, { maxWidth: maxAppWidth }]}>
         <Tabs
           tabBar={(props) => <CustomTabBar {...props} />}
           screenOptions={{
@@ -500,6 +503,7 @@ export default function AppLayout() {
         <Tabs.Screen name="activity-log" options={{ href: null }} />
         <Tabs.Screen name="help-desk" options={{ href: null }} />
         <Tabs.Screen name="family-members" options={{ href: null }} />
+        <Tabs.Screen name="community-hub" options={{ href: null }} />
         <Tabs.Screen name="profile-settings" options={{ href: null }} />
         <Tabs.Screen name="residency-requests" options={{ href: null }} />
         <Tabs.Screen name="visitors/index" options={{ href: null }} />
@@ -551,7 +555,6 @@ const styles = StyleSheet.create({
   appFrame: {
     flex: 1,
     width: '100%',
-    maxWidth: 440,
   },
   tabBarWrapper: {
     backgroundColor: theme.colors.background,

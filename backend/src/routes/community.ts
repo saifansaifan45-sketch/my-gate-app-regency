@@ -421,6 +421,7 @@ const createPollSchema = z.object({
   audience: z.enum(['HOUSEHOLD', 'LEADERSHIP', 'OWNERS', 'RESIDENTS']).optional(),
   audiences: z.array(z.enum(['HOUSEHOLD', 'LEADERSHIP', 'OWNERS', 'RESIDENTS'])).min(1).max(3).optional(),
   unitId: z.string().uuid().optional(),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -431,7 +432,7 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       return res.status(400).json({ error: { message: 'Missing space id' } });
     }
 
-    const { question, options, expiresAt, audience, audiences: requestedAudiences, unitId } = createPollSchema.parse(req.body);
+    const { question, options, expiresAt, audience, audiences: requestedAudiences, unitId, idempotencyKey } = createPollSchema.parse(req.body);
     const selectedAudiences = [...new Set((requestedAudiences?.length ? requestedAudiences : [audience || (unitId ? PollAudience.HOUSEHOLD : PollAudience.RESIDENTS)]) as PollAudience[])];
     const selectedAudience = selectedAudiences[0];
     if (!selectedAudience || (selectedAudiences.includes(PollAudience.HOUSEHOLD) && selectedAudiences.length > 1)) {
@@ -440,6 +441,17 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
     const canCreatePoll = await canUserCreatePoll(userId, spaceId, selectedAudiences, unitId);
     if (!canCreatePoll) {
       return res.status(403).json({ error: { message: 'Poll audience or residence is not permitted for this account' } });
+    }
+
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingKey = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existingKey) {
+        if (existingKey.response) {
+          return res.status(201).json(existingKey.response);
+        }
+        return res.status(409).json({ error: { message: 'Request is being processed, please wait.' } });
+      }
     }
 
     const poll = await prisma.poll.create({
@@ -462,6 +474,13 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
         options: true,
       },
     });
+
+    // Store idempotency key
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.create({
+        data: { key: idempotencyKey, endpoint: '/community/spaces/polls', userId, response: poll, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+      });
+    }
 
     await notifyPollMembers({
       id: poll.id,
@@ -571,6 +590,7 @@ const createAnnouncementSchema = z.object({
   priority: z.enum(['NORMAL', 'IMPORTANT', 'URGENT']).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
   expiresAt: z.string().datetime().optional(),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 const announcementAudienceSchema = z.enum(['RESIDENTS', 'OWNERS', 'LEADERSHIP']);
@@ -587,12 +607,23 @@ const announcementSpaceTypes: Record<z.infer<typeof announcementAudienceSchema>,
 router.post('/announcements/broadcast', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-    const { audiences, title, content, category, priority, status, expiresAt } = broadcastAnnouncementSchema.parse(req.body);
+    const { audiences, title, content, category, priority, status, expiresAt, idempotencyKey } = broadcastAnnouncementSchema.parse(req.body);
     const selectedAudiences = [...new Set(audiences)];
     const accessibleSpaces = await getUserAccessibleSpaces(userId);
     const targetSpaces = accessibleSpaces.filter((space) => selectedAudiences.some((audience) => announcementSpaceTypes[audience] === space.type));
     if (targetSpaces.length !== selectedAudiences.length) {
       return res.status(403).json({ error: { message: 'One or more selected notice audiences are not available for this account.' } });
+    }
+
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingKey = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existingKey) {
+        if (existingKey.response) {
+          return res.status(201).json(existingKey.response);
+        }
+        return res.status(409).json({ error: { message: 'Request is being processed, please wait.' } });
+      }
     }
 
     const created = await prisma.$transaction(
@@ -611,6 +642,14 @@ router.post('/announcements/broadcast', async (req: AuthRequest, res: Response, 
         include: { author: { select: { id: true, firstName: true, lastName: true, role: true } } },
       }))
     );
+
+    // Store idempotency key
+    if (idempotencyKey) {
+      const response = { announcements: created, audiences: selectedAudiences };
+      await prisma.idempotencyKey.create({
+        data: { key: idempotencyKey, endpoint: '/community/announcements/broadcast', userId, response, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+      });
+    }
 
     if ((status || AnnouncementStatus.PUBLISHED) === AnnouncementStatus.PUBLISHED) {
       await Promise.all(created.map((announcement) => notifySpaceMembers(announcement.spaceId, {
@@ -640,9 +679,20 @@ router.post('/spaces/:id/announcements', async (req: AuthRequest, res: Response,
       return res.status(403).json({ error: { message: 'Only Leadership and Managers can create official announcements' } });
     }
 
-    const { title, content, category, priority, status, expiresAt } = createAnnouncementSchema.parse(req.body);
+    const { title, content, category, priority, status, expiresAt, idempotencyKey } = createAnnouncementSchema.parse(req.body);
     const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { communityId: true } });
     if (!space) return res.status(404).json({ error: { message: 'Community space not found' } });
+
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingKey = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existingKey) {
+        if (existingKey.response) {
+          return res.status(201).json(existingKey.response);
+        }
+        return res.status(409).json({ error: { message: 'Request is being processed, please wait.' } });
+      }
+    }
 
     const announcement = await prisma.announcement.create({
       data: {
@@ -660,6 +710,13 @@ router.post('/spaces/:id/announcements', async (req: AuthRequest, res: Response,
         author: { select: { id: true, firstName: true, lastName: true, role: true } },
       },
     });
+
+    // Store idempotency key
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.create({
+        data: { key: idempotencyKey, endpoint: '/community/spaces/announcements', userId, response: announcement, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+      });
+    }
 
     if (announcement.status === AnnouncementStatus.PUBLISHED) {
       await notifySpaceMembers(spaceId, { type: 'ANNOUNCEMENT_PUBLISHED', title: announcement.title, message: announcement.content.slice(0, 180), metadata: { announcementId: announcement.id, spaceId, navigation: '/community' } });

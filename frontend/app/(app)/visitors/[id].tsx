@@ -121,13 +121,13 @@ export default function VisitorDetailsScreen() {
         </View>
 
         {/* Dynamic OTP Panel if just approved */}
-        {newOtp && (
+        {Boolean(newOtp) && (
           <View style={styles.otpCard}>
             <View style={styles.otpIconWrap}>
               <Feather name="shield" size={24} color="#FFF" />
             </View>
             <Text style={styles.otpLabel}>ONE-TIME ENTRY CODE</Text>
-            <Text style={styles.otpValue}>{newOtp.split('').join(' ')}</Text>
+            <Text style={styles.otpValue}>{newOtp ? newOtp.split('').join(' ') : ''}</Text>
             <Text style={styles.otpNotice}>Copy or share this code now. It will not be shown again for security reasons.</Text>
             
             <View style={styles.otpActions}>
@@ -154,7 +154,7 @@ export default function VisitorDetailsScreen() {
             </View>
           </View>
           
-          {checkInTime && (
+          {Boolean(checkInTime) && (
             <View style={styles.timelineItem}>
               <View style={[styles.timelineLine, { backgroundColor: theme.colors.primary }]} />
               <View style={[styles.timelineDot, { backgroundColor: theme.colors.primary }]} />
@@ -165,7 +165,7 @@ export default function VisitorDetailsScreen() {
             </View>
           )}
 
-          {checkOutTime && (
+          {Boolean(checkOutTime) && (
             <View style={styles.timelineItem}>
               <View style={[styles.timelineLine, { backgroundColor: theme.colors.primary }]} />
               <View style={[styles.timelineDot, { backgroundColor: theme.colors.primary }]} />
@@ -202,7 +202,7 @@ export default function VisitorDetailsScreen() {
                 <Text style={styles.detailLabel}>Handed off to</Text>
                 <Text style={styles.detailValue}>{visitor.handoffRecipientType === 'SECURITY' ? 'Gate Security' : visitor.handoffRecipientType === 'LOCKER' ? 'Parcel Locker' : 'Resident (Door)'}</Text>
               </View>
-              {visitor.handoffRecipientName && (
+              {Boolean(visitor.handoffRecipientName) && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Recipient Name</Text>
                   <Text style={styles.detailValue}>{visitor.handoffRecipientName}</Text>
@@ -212,7 +212,7 @@ export default function VisitorDetailsScreen() {
                 <Text style={styles.detailLabel}>Handoff Time</Text>
                 <Text style={styles.detailValue}>{new Date(visitor.handoffTimestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</Text>
               </View>
-              {visitor.handoffProofReference && (
+              {Boolean(visitor.handoffProofReference) && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Proof Reference</Text>
                   <Text style={styles.detailValue}>{visitor.handoffProofReference}</Text>
@@ -259,7 +259,7 @@ export default function VisitorDetailsScreen() {
               <View style={styles.divider} />
             </>
           )}
-          {visitor.phone && (
+          {Boolean(visitor.phone) && (
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Phone Number</Text>
@@ -268,7 +268,7 @@ export default function VisitorDetailsScreen() {
               <View style={styles.divider} />
             </>
           )}
-          {visitor.purpose && (
+          {Boolean(visitor.purpose) && (
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Purpose</Text>
@@ -277,7 +277,7 @@ export default function VisitorDetailsScreen() {
               <View style={styles.divider} />
             </>
           )}
-          {visitor.vehicleNumber && (
+          {Boolean(visitor.vehicleNumber) && (
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Vehicle Number</Text>
@@ -286,7 +286,7 @@ export default function VisitorDetailsScreen() {
               <View style={styles.divider} />
             </>
           )}
-          {visitor.orderReference && (
+          {Boolean(visitor.orderReference) && (
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Order Ref</Text>

@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   pollOptionText: { flex: 1, fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 14, color: theme.colors.textPrimary },
   pollCount: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   pollTopRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  deleteBtn: { padding: 6, borderRadius: 8, backgroundColor: '#FDEBEC' },
+  deleteBtn: { padding: 6, borderRadius: 100, backgroundColor: '#FDEBEC' },
   filterRow: { gap: 8, paddingBottom: 4 },
   filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 97, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
   filterChipActive: { backgroundColor: '#EEF8F1', borderColor: theme.colors.primary },

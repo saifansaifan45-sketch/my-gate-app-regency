@@ -3,18 +3,76 @@ import { sendEmail, generateResetToken } from '../utils/email';
 import { Router, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { Role, OwnershipStatus, ResidencyStatus, ResidencyType, MembershipStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import {
+  isAccountLocked,
+  recordFailedAttempt,
+  recordSuccessfulLogin,
+  validateCaptcha,
+  generateCaptcha,
+  getAccountStatus,
+} from '../utils/loginSecurity';
+
+const lockoutDurationMs = 15 * 60 * 1000; // 15 minutes
 
 const router = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: { message: 'Too many requests, please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Login: 10 attempts per 15 min per IP+email combo
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: { message: 'Too many login attempts. Please try again in 15 minutes.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
+  keyGenerator: (req) => {
+    const ip = req.ip || '127.0.0.1';
+    try {
+      const email = (req.body?.email || '').toLowerCase().trim();
+      return email ? `${ip}:${email}` : ip;
+    } catch {
+      return ip;
+    }
+  },
+  skipSuccessfulRequests: true,
+});
+
+// Register: 5 per hour per IP (legitimate users rarely register more than once)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: { message: 'Too many registration attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Password reset: 3 per hour per IP (strict but not blocking)
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { error: { message: 'Too many password reset attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const registerSchema = z.object({
   email: z.string().email('Valid email address is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   fullName: z.string().optional(),
   phoneNumber: z.string().optional(),
+  idempotencyKey: z.string().uuid().optional(),
   // Legacy / optional fields for backward compatibility
   floor: z.string().optional(),
   room: z.string().optional(),
@@ -27,6 +85,8 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  captchaAnswer: z.string().optional(),
+  captchaToken: z.string().optional(),
 });
 
 const refreshSchema = z.object({
@@ -94,14 +154,32 @@ function formatUserResponse(user: any) {
 // ----------------------------------------------------
 // 1. POST /auth/register (Step 1 — Pure Account Creation)
 // ----------------------------------------------------
-router.post('/register', async (req, res, _next) => {
+router.post('/register', registerLimiter, async (req, res, _next) => {
   try {
     const body = registerSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
+    const idempotencyKey = body.idempotencyKey;
+
+    // Idempotency check
+    if (idempotencyKey) {
+      const existingKey = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existingKey) {
+        if (existingKey.response) {
+          return res.status(201).json(existingKey.response);
+        }
+        return res.status(409).json({ error: { message: 'Request is being processed, please wait.' } });
+      }
+    }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      return res.status(400).json({ error: { message: 'User already exists with this email address' } });
+      const response = { error: { message: 'User already exists with this email address' } };
+      if (idempotencyKey) {
+        await prisma.idempotencyKey.create({
+          data: { key: idempotencyKey, endpoint: '/auth/register', userId: existingUser.id, response, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+        });
+      }
+      return res.status(400).json(response);
     }
 
     const passwordHash = await bcrypt.hash(body.password, 10);
@@ -133,6 +211,13 @@ router.post('/register', async (req, res, _next) => {
         role: Role.RESIDENT,
       },
     });
+
+    // Store idempotency key if provided
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.create({
+        data: { key: idempotencyKey, endpoint: '/auth/register', userId: user.id, response: { id: user.id, email: user.email }, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+      });
+    }
 
     let _membership = null;
     let _createdOwnership: any = null;
@@ -231,13 +316,23 @@ router.post('/register', async (req, res, _next) => {
 
     const formatted = formatUserResponse(fullUser);
 
-    res.status(201).json({
+    const response = {
       accessToken,
       refreshToken,
       user: formatted,
       roles: formatted.roles,
       memberships: formatted.memberships,
-    });
+    };
+
+    // Update idempotency key with full response
+    if (idempotencyKey) {
+      await prisma.idempotencyKey.update({
+        where: { key: idempotencyKey },
+        data: { response }
+      });
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     _next(error);
   }
@@ -246,10 +341,46 @@ router.post('/register', async (req, res, _next) => {
 // ----------------------------------------------------
 // 2. POST /auth/login
 // ----------------------------------------------------
-router.post('/login', async (req, res, _next) => {
+router.post('/login', loginLimiter, async (req, res, _next) => {
   try {
-    const { email: rawEmail, password } = loginSchema.parse(req.body);
+    const { email: rawEmail, password, captchaAnswer, captchaToken } = loginSchema.parse(req.body);
     const email = rawEmail.trim().toLowerCase();
+
+    // Check if account is locked
+    const lockStatus = isAccountLocked(email);
+    if (lockStatus.locked) {
+      const remainingMinutes = Math.ceil((lockStatus.remainingMs || 0) / 60000);
+      return res.status(429).json({
+        error: {
+          message: `Account temporarily locked. Please try again in ${remainingMinutes} minute(s).`,
+          locked: true,
+          remainingMs: lockStatus.remainingMs,
+        },
+      });
+    }
+
+    // Check if CAPTCHA is required
+    if (lockStatus.captchaRequired) {
+      if (!captchaAnswer || !captchaToken) {
+        // Return CAPTCHA challenge
+        const captcha = generateCaptcha(email);
+        return res.status(400).json({
+          error: {
+            message: 'CAPTCHA verification required',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+          },
+        });
+      }
+
+      // Validate CAPTCHA
+      if (!validateCaptcha(email, captchaAnswer, captchaToken)) {
+        return res.status(400).json({
+          error: { message: 'Invalid CAPTCHA answer. Please try again.' },
+        });
+      }
+    }
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -267,8 +398,62 @@ router.post('/login', async (req, res, _next) => {
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      return res.status(401).json({ error: { message: 'Invalid email or password' } });
+      const result = recordFailedAttempt(email);
+
+      if (result.locked) {
+        return res.status(429).json({
+          error: {
+            message: 'Account temporarily locked due to too many failed attempts. Please try again in 15 minutes.',
+            locked: true,
+            remainingMs: lockoutDurationMs,
+          },
+        });
+      }
+
+      if (result.captchaRequired) {
+        const captcha = generateCaptcha(email);
+        return res.status(401).json({
+          error: {
+            message: 'Invalid email or password',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+            remainingAttempts: result.remainingAttempts,
+          },
+        });
+      }
+
+      return res.status(401).json({ error: { message: `Invalid email or password. ${result.remainingAttempts} attempt(s) remaining before temporary lockout.` } });
     }
+
+    // CAPTCHA validation for subsequent attempts
+    if (captchaAnswer && captchaToken) {
+      if (!validateCaptcha(email, captchaAnswer, captchaToken)) {
+        const failResult = recordFailedAttempt(email);
+        if (failResult.locked) {
+          return res.status(429).json({
+            error: {
+              message: 'Account temporarily locked due to too many failed attempts. Please try again in 15 minutes.',
+              locked: true,
+              remainingMs: lockoutDurationMs,
+            },
+          });
+        }
+        const captcha = generateCaptcha(email);
+        return res.status(401).json({
+          error: {
+            message: 'Invalid CAPTCHA answer. Please try again.',
+            captchaRequired: true,
+            captchaQuestion: captcha.question,
+            captchaToken: captcha.token,
+            remainingAttempts: failResult.remainingAttempts,
+          },
+        });
+      }
+    }
+
+    // Record successful login
+    recordSuccessfulLogin(email);
 
     const { accessToken, refreshToken } = generateTokens(user.id, user.tokenVersion);
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);
@@ -624,7 +809,7 @@ router.post('/onboarding/employee', requireAuth, async (req: AuthRequest, res: R
 // ----------------------------------------------------
 // 6. POST /auth/refresh
 // ----------------------------------------------------
-router.post('/refresh', async (req, res, _next) => {
+router.post('/refresh', authLimiter, async (req, res, _next) => {
   try {
     const { refreshToken } = refreshSchema.parse(req.body);
 
@@ -800,7 +985,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-router.post('/change-password', requireAuth, async (req: AuthRequest, res, _next) => {
+router.post('/change-password', requireAuth, authLimiter, async (req: AuthRequest, res, _next) => {
   try {
     const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
     const userId = req.user!.userId;
@@ -850,7 +1035,7 @@ router.post('/change-password', requireAuth, async (req: AuthRequest, res, _next
 // ----------------------------------------------------
 // 11. POST /auth/forgot-password
 // ----------------------------------------------------
-router.post('/forgot-password', async (req, res, _next) => {
+router.post('/forgot-password', passwordResetLimiter, async (req, res, _next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: { message: 'Email is required' } });
@@ -902,7 +1087,7 @@ router.post('/forgot-password', async (req, res, _next) => {
 // ----------------------------------------------------
 // 12. POST /auth/reset-password
 // ----------------------------------------------------
-router.post('/reset-password', async (req, res, _next) => {
+router.post('/reset-password', authLimiter, async (req, res, _next) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword || newPassword.length < 8) {
@@ -958,6 +1143,49 @@ router.post('/reset-password', async (req, res, _next) => {
     }).catch(console.error);
 
     res.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (error) {
+    _next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 12. Admin: GET /auth/account-status/:email
+// ----------------------------------------------------
+router.get('/account-status/:email', requireAuth, async (req: AuthRequest, res, _next) => {
+  try {
+    // Only allow leadership or manager to view account status
+    if (req.user?.role !== Role.LEADERSHIP && req.user?.role !== Role.MANAGER) {
+      return res.status(403).json({ error: { message: 'Insufficient permissions' } });
+    }
+
+    const { email } = req.params as { email: string };
+    const status = getAccountStatus(email);
+    
+    res.json({ success: true, accountStatus: status });
+  } catch (error) {
+    _next(error);
+  }
+});
+
+// ----------------------------------------------------
+// 13. Admin: POST /auth/unlock-account
+// ----------------------------------------------------
+router.post('/unlock-account', requireAuth, async (req: AuthRequest, res, _next) => {
+  try {
+    // Only allow leadership to unlock accounts
+    if (req.user?.role !== Role.LEADERSHIP) {
+      return res.status(403).json({ error: { message: 'Only leadership can unlock accounts' } });
+    }
+
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: { message: 'Email is required' } });
+    }
+
+    const { adminUnlockAccount } = await import('../utils/loginSecurity.js');
+    await adminUnlockAccount(email, req.user!.userId);
+    
+    res.json({ success: true, message: 'Account unlocked successfully' });
   } catch (error) {
     _next(error);
   }
