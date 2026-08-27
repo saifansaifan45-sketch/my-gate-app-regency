@@ -66,7 +66,12 @@ export default function GateOperationsScreen() {
 
   // Mutations
   const checkInMut = useMutation({
-    mutationFn: ({ id, otp }: { id: string; otp?: string }) => visitorsApi.checkInVisitor(id, otp),
+    mutationFn: ({ id, otp }: { id: string; otp?: string }) => {
+      if (id.startsWith('pp-')) {
+        return visitorsApi.checkInPermanentPass(id.replace('pp-', ''));
+      }
+      return visitorsApi.checkInVisitor(id, otp);
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['gate-visitors'] }) },
   });
   const checkOutMut = useMutation({

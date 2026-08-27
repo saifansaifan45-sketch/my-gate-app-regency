@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord } from '../../src/api/household';
+import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord, PermanentPassRecord } from '../../src/api/household';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { Button } from '../../src/components/ui/Button';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -54,6 +54,46 @@ export default function FamilyMembersScreen() {
   const records = recordsQuery.data;
   const canManage = records?.canManageAssets ?? false;
   const residentName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'you';
+
+  // Permanent passes
+  const passesQuery = useQuery({ queryKey: ['permanent-passes'], queryFn: householdApi.getPermanentPasses });
+  const passes = passesQuery.data?.passes ?? [];
+  const passesCanManage = passesQuery.data?.canManage ?? false;
+  const [passFormVisible, setPassFormVisible] = useState(false);
+  const [passForm, setPassForm] = useState({ name: '', phone: '', vehicleNumber: '' });
+  const [renewTarget, setRenewTarget] = useState<string | null>(null);
+  const [deletePassTarget, setDeletePassTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const createPassMutation = useMutation({
+    mutationFn: () => householdApi.createPermanentPass({ name: passForm.name, phone: passForm.phone || undefined, vehicleNumber: passForm.vehicleNumber || undefined }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permanent-passes'] });
+      setPassFormVisible(false);
+      setPassForm({ name: '', phone: '', vehicleNumber: '' });
+      showToast({ title: 'Pass issued', message: 'A 28-day permanent pass has been created. No OTP required at the gate.', type: 'success' });
+    },
+    onError: () => showToast({ title: 'Could not create pass', message: 'Please check the details and try again.', type: 'error' }),
+  });
+
+  const renewPassMutation = useMutation({
+    mutationFn: (id: string) => householdApi.renewPermanentPass(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permanent-passes'] });
+      setRenewTarget(null);
+      showToast({ title: 'Pass renewed', message: 'The pass has been extended for another 28 days.', type: 'success' });
+    },
+    onError: () => showToast({ title: 'Could not renew pass', message: 'Please try again.', type: 'error' }),
+  });
+
+  const deletePassMutation = useMutation({
+    mutationFn: (id: string) => householdApi.deletePermanentPass(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permanent-passes'] });
+      setDeletePassTarget(null);
+      showToast({ title: 'Pass removed', message: 'The permanent pass has been deleted.', type: 'success' });
+    },
+    onError: () => showToast({ title: 'Could not remove pass', message: 'Please try again.', type: 'error' }),
+  });
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -247,7 +287,132 @@ export default function FamilyMembersScreen() {
             </View>
           </ScreenEntrance>
         ))}
+
+        {/* ── Permanent Passes (28-day gate access, no OTP) ── */}
+        {activeTab === 'members' && (
+          <>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Gate passes</Text>
+                <Text style={styles.sectionMeta}>{passes.length} {passes.length === 1 ? 'pass' : 'passes'} · 28-day validity, no OTP</Text>
+              </View>
+              {passesCanManage && (
+                <PremiumPressable style={styles.addButton} onPress={() => { setPassForm({ name: '', phone: '', vehicleNumber: '' }); setPassFormVisible(true); }} accessibilityRole="button" accessibilityLabel="Issue a permanent pass">
+                  <Feather name="plus" size={17} color="#FFFFFF" />
+                  <Text style={styles.addButtonText}>Issue</Text>
+                </PremiumPressable>
+              )}
+            </View>
+            {passesQuery.isLoading ? <View style={styles.loader}><ActivityIndicator color={theme.colors.primary} /></View> : null}
+            {!passesQuery.isLoading && passes.length === 0 && (
+              <EmptyState icon="key" title="No permanent passes" description={passesCanManage ? 'Issue a pass so family members can enter without OTP.' : 'The property owner can issue permanent gate passes.'} />
+            )}
+            {passes.map((pass) => {
+              const isExpired = pass.status === 'EXPIRED' || new Date(pass.validUntil) < new Date();
+              const isPaused = pass.status === 'PAUSED';
+              const daysLeft = Math.max(0, Math.ceil((new Date(pass.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+              return (
+                <ScreenEntrance key={pass.id} delay={110}>
+                  <View style={styles.recordRow}>
+                    <View style={[styles.recordIcon, { backgroundColor: isExpired ? '#FEE2E2' : isPaused ? '#FEF3C7' : '#E8F5E9' }]}>
+                      <Feather name="key" size={19} color={isExpired ? '#DC2626' : isPaused ? '#D97706' : theme.colors.primary} />
+                    </View>
+                    <View style={styles.recordInfo}>
+                      <Text style={styles.recordTitle}>{pass.name}</Text>
+                      <Text style={styles.recordDetail}>
+                        {pass.vehicleNumber ? `${pass.vehicleNumber} · ` : ''}{daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}{pass.useCount > 0 ? ` · Used ${pass.useCount}x` : ''}
+                      </Text>
+                      {isExpired && (
+                        <View style={[styles.statusBadge, styles.statusRevoked]}>
+                          <Text style={[styles.statusBadgeText, styles.statusRevokedText]}>EXPIRED</Text>
+                        </View>
+                      )}
+                      {isPaused && (
+                        <View style={[styles.statusBadge, styles.statusPaused]}>
+                          <Text style={[styles.statusBadgeText, styles.statusPausedText]}>PAUSED</Text>
+                        </View>
+                      )}
+                    </View>
+                    {passesCanManage && (
+                      <View style={styles.actionButtons}>
+                        {(isExpired || isPaused) && (
+                          <PremiumPressable
+                            onPress={() => setRenewTarget(pass.id)}
+                            style={styles.actionButton}
+                            accessibilityLabel={`Renew pass for ${pass.name}`}
+                          >
+                            <Feather name="refresh-cw" size={16} color="#059669" />
+                          </PremiumPressable>
+                        )}
+                        {!isExpired && !isPaused && (
+                          <PremiumPressable
+                            onPress={() => householdApi.updatePermanentPassStatus(pass.id, 'PAUSED').then(() => queryClient.invalidateQueries({ queryKey: ['permanent-passes'] }))}
+                            style={styles.actionButton}
+                            accessibilityLabel={`Pause pass for ${pass.name}`}
+                          >
+                            <Feather name="pause" size={16} color="#D97706" />
+                          </PremiumPressable>
+                        )}
+                        <PremiumPressable
+                          onPress={() => setDeletePassTarget({ id: pass.id, name: pass.name })}
+                          style={styles.actionButton}
+                          accessibilityLabel={`Remove pass for ${pass.name}`}
+                        >
+                          <Feather name="trash-2" size={16} color="#DC2626" />
+                        </PremiumPressable>
+                      </View>
+                    )}
+                  </View>
+                </ScreenEntrance>
+              );
+            })}
+          </>
+        )}
       </ScrollView>
+
+      {/* ── Issue Pass Modal ── */}
+      <Modal visible={passFormVisible} transparent animationType="fade" onRequestClose={() => setPassFormVisible(false)}>
+        <View style={styles.overlay}><View style={styles.sheet}>
+          <View style={styles.handle} />
+          <Text style={styles.sheetTitle}>Issue a gate pass</Text>
+          <Text style={styles.sheetSubtitle}>This pass is valid for 28 days. The family member can enter without OTP or pre-approval.</Text>
+          <View style={styles.field}><Text style={styles.fieldLabel}>Name *</Text><TextInput style={styles.input} value={passForm.name} onChangeText={(v) => setPassForm((c) => ({ ...c, name: v }))} placeholder="e.g. Amina Bello" placeholderTextColor={theme.colors.textSecondary} /></View>
+          <View style={styles.field}><Text style={styles.fieldLabel}>Phone</Text><TextInput style={styles.input} value={passForm.phone} onChangeText={(v) => setPassForm((c) => ({ ...c, phone: v }))} placeholder="Optional" placeholderTextColor={theme.colors.textSecondary} keyboardType="phone-pad" /></View>
+          <View style={styles.field}><Text style={styles.fieldLabel}>Vehicle number</Text><TextInput style={styles.input} value={passForm.vehicleNumber} onChangeText={(v) => setPassForm((c) => ({ ...c, vehicleNumber: v.toUpperCase() }))} placeholder="Optional" placeholderTextColor={theme.colors.textSecondary} autoCapitalize="characters" /></View>
+          <View style={styles.sheetActions}>
+            <Button label="Cancel" variant="outline" onPress={() => setPassFormVisible(false)} style={styles.cancelButton} />
+            <Button label="Issue pass" onPress={() => { if (!passForm.name.trim()) { showToast({ title: 'Name required', message: 'Enter the family member name.', type: 'warning' }); return; } createPassMutation.mutate(); }} loading={createPassMutation.isPending} style={styles.saveButton} />
+          </View>
+        </View></View>
+      </Modal>
+
+      {/* ── Renew Confirmation ── */}
+      <Modal visible={Boolean(renewTarget)} transparent animationType="fade" onRequestClose={() => setRenewTarget(null)}>
+        <View style={styles.overlay}>
+          <View style={styles.deleteModal}>
+            <Text style={styles.deleteTitle}>Renew pass?</Text>
+            <Text style={styles.deleteMessage}>This will reset the pass for another 28 days from today.</Text>
+            <View style={styles.deleteActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setRenewTarget(null)} style={styles.cancelButton} />
+              <Button label="Renew" onPress={() => { if (renewTarget) renewPassMutation.mutate(renewTarget); }} loading={renewPassMutation.isPending} style={{ flex: 1, backgroundColor: '#059669' }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Delete Pass Confirmation ── */}
+      <Modal visible={Boolean(deletePassTarget)} transparent animationType="fade" onRequestClose={() => setDeletePassTarget(null)}>
+        <View style={styles.overlay}>
+          <View style={styles.deleteModal}>
+            <Text style={styles.deleteTitle}>Remove pass?</Text>
+            <Text style={styles.deleteMessage}>{deletePassTarget ? `Remove the permanent pass for ${deletePassTarget.name}? They will need OTP or pre-approval to enter.` : ''}</Text>
+            <View style={styles.deleteActions}>
+              <Button label="Cancel" variant="outline" onPress={() => setDeletePassTarget(null)} style={styles.cancelButton} />
+              <Button label="Remove" onPress={() => { if (deletePassTarget) deletePassMutation.mutate(deletePassTarget.id); }} loading={deletePassMutation.isPending} style={styles.deleteConfirmBtn} />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)}>
         <View style={styles.overlay}><View style={styles.sheet}>

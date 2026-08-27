@@ -37,6 +37,10 @@ export interface VisitorItem {
   handoffSuggestionType?: string | null;
   handoffSuggestionName?: string | null;
 
+  // Permanent pass fields
+  isPermanentPass?: boolean;
+  permanentPassId?: string;
+
   createdAt: string;
   updatedAt: string;
   unit?: {
@@ -219,6 +223,11 @@ export const visitorsApi = {
 
   reconcileVisitors: async (communityId?: string): Promise<{ success: boolean; expired: number; autoCheckedOut: number }> => {
     const res = await api.post<{ success: boolean; expired: number; autoCheckedOut: number }>('/visitors/reconcile', { communityId });
+    return res.data;
+  },
+
+  checkInPermanentPass: async (passId: string): Promise<{ success: boolean; visitor: VisitorItem }> => {
+    const res = await api.post<{ success: boolean; visitor: VisitorItem }>(`/visitors/permanent-pass/${passId}/check-in`);
     return res.data;
   },
 };

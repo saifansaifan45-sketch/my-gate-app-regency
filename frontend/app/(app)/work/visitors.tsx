@@ -60,7 +60,13 @@ export default function SecurityGateOperations() {
   });
 
   const checkInMutation = useMutation({
-    mutationFn: ({ id, otp }: { id: string; otp?: string }) => visitorsApi.checkInVisitor(id, otp),
+    mutationFn: ({ id, otp }: { id: string; otp?: string }) => {
+      // Permanent pass check-in: id starts with 'pp-'
+      if (id.startsWith('pp-')) {
+        return visitorsApi.checkInPermanentPass(id.replace('pp-', ''));
+      }
+      return visitorsApi.checkInVisitor(id, otp);
+    },
     onMutate: ({ id }) => setCheckInPending(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['security-gate'] });

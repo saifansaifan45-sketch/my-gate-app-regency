@@ -48,6 +48,21 @@ export interface HelpDeskContact {
   manager: { name: string; phoneNumber?: string | null } | null;
 }
 
+export interface PermanentPassRecord {
+  id: string;
+  name: string;
+  phone?: string | null;
+  vehicleNumber?: string | null;
+  purpose?: string | null;
+  householdMemberId?: string | null;
+  status: string;
+  validFrom: string;
+  validUntil: string;
+  lastUsedAt?: string | null;
+  useCount: number;
+  createdAt: string;
+}
+
 export const householdApi = {
   getRecords: async (): Promise<HouseholdRecords> => (await api.get('/household')).data,
   addMember: async (payload: Omit<HouseholdMemberRecord, 'id'>) => (await api.post('/household/members', payload)).data.member as HouseholdMemberRecord,
@@ -59,4 +74,11 @@ export const householdApi = {
   updateMemberStatus: async (id: string, status: 'ACTIVE' | 'PAUSED' | 'REVOKED') => (await api.patch(`/household/members/${id}/status`, { status })).data.member as HouseholdMemberRecord,
   getActivity: async (params?: { from?: string; to?: string }): Promise<{ activities: HouseholdActivity[] }> => (await api.get('/household/activity', { params })).data,
   getHelpDeskContact: async (): Promise<HelpDeskContact> => (await api.get('/household/help-desk')).data,
+
+  // Permanent passes
+  getPermanentPasses: async (): Promise<{ passes: PermanentPassRecord[]; canManage: boolean }> => (await api.get('/household/permanent-passes')).data,
+  createPermanentPass: async (payload: { name: string; phone?: string; vehicleNumber?: string; purpose?: string; householdMemberId?: string }) => (await api.post('/household/permanent-passes', payload)).data.pass as PermanentPassRecord,
+  renewPermanentPass: async (id: string) => (await api.post(`/household/permanent-passes/${id}/renew`)).data.pass as PermanentPassRecord,
+  updatePermanentPassStatus: async (id: string, status: 'ACTIVE' | 'PAUSED' | 'EXPIRED') => (await api.patch(`/household/permanent-passes/${id}/status`, { status })).data.pass as PermanentPassRecord,
+  deletePermanentPass: async (id: string) => api.delete(`/household/permanent-passes/${id}`),
 };
