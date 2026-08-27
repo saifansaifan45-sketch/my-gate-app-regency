@@ -164,14 +164,14 @@ export default function LeadershipOverviewScreen() {
 
         {/* Operations Hub Banner */}
         <ScreenEntrance delay={40}>
-          <View style={styles.hubBanner}>
-            <View style={styles.roleTag}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroBadge}>
               <Feather name="shield" size={13} color="#FFFFFF" />
-              <Text style={styles.roleTagText}>REGENCY SALMA</Text>
+              <Text style={styles.heroBadgeText}>REGENCY SALMA</Text>
             </View>
-            <Text style={styles.hubTitle}>{greeting} {displayName}</Text>
-            <Text style={styles.hubSubtitle}>
-              Leadership Governance &amp; Operational Oversight
+            <Text style={styles.heroTitle}>{displayName}</Text>
+            <Text style={styles.heroSub}>
+              Leadership Governance & Operational Oversight
             </Text>
           </View>
         </ScreenEntrance>

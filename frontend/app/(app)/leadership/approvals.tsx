@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Modal, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { smartBack } from '../../../src/navigation/history';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../../../src/components/ui/Text';
 import { Button } from '../../../src/components/ui/Button';
+import { PremiumPressable } from '../../../src/components/ui/PremiumPressable';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { AppHeader } from '../../../src/components/ui/AppHeader';
 import { Skeleton } from '../../../src/components/ui/Skeleton';
@@ -14,6 +15,7 @@ import { theme } from '../../../src/theme';
 import { useToast } from '../../../src/store/toast';
 import { leadershipApi, PendingManagerItem, LeadershipOverviewResponse } from '../../../src/api/leadership';
 import { parseApiError } from '../../../src/utils/api-error';
+import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function LeadershipApprovalsScreen() {
   const router = useRouter();
@@ -142,32 +144,32 @@ export default function LeadershipApprovalsScreen() {
 
       {/* Tabs */}
       <View style={styles.tabBar}>
-        <TouchableOpacity
+        <PremiumPressable
           style={[styles.tabItem, activeTab === 'managers' && styles.tabItemActive]}
           onPress={() => setActiveTab('managers')}
         >
           <Text style={[styles.tabText, activeTab === 'managers' && styles.tabTextActive]}>
             Manager Requests ({pendingManagers.length})
           </Text>
-        </TouchableOpacity>
+        </PremiumPressable>
 
-        <TouchableOpacity
+        <PremiumPressable
           style={[styles.tabItem, activeTab === 'workforce' && styles.tabItemActive]}
           onPress={() => setActiveTab('workforce')}
         >
           <Text style={[styles.tabText, activeTab === 'workforce' && styles.tabTextActive]}>
             Workforce Overview
           </Text>
-        </TouchableOpacity>
+        </PremiumPressable>
 
-        <TouchableOpacity
+        <PremiumPressable
           style={[styles.tabItem, activeTab === 'history' && styles.tabItemActive]}
           onPress={() => setActiveTab('history')}
         >
           <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
             History
           </Text>
-        </TouchableOpacity>
+        </PremiumPressable>
       </View>
 
       <ScrollView
@@ -341,9 +343,9 @@ export default function LeadershipApprovalsScreen() {
                   <Feather name="shield" size={20} color="#143D2A" />
                   <Text style={styles.modalTitle}>Review Application</Text>
                 </View>
-                <TouchableOpacity onPress={() => setSelectedApplicant(null)} style={styles.modalCloseBtn}>
-                  <Feather name="x" size={20} color="#6B7280" />
-                </TouchableOpacity>
+                <PremiumPressable onPress={() => setSelectedApplicant(null)} style={styles.modalCloseBtn}>
+                  <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                </PremiumPressable>
               </View>
 
               <View style={styles.modalApplicantBox}>
@@ -392,14 +394,14 @@ export default function LeadershipApprovalsScreen() {
                   loading={actionLoading}
                   style={{ marginBottom: 8 }}
                 />
-                <TouchableOpacity
+                <PremiumPressable
                   style={styles.blockBtn}
                   onPress={() => handleBlock(selectedApplicant)}
                   disabled={actionLoading}
                 >
                   <Feather name="slash" size={14} color="#DC2626" />
                   <Text style={styles.blockBtnText}>Block Applicant Permanently</Text>
-                </TouchableOpacity>
+                </PremiumPressable>
               </View>
             </View>
           </View>
@@ -416,44 +418,45 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingHorizontal: 12,
+    paddingHorizontal: cardSystem.pagePadding,
+    gap: 8,
+    paddingBottom: 12,
   },
   tabItem: {
-    paddingVertical: 14,
+    flex: 1,
+    minHeight: 44,
     paddingHorizontal: 14,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 9,
+    borderRadius: 100,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
   },
   tabItemActive: {
-    borderBottomColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   tabText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
   },
   tabTextActive: {
-    color: theme.colors.primary,
+    color: '#FFFFFF',
     fontFamily: 'PlusJakartaSans_700Bold',
   },
   content: {
-    padding: 18,
+    paddingHorizontal: cardSystem.pagePadding,
+    gap: 12,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderRadius: 18,
-    padding: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: theme.colors.border,
+    ...theme.shadows.card,
   },
   cardTop: {
     flexDirection: 'row',
@@ -464,7 +467,7 @@ const styles = StyleSheet.create({
   applicantAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
@@ -490,21 +493,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB',
     borderColor: '#FDE68A',
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 100,
   },
   pendingBadgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 10.5,
+    fontSize: 10,
     color: '#B45309',
     letterSpacing: 0.5,
   },
   cardInfoGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 14,
   },
@@ -514,7 +517,7 @@ const styles = StyleSheet.create({
   infoColLabel: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 11.5,
-    color: '#6B7280',
+    color: theme.colors.textSecondary,
     marginBottom: 2,
   },
   infoColValue: {
@@ -545,7 +548,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   breakdownList: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.colors.background,
     borderRadius: 12,
     padding: 14,
   },
@@ -567,7 +570,7 @@ const styles = StyleSheet.create({
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: theme.colors.border,
     marginVertical: 4,
   },
   historyItem: {
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
   historyIconBox: {
     width: 32,
     height: 32,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
@@ -597,7 +600,7 @@ const styles = StyleSheet.create({
   historyTime: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 11.5,
-    color: '#9CA3AF',
+    color: theme.colors.textSecondary,
   },
   modalOverlay: {
     flex: 1,
@@ -609,7 +612,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderRadius: 22,
     padding: 22,
   },
@@ -619,7 +622,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: theme.colors.border,
     paddingBottom: 12,
   },
   modalTitleRow: {
@@ -630,7 +633,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 18,
-    color: '#143D2A',
+    color: theme.colors.textPrimary,
   },
   modalCloseBtn: {
     width: 44,
@@ -640,7 +643,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalApplicantBox: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.colors.background,
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
@@ -671,7 +674,7 @@ const styles = StyleSheet.create({
   modalInfoLabel: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 13,
-    color: '#6B7280',
+    color: theme.colors.textSecondary,
   },
   modalInfoValue: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -686,10 +689,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   modalInput: {
-    backgroundColor: '#F9FAFB',
-    borderColor: '#E5E7EB',
+    backgroundColor: theme.colors.background,
+    borderColor: theme.colors.border,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
@@ -709,6 +712,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
   },
   blockBtnText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',

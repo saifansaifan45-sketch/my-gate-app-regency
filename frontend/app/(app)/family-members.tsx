@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.48)',
   },
   keyboardView: {

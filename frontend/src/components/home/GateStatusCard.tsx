@@ -66,10 +66,9 @@ export const GateStatusCard: React.FC<GateStatusCardProps> = ({
             <Text style={styles.statusDescription}>No one is waiting at the gate.</Text>
           </View>
 
-          {/* Right Action Link */}
-          <View style={styles.actionLinkWrap}>
-            <Text style={styles.actionLinkText}>View gate activity</Text>
-            <Feather name="chevron-right" size={15} color="#FFFFFF" />
+          {/* Right Action Chevron */}
+          <View style={styles.chevronBox}>
+            <Feather name="chevron-right" size={18} color="#FFFFFF" />
           </View>
         </View>
       </PremiumPressable>

@@ -34,6 +34,21 @@ interface RadialAction {
   opacity: Animated.Value;
 }
 
+function getArcSpan(count: number): number {
+  if (count <= 2) return Math.PI * 0.35;
+  if (count <= 3) return Math.PI * 0.5;
+  if (count <= 4) return Math.PI * 0.65;
+  return Math.PI * 0.8;
+}
+
+function getRoleDefaults(role?: string): string[] {
+  if (!role) return DEFAULT_VISIBLE;
+  return DEFAULT_VISIBLE.filter((id) => {
+    const service = SERVICE_CATALOG.find((s) => s.id === id);
+    return service?.availableRoles.includes(role);
+  });
+}
+
 export function QuickActionsRadial() {
   const router = useRouter();
   const { user } = useSession();
@@ -42,6 +57,7 @@ export function QuickActionsRadial() {
   const [radialActions, setRadialActions] = useState<RadialAction[]>([]);
   const [visitorPassConfig, setVisitorPassConfig] = useState<{ visitorType: 'GUEST' | 'CAB' | 'DELIVERY'; title: string } | null>(null);
   const [isSOSVisible, setIsSOSVisible] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const insets = useSafeAreaInsets();
 
   // Center button sits at top:-22 inside a 62px tab-bar slot, so its
@@ -61,41 +77,59 @@ export function QuickActionsRadial() {
   // Load quick action preferences
   useEffect(() => {
     let cancelled = false;
+    const roleDefaults = getRoleDefaults(user?.role);
     const defaults = SERVICE_CATALOG.filter((s) =>
       s.availableRoles.includes(user?.role || '')
-    ).map((s) => ({ id: s.id, visible: DEFAULT_VISIBLE.includes(s.id) }));
+    ).map((s) => ({ id: s.id, visible: roleDefaults.includes(s.id) }));
 
     const storageKey = user?.id ? `quick-actions:${user.id}` : null;
     if (!storageKey) {
       const visible = defaults.filter((d) => d.visible).slice(0, 5);
       const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-      if (!cancelled) setActions(services);
+      if (!cancelled) {
+        setActions(services);
+        setPrefsLoaded(true);
+      }
       return () => { cancelled = true; };
     }
 
     AsyncStorage.getItem(storageKey).then((stored) => {
       if (cancelled) return;
       if (!stored) {
-        // No saved preferences yet – fall back to defaults.
         const visible = defaults.filter((d) => d.visible).slice(0, 5);
         const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-        if (!cancelled) setActions(services);
+        if (!cancelled) {
+          setActions(services);
+          setPrefsLoaded(true);
+        }
         return;
       }
       try {
         const saved = JSON.parse(stored) as { id: string; visible: boolean }[];
-        const defaultIds = new Set(defaults.map((d) => d.id));
-        const restored = saved
-          .filter((a) => defaultIds.has(a.id))
-          .map((a) => ({ id: a.id, visible: Boolean(a.visible) }));
-        const visible = restored.filter((a) => a.visible).slice(0, 5);
-        const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-        if (!cancelled && services.length > 0) setActions(services);
+        const savedIds = new Set(saved.map((a) => a.id));
+        const currentRoleIds = new Set(defaults.map((d) => d.id));
+
+        const visibleFromSaved = saved
+          .filter((a) => a.visible && currentRoleIds.has(a.id))
+          .map((a) => a.id);
+
+        const newDefaults = defaults
+          .filter((d) => d.visible && !savedIds.has(d.id))
+          .map((d) => d.id);
+
+        const merged = [...visibleFromSaved, ...newDefaults].slice(0, 5);
+        const services = merged.map((id) => SERVICE_CATALOG.find((s) => s.id === id)!).filter(Boolean);
+        if (!cancelled && services.length > 0) {
+          setActions(services);
+          setPrefsLoaded(true);
+        }
       } catch {
-        // Malformed storage – fall back to defaults.
         const visible = defaults.filter((d) => d.visible).slice(0, 5);
         const services = visible.map((v) => SERVICE_CATALOG.find((s) => s.id === v.id)!).filter(Boolean);
-        if (!cancelled) setActions(services);
+        if (!cancelled) {
+          setActions(services);
+          setPrefsLoaded(true);
+        }
       }
     });
 
@@ -106,8 +140,9 @@ export function QuickActionsRadial() {
   useEffect(() => {
     if (actions.length === 0) return;
     const count = actions.length;
-    const startAngle = -Math.PI / 2 - (Math.PI * 0.45);
-    const endAngle = -Math.PI / 2 + (Math.PI * 0.45);
+    const arcSpan = getArcSpan(count);
+    const startAngle = -Math.PI / 2 - arcSpan / 2;
+    const endAngle = -Math.PI / 2 + arcSpan / 2;
     const angleStep = count > 1 ? (endAngle - startAngle) / (count - 1) : 0;
 
     const items: RadialAction[] = actions.map((service, i) => ({
@@ -338,12 +373,13 @@ export function QuickActionsRadial() {
   }, [radialActions, closeMenu, router]);
 
   const toggleMenu = useCallback(() => {
+    if (!prefsLoaded) return;
     if (menuVisible.current) {
       closeMenu();
     } else {
       openMenu();
     }
-  }, [openMenu, closeMenu]);
+  }, [openMenu, closeMenu, prefsLoaded]);
 
   const interpolateRotation = centerRotation.interpolate({
     inputRange: [0, 1],
@@ -358,10 +394,12 @@ export function QuickActionsRadial() {
           accessibilityLabel="Quick actions"
           onPress={toggleMenu}
           style={styles.centerPressable}
+          disabled={!prefsLoaded}
         >
           <Animated.View
             style={[
               styles.centerButton,
+              !prefsLoaded && styles.centerButtonLoading,
               {
                 transform: [
                   { scale: centerScale },
@@ -370,10 +408,10 @@ export function QuickActionsRadial() {
               },
             ]}
           >
-            <Feather name="plus" size={28} color="#FFFFFF" />
+            <Feather name={prefsLoaded ? 'plus' : 'loader'} size={28} color="#FFFFFF" />
           </Animated.View>
         </Pressable>
-        <Text style={styles.centerLabel}>Actions</Text>
+        <Text style={[styles.centerLabel, !prefsLoaded && styles.centerLabelLoading]}>Actions</Text>
       </View>
 
       <Modal visible={isOpen} transparent statusBarTranslucent onRequestClose={() => closeMenu()}>
@@ -494,11 +532,17 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 8,
   },
+  centerButtonLoading: {
+    opacity: 0.6,
+  },
   centerLabel: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 10,
     color: theme.colors.primary,
     letterSpacing: -0.05,
+  },
+  centerLabelLoading: {
+    opacity: 0.5,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
