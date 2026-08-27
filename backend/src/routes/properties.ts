@@ -272,22 +272,33 @@ router.post('/units/:unitId/residencies/:residencyId/approve', async (req: AuthR
       include: { user: true, unit: true },
     });
 
-    // Auto-populate family records if the resident is an owner
-    if (residency.relationshipType === ResidencyType.OWNER) {
+    // Auto-populate household member record when a residency is approved.
+    // This ensures owners and family members who register through the
+    // onboarding flow appear in the family / household records section.
+    if (
+      residency.relationshipType === ResidencyType.OWNER ||
+      residency.relationshipType === ResidencyType.FAMILY_MEMBER
+    ) {
+      const relationshipLabel =
+        residency.relationshipType === ResidencyType.OWNER ? 'OWNER' : 'Family Member';
+
       const existingMember = await prisma.householdMember.findFirst({
         where: {
           unitId,
-          email: residency.user.email,
-          relationship: 'OWNER',
+          email: residency.user.email ?? undefined,
+          relationship: relationshipLabel,
         },
       });
 
       if (!existingMember) {
-        const ownerName = [residency.user.firstName, residency.user.lastName].filter(Boolean).join(' ') || 'Property Owner';
+        const memberName =
+          [residency.user.firstName, residency.user.lastName]
+            .filter(Boolean)
+            .join(' ') || (relationshipLabel === 'OWNER' ? 'Property Owner' : 'Family Member');
         await prisma.householdMember.create({
           data: {
-            name: ownerName,
-            relationship: 'OWNER',
+            name: memberName,
+            relationship: relationshipLabel,
             phone: residency.user.phoneNumber || null,
             email: residency.user.email,
             unitId,
