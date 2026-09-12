@@ -147,7 +147,7 @@ describe('Operational Role Permission Hardening & Database-Backed Security Audit
         unitNumber: '9A',
       },
     });
-    let residentToken = generateTokens(residentUser.id).accessToken;
+    const _residentToken = generateTokens(residentUser.id).accessToken;
 
     testTicket = await prisma.ticket.create({
       data: {

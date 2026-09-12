@@ -8,12 +8,11 @@ import { generateTokens } from '../src/utils/jwt';
 const request = supertest(app);
 
 describe('Authentication Lifecycle & Role Verification Suite', () => {
-  let accessToken: string;
-  let refreshToken: string;
+  let accessToken!: string;
+  let refreshToken!: string;
 
   const testEmail = 'owner@test.com';
   const testPassword = 'password123';
-  let _accessToken: string;
   
 
   beforeAll(async () => {

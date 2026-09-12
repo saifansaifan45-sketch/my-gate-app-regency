@@ -10,7 +10,7 @@ describe('Register self-escalation — MANAGER via public registration', () => {
   const managerEmail = `manager_escalate_${suffix}@test.com`;
   const ownerEmail = `owner_legit_${suffix}@test.com`;
   let managerToken: string;
-  let managerMembershipId: string;
+  let _managerMembershipId: string;
 
   it('MANAGER requested via public register → membership PENDING, not APPROVED manager', async () => {
     const res = await request(app).post('/auth/register').send({
@@ -32,7 +32,7 @@ describe('Register self-escalation — MANAGER via public registration', () => {
     const membership = await prisma.membership.findFirst({ where: { userId: user!.id, role: Role.MANAGER } });
     expect(membership).not.toBeNull();
     expect(membership!.status).toBe(MembershipStatus.PENDING);
-    managerMembershipId = membership!.id;
+    _managerMembershipId = membership!.id;
     managerToken = res.body.accessToken;
 
     // Must not be able to operate as manager immediately

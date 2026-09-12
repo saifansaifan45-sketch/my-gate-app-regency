@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../src/index';
 import { prisma } from '../src/prisma';
 import { generateTokens } from '../src/utils/jwt';
-import { Role, MembershipStatus, PersonnelCategory, Department } from '@prisma/client';
+import { Role, MembershipStatus } from '@prisma/client';
 
 describe('PermanentPass renew guard — linked member must be ACTIVE', () => {
   let ownerId: string;
