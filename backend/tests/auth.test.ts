@@ -8,7 +8,7 @@ import { generateTokens } from '../src/utils/jwt';
 const request = supertest(app);
 
 describe('Authentication Lifecycle & Role Verification Suite', () => {
-  let accessToken!: string;
+  let _accessToken!: string;
   let refreshToken!: string;
 
   const testEmail = 'owner@test.com';
@@ -80,7 +80,7 @@ describe('Authentication Lifecycle & Role Verification Suite', () => {
     expect(res.body.roles).toContain(Role.OWNER);
     expect(res.body.memberships.length).toBeGreaterThanOrEqual(1);
 
-    accessToken = res.body.accessToken;
+    _accessToken = res.body.accessToken;
     
   });
 
