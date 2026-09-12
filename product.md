@@ -1,89 +1,59 @@
-# Product Vision & Requirements
+# Product — Zobay Neighbourhood V0.0.1
 
-This document defines the product vision, user roles, core capabilities, and the rollout roadmap for the Regency Salma platform.
+> **Regency Salma → Zobay Neighbourhood** — community OS, not MyGate clone. `origin/main@5976a96` (`v0.0.1` at `758a563` + `5976a96` chat contract), `34 tables`, `42/42`.
 
-## Product Vision
-Regency Salma is a premium gated residential-community platform connecting management, owners, residents, and workforce seamlessly, ensuring security, convenience, and transparent communication.
+## Vision
 
-## User Roles
-1. **Leadership / Management:** Oversees the entire community. Has highest privileges.
-2. **Owner:** Owns properties within the community.
-3. **Resident / Family Member:** Lives in the community (could be an owner living there, or family).
-4. **Tenant:** Rents and lives in the community. Requires authorization from an Owner or Management.
-5. **Workforce / Service Worker:** Performs maintenance, security, or community tasks.
+Premium gated community platform — **security, household, community, workforce, chat** — where `Identity ≠ Authorization`. One `User` can be `OWNER` in `Unit A`, `TENANT` in `Unit B`, `FAMILY_MEMBER` in `Unit C` (`User → Membership → UnitResidency → HouseholdMember → PermanentPass → Visitor`).
 
-## Authorization Model
-- **Authentication != Authorization:** Logging in merely authenticates identity. Community access and capabilities are strictly governed by authorized roles.
-- **Leadership Space:** Accessed only by Leadership/Management. Leadership also has access to Owner and Resident spaces.
-- **Owner Space:** Accessed by Owners. Owners also have access to the Resident space.
-- **Resident Space:** Accessed by Residents and Tenants.
-- **Tenant Rules:** Tenants must be explicitly added or authorized by an Owner or Management to gain access to the Resident space.
+## Roles (canonical, not flattened)
 
-## Core Resident Capabilities
-- **Visitor Management:** Authorize visitors using OTP, advance visitor booking.
-- **Family Access:** Manage family-member access with "always-allow" permissions.
-- **Quick-Connect Actions:** Fast access to emergency contacts, community desk, etc.
-- **Maintenance Tickets:** Create and track issues/maintenance requests.
-- **Announcements & Updates:** View relevant community news.
-- **Profile & Home Info:** Manage personal and household details.
+- **LEADERSHIP** — community-wide, `requireLeadership` strict (`LEADERSHIP + APPROVED` only, `middleware/auth.ts:104` fallback removed).
+- **MANAGER** — `MANAGER + APPROVED` (public `POST /auth/register {role:MANAGER}` → `PENDING` until leadership approves, `auth.ts:246`).
+- **OWNER** — owns `UnitOwnership ACTIVE`, auto `Residency OWNER ACTIVE`.
+- **RESIDENT / FAMILY_MEMBER** — lives via `UnitResidency ACTIVE`.
+- **TENANT** — `Residency PENDING` until `OWNER/MANAGER` approves.
+- **WORKFORCE — SECURITY** — `PersonnelCategory SECURITY` + `Department SECURITY`, `requireWorkforce` checks `Personnel.employmentStatus !== TERMINATED`.
 
-## Announcement Spaces & Permissions
-Announcements are segregated into three distinct spaces:
-1. **Leadership Announcements:** Published by and accessed only by Leadership.
-2. **Owner Announcements:** Published by Leadership. Accessed by Leadership and Owners.
-3. **Resident Announcements:** Published by Leadership. Accessed by Leadership, Owners, Residents, and Tenants.
+## V0.0.1 Capabilities (shipped)
 
-## Workforce Management Vision
-A future system for management and workers to handle operational tasks:
-- Management can receive, accept, or reject maintenance tickets, and assign workers.
-- Workers can track status, record updates, add notes/media, and mark as complete.
-- The system will maintain a fully auditable history.
+**Resident:**
+- Home dashboard, `QuickActions` radial (centered `QuickActionsRadial:92`), `CommunityUpdates`, `GateStatusCard`, `MyRequests`, `TimeBasedBackground`.
+- Household: `HouseholdMember` `ACTIVE/PAUSED/REVOKED` → `PermanentPass` `ACTIVE/PAUSED/REVOKED` (28d, `validUntil` + `status` indexes), `HouseholdVehicle` unique `unitId+registrationNumber`, `HouseholdPet`, `HouseholdHelp`.
+- Visitor: `POST /visitors` `purpose` required (`min 1`), `GUEST` → OTP `6-digit` (5-attempt lock `429`), `CAB/DELIVERY/SERVICE` → `isPreApproved` no OTP, `unannounced` → resident alert → `approve` → `check-in` (OTP or `permanent-pass` one-tap), `reconcileVisitorLifecycle` 60s.
+- Help-desk: `Ticket` `OPEN→ASSIGNED→COMPLETED_BY_WORKER→CLOSED` + `Task` `ASSIGNED→VERIFIED`, `Manager` assignment.
 
----
+**Gate/Security:**
+- `GET /visitors/gate` (filters `ACTIVE`), `POST /visitors/:id/check-in` (OTP + `reconcile` + `updateMany where APPROVED` → `409` concurrency), `POST /visitors/permanent-pass/:passId/check-in` (`ACTIVE` + `validUntil` + `community` + `header` auth, `PAUSED/REVOKED` → `400`, cross-community → `404`).
 
-## Planned Five-Stage Roadmap
+**Community:**
+- `Space` (`LEADERSHIP/OWNER/RESIDENT`), `CommunityPost`, `Poll` (`ACTIVE`), `Announcement` (`NORMAL/IMPORTANT/URGENT`), `SpaceMessage`.
+- **Chat P1:** `GET /chat/channels` (unit/community/owners), `GET/POST /chat/channels/:channelId/messages` — header `Authorization: Bearer` (never `?token=`), `canUserAccessChannel` checks `ACTIVE`/`APPROVED`, `PAUSED/REVOKED` → `404`, `replace` mock push.
 
-### Stage 1 — Foundation (Current Scope)
-*Explicit Non-Goals for Stage 1: Full UI implementation, frontend screens, announcements, visitor management, maintenance features, and workforce features.*
-- Expo + React Native application shell
-- Backend service
-- PostgreSQL database
-- Prisma schema and migrations
-- Custom authentication
-- User, role, session, and community foundations
-- Design-system foundation
-- Authentication UI direction
+**Workforce/Manager/Leadership:**
+- `Personnel` `ACTIVE/SUSPENDED/TERMINATED`, `Attendance`, `Task` assignment, `Leadership` announcements, `Manager` approvals.
 
-### Stage 2 — Onboarding and authorization
-- Join or create community
-- Owner verification
-- Tenant authorization
-- Family-member permissions
-- Community membership rules
-- Role-based access control
+## Intentionally unavailable (V0.0.1)
 
-### Stage 3 — Resident experience
-- Resident dashboard
-- Visitor authorization and OTP
-- Advance visitor booking
-- Quick-connect actions
-- Maintenance-ticket creation
-- Home and profile areas
+- **Lost & Found** — no `LostAndFoundItem` route yet.
+- **Calendar** — no event storage.
 
-### Stage 4 — Announcements and workforce management
-- Leadership, owner, and resident announcement spaces
-- Announcement permissions
-- Manager ticket acceptance
-- Worker delegation
-- Work status and records
-- Maintenance audit trail
+## Authorization Invariants (proven)
 
-### Stage 5 — Product hardening
-- Notifications
-- Media uploads
-- Search and filtering
-- Accessibility
-- Security review
-- Testing
-- Performance
-- Production deployment preparation
+```text
+REVOKED/PAUSED member → ACTIVE passes → REVOKED/PAUSED (transaction, household.ts:257)
+→ POST /permanent-pass/:passId/check-in → 400 DENY (household-revoke/paused.test.ts)
+REVOKED/PAUSED member → POST /household/permanent-passes/:id/renew → 400 (household-renew.test.ts)
+LEADERSHIP strict → MANAGER/WORKFORCE/RESIDENT/OWNER → 403 (leadership-auth.test.ts)
+MANAGER via public register → PENDING → 403 on /manager/roles/assign-manager (register-authz.test.ts)
+purpose required → POST /visitors without purpose → 400 (visitor-purpose.test.ts)
+chat PAUSED/REVOKED → 404, cross-community → 404 (chat.test.ts)
+```
+
+## Roadmap (beyond V0.0.1)
+
+**V0.0.2:** `concurrent admission` (`partySize` → `admittedCount` transactional `WHERE admittedCount < partySize`), `register` captcha/Redis, `AccessGrant` vs `PermanentPass` decision.
+
+**V1:** Multi-community `Zobay Neighbourhood` genericization, `Maya` integration, `NoBrokerHood/MyGate` gap.
+
+**V0.0.1 is `5976a96`** — `v0.0.1` tag `758a563` + `5976a96` chat contract fix.
