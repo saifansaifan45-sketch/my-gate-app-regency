@@ -15,6 +15,7 @@ import {
   validateCaptcha,
   generateCaptcha,
   getAccountStatus,
+  sleep,
 } from '../utils/loginSecurity';
 
 const lockoutDurationMs = 15 * 60 * 1000; // 15 minutes
@@ -404,6 +405,7 @@ router.post('/login', loginLimiter, async (req, res, _next) => {
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       const result = recordFailedAttempt(email);
+      await sleep(result.delayMs);
 
       if (result.locked) {
         return res.status(429).json({
@@ -435,6 +437,7 @@ router.post('/login', loginLimiter, async (req, res, _next) => {
     if (captchaAnswer && captchaToken) {
       if (!validateCaptcha(email, captchaAnswer, captchaToken)) {
         const failResult = recordFailedAttempt(email);
+        await sleep(failResult.delayMs);
         if (failResult.locked) {
           return res.status(429).json({
             error: {

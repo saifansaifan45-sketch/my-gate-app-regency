@@ -1,5 +1,6 @@
 import { prisma } from '../prisma';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
 // In-memory store for failed attempts (production should use Redis)
 const failedAttempts = new Map<string, {
@@ -8,6 +9,18 @@ const failedAttempts = new Map<string, {
   lockedUntil: number | null;
   captchaRequired: boolean;
 }>();
+
+// Single-use captcha tokens
+const usedCaptchaTokens = new Set<string>();
+const CAPTCHA_HMAC_SECRET = process.env.JWT_ACCESS_SECRET || 'dev-captcha-hmac-secret';
+
+function hmacForCaptcha(payload: string): string {
+  return crypto.createHmac('sha256', CAPTCHA_HMAC_SECRET).update(payload).digest('hex').slice(0, 16);
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Configuration
 const CONFIG = {
@@ -128,39 +141,42 @@ export function recordSuccessfulLogin(email: string): void {
   failedAttempts.delete(normalizedEmail);
 }
 
-// Validate CAPTCHA (simple math challenge for now)
+// Validate CAPTCHA — HMAC + email-bound + single-use + 5m expiry
 export function validateCaptcha(email: string, captchaAnswer: string, captchaToken: string): boolean {
-  // In production, use a proper CAPTCHA service (reCAPTCHA, hCaptcha)
-  // For now, we'll validate a simple math challenge stored in session
-  
   try {
+    if (usedCaptchaTokens.has(captchaToken)) return false;
     const decoded = Buffer.from(captchaToken, 'base64').toString();
-    const [expectedAnswer, timestamp] = decoded.split(':');
-    
-    if (!expectedAnswer || !timestamp) {
-      return false;
+    const [expectedAnswer, timestamp, tokenEmail, hmac] = decoded.split(':');
+    if (!expectedAnswer || !timestamp || !tokenEmail || !hmac) return false;
+    if (tokenEmail.toLowerCase().trim() !== email.toLowerCase().trim()) return false;
+    if (Date.now() - parseInt(timestamp) > 5 * 60 * 1000) return false;
+    const payload = `${expectedAnswer}:${timestamp}:${tokenEmail.toLowerCase().trim()}`;
+    const expectedHmac = hmacForCaptcha(payload);
+    if (hmac !== expectedHmac) return false;
+    if (captchaAnswer !== expectedAnswer) return false;
+    usedCaptchaTokens.add(captchaToken);
+    // Clean up old tokens periodically (keep set small)
+    if (usedCaptchaTokens.size > 1000) {
+      const first = usedCaptchaTokens.values().next().value;
+      if (first) usedCaptchaTokens.delete(first);
     }
-    
-    // Token expires after 5 minutes
-    if (Date.now() - parseInt(timestamp) > 5 * 60 * 1000) {
-      return false;
-    }
-    
-    return captchaAnswer === expectedAnswer;
+    return true;
   } catch {
     return false;
   }
 }
 
-// Generate CAPTCHA challenge
+// Generate CAPTCHA challenge — HMAC + email-bound
 export function generateCaptcha(email: string): { question: string; token: string } {
   const a = Math.floor(Math.random() * 10) + 1;
   const b = Math.floor(Math.random() * 10) + 1;
   const operation = Math.random() > 0.5 ? '+' : '-';
   const answer = operation === '+' ? a + b : a - b;
-  
-  const token = Buffer.from(`${answer}:${Date.now()}`).toString('base64');
-  
+  const timestamp = Date.now().toString();
+  const normalizedEmail = email.toLowerCase().trim();
+  const payload = `${answer}:${timestamp}:${normalizedEmail}`;
+  const hmac = hmacForCaptcha(payload);
+  const token = Buffer.from(`${payload}:${hmac}`).toString('base64');
   return {
     question: `What is ${a} ${operation} ${b}?`,
     token,
