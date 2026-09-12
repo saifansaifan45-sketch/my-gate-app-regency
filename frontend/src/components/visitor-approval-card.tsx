@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Text } from './ui/Text';
 import { PremiumPressable } from './ui/PremiumPressable';
 import { Button } from './ui/Button';
@@ -44,9 +45,19 @@ export function VisitorApprovalCard({ visitor, onApprove, onReject, onDelete, on
 
   const handleConfirmAction = () => {
     if (confirmAction === 'approve') {
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {
+        // Haptics fallback
+      }
       setStatus('approved');
       onApprove?.(visitor.id);
     } else if (confirmAction === 'reject') {
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } catch {
+        // Haptics fallback
+      }
       setStatus('rejected');
       onReject?.(visitor.id);
     }

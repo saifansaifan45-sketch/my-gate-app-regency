@@ -93,7 +93,7 @@ export function CreateAnnouncementModal({ visible, onClose, onSubmit, canChooseA
   );
 
   return (
-    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose} footer={created ? undefined : actionButtons}>
+    <CommunitySheet visible={visible} title="New Announcement" onClose={handleClose} footer={created ? undefined : actionButtons} scrollable={!created}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>

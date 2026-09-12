@@ -18,7 +18,7 @@ import { getTimePeriod, getTimeGreeting } from '../../../src/components/home/Tim
 
 export default function ManagerDashboardScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { hasManagerAccess, hasResidentAccess, hasOwnerAccess } = useSession();
   const { containerWidth, pagePadding, isTablet } = useResponsive();
 
@@ -73,22 +73,12 @@ export default function ManagerDashboardScreen() {
   const pendingCount = pendingWorkforce.length;
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="tabroot"
         title="Manager Operations"
-        rightAction={
-          <PremiumPressable
-            onPress={() => router.push('/notifications')}
-            style={styles.notifBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Feather name="bell" size={20} color={theme.colors.textPrimary} />
-            {((stats?.pendingTickets || 0) > 0 || pendingCount > 0) && (
-              <View style={styles.notifDot} />
-            )}
-          </PremiumPressable>
-        }
+        showNotification={true}
+        hasUnreadNotifications={(stats?.pendingTickets || 0) > 0 || pendingCount > 0}
       />
 
       <ScrollView
@@ -520,10 +510,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
+    borderColor: 'rgba(20, 61, 42, 0.05)',
+    shadowColor: '#143D2A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 2,
   },
@@ -552,8 +542,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(20, 61, 42, 0.05)',
     marginBottom: 20,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   workforceGrid: {
     flexDirection: 'row',
@@ -587,9 +582,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(20, 61, 42, 0.05)',
     marginBottom: 24,
     gap: 12,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   attIconBox: {
     width: 42,
@@ -638,10 +638,15 @@ const styles = StyleSheet.create({
   pendingTicketCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(20, 61, 42, 0.05)',
     marginBottom: 12,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
     alignItems: 'stretch',
     justifyContent: 'flex-start',
   },

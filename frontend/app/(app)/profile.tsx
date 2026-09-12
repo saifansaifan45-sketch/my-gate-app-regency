@@ -15,7 +15,7 @@ import { useSession } from '../../src/store/auth';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(true);
+  const { bottomClearance } = useScreenInsets(true);
   const { user, logout, hasManagerAccess, hasOwnership } = useSession();
   const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -41,7 +41,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="tabroot"
         title="Profile"
@@ -67,31 +67,35 @@ export default function ProfileScreen() {
               source={{ uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=143D2A&color=fff&size=128` }}
               style={styles.avatar}
             />
-            <Text style={styles.profileName}>{displayName}</Text>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
 
-            <View style={styles.badgeRow}>
-              {primaryResidency ? (
-                <View style={[styles.roleBadge, primaryResidency.status === 'PENDING' && { backgroundColor: '#FFF7ED' }]}>
-                  <Text style={[styles.roleBadgeText, primaryResidency.status === 'PENDING' && { color: '#C2410C' }]}>
-                    {primaryResidency.relationshipType} · {primaryResidency.status}
-                  </Text>
-                </View>
+              <View style={styles.badgeRow}>
+                {primaryResidency ? (
+                  <View style={[styles.roleBadge, primaryResidency.status === 'PENDING' && { backgroundColor: '#FFF7ED' }]}>
+                    <Text style={[styles.roleBadgeText, primaryResidency.status === 'PENDING' && { color: '#C2410C' }]}>
+                      {primaryResidency.relationshipType} · {primaryResidency.status}
+                    </Text>
+                  </View>
+                ) : null}
+                {unit ? (
+                  <View style={styles.unitBadge}>
+                    <Text style={styles.unitBadgeText}>Unit {unit}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {email ? (
+                <Text style={styles.profileContact} numberOfLines={1}>
+                  {email}
+                </Text>
               ) : null}
-              {unit ? (
-                <View style={styles.unitBadge}>
-                  <Text style={styles.unitBadgeText}>Unit {unit}</Text>
-                </View>
-              ) : null}
+              {phone ? (
+                <Text style={styles.profilePhone} numberOfLines={1}>{phone}</Text>
+              ) : (
+                <Text style={styles.profilePhoneEmpty}>Phone number not added</Text>
+              )}
             </View>
-
-            <Text style={styles.profileContact}>
-              {email}
-            </Text>
-            {phone ? (
-              <Text style={styles.profilePhone}>{phone}</Text>
-            ) : (
-              <Text style={styles.profilePhoneEmpty}>Phone number not added</Text>
-            )}
           </View>
         </ScreenEntrance>
 
@@ -166,26 +170,7 @@ export default function ProfileScreen() {
           </ScreenEntrance>
         ) : null}
 
-        {/* Manager Operations Module (If user has community role) */}
-        {isManager ? (
-          <ScreenEntrance delay={120}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Community Operational Roles</Text>
-              <View style={styles.card}>
-                <PremiumPressable style={styles.menuRow} onPress={() => router.push('/manager')}>
-                  <View style={[styles.iconBox, { backgroundColor: '#143D2A' }]}>
-                     <Feather name="shield" size={22} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.menuInfo}>
-                    <Text style={styles.menuLabel}>Manager Operations Module</Text>
-                    <Text style={styles.menuDesc}>Tickets, staff assignment, attendance & tracking</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
-                </PremiumPressable>
-              </View>
-            </View>
-          </ScreenEntrance>
-        ) : null}
+
 
         {/* Visitors & Deliveries (Manager) */}
         {isManager ? (
@@ -324,82 +309,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#D6EBDD',
+    borderColor: 'rgba(20, 61, 42, 0.08)',
   },
   profileCard: {
     ...homeSurface,
-    padding: homeLayout.cardPaddingLarge,
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EDF6F0',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#D6EBDD',
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    borderRadius: 20,
+    gap: 16,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 38,
-    marginBottom: 16,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#143D2A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: '#EDF6F0',
+    backgroundColor: '#143D2A',
+  },
+  profileInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
   profileName: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 20,
+    fontSize: 18,
     color: theme.colors.textPrimary,
-    marginBottom: 8,
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
   },
   roleBadge: {
     backgroundColor: '#143D2A',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 98,
   },
   roleBadgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   unitBadge: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    backgroundColor: '#EDF6F0',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 98,
     borderWidth: 1,
-    borderColor: '#143D2A',
+    borderColor: 'rgba(20, 61, 42, 0.1)',
   },
   unitBadgeText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#143D2A',
   },
   profileContact: {
     fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#52705F',
+    marginBottom: 2,
   },
   profilePhone: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12.5,
     color: '#143D2A',
-    marginTop: 4,
   },
   profilePhoneEmpty: {
     fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#8B9A8F',
     fontStyle: 'italic',
-    marginTop: 4,
   },
   section: {
     gap: cardSystem.headingSpacing,

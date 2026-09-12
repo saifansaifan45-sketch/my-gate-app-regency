@@ -19,7 +19,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function VisitorsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets();
+  const { bottomClearance } = useScreenInsets();
   const params = useLocalSearchParams<{ category?: string }>();
   const initialCategory = (params.category as 'VISITORS' | 'SERVICE' | 'CABS' | 'DELIVERIES') || 'VISITORS';
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
@@ -113,7 +113,7 @@ export default function VisitorsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Access Passes"

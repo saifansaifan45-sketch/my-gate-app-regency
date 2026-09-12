@@ -52,15 +52,7 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
 
   const handleAction = () => {
     if (visitor.status === 'APPROVED') {
-      if (isPermanent) {
-        // Permanent pass: one-tap check-in via the dedicated endpoint
-        onCheckIn(`pp-${visitor.permanentPassId || visitor.id}`);
-      } else if (visitor.requiresOtp) {
-        // OTP handled by parent via modal
-        onCheckIn(visitor.id);
-      } else {
-        onCheckIn(visitor.id);
-      }
+      onCheckIn(visitor.id);
     } else if (visitor.status === 'CHECKED_IN') {
       if (visitor.visitorType === 'DELIVERY' && !visitor.handoffRecipientType) {
         onHandoff(visitor);
@@ -103,11 +95,21 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
           </View>
         </View>
 
-        {/* Pre-approved badge */}
+        {/* Pre-approved / Permanent Pass badge */}
         {visitor.isPreApproved && visitor.status !== 'PENDING' && (
-          <View style={styles.preApprovedBadge}>
-            <Feather name="shield" size={10} color="#059669" />
-            <Text style={styles.preApprovedText}>Pre-approved</Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.preApprovedBadge}>
+              <Feather name={isPermanent ? 'award' : 'shield'} size={10} color="#059669" />
+              <Text style={styles.preApprovedText}>{isPermanent ? '28-Day Member Pass' : 'Pre-approved'}</Text>
+            </View>
+            {isPermanent && visitor.validUntil ? (
+              <View style={styles.validityBadge}>
+                <Feather name="calendar" size={10} color="#047857" />
+                <Text style={styles.validityText}>
+                  {`Valid until ${new Date(visitor.validUntil).toLocaleDateString([], { month: 'short', day: 'numeric' })}`}
+                </Text>
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -204,14 +206,19 @@ export function GateVisitorCard({ visitor, onCheckIn, onCheckOut, onHandoff, onR
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
     overflow: 'hidden',
   },
   statusBar: {
-    height: 4,
+    height: 3.5,
   },
   content: {
     padding: 16,
@@ -223,9 +230,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   typeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -233,11 +240,12 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
     minWidth: 0,
-    gap: 6,
+    gap: 4,
   },
   visitorName: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 16,
+    letterSpacing: -0.3,
     color: theme.colors.textPrimary,
   },
   metaRow: {
@@ -262,7 +270,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 98,
-    gap: 6,
+    gap: 5,
     flexShrink: 0,
   },
   statusDot: {
@@ -276,21 +284,44 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+  },
   preApprovedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 7,
     backgroundColor: '#D1FAE5',
     alignSelf: 'flex-start',
   },
   preApprovedText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 10,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 10.5,
     color: '#059669',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+  validityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 7,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    alignSelf: 'flex-start',
+  },
+  validityText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 10.5,
+    color: '#047857',
   },
   checkInTimeRow: {
     flexDirection: 'row',
@@ -298,17 +329,17 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#EFF6FF',
   },
   checkInTimeText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
+    fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
     color: '#1D4ED8',
   },
   actionArea: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: 'rgba(20, 61, 42, 0.05)',
     paddingTop: 12,
   },
   pendingNotice: {
@@ -317,7 +348,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: '#FFF7ED',
   },
   pendingText: {

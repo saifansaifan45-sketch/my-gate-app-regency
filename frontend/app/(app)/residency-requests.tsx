@@ -19,7 +19,7 @@ function getApiErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function ResidencyRequestsScreen() {
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { user, hasOwnership, refreshProfile } = useSession();
 
   const [loading, setLoading] = useState(true);
@@ -118,7 +118,7 @@ export default function ResidencyRequestsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Verification & Access" />
 
       <ScrollView

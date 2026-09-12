@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, Animated, Easing, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,33 @@ export interface AppHeaderProps {
   hasUnreadNotifications?: boolean;
 }
 
+function PulsingUnreadDot({ style }: { style?: any }) {
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.35,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
+  return <Animated.View style={[style, { transform: [{ scale: pulseAnim }] }]} />;
+}
+
 export function AppHeader({
   variant = 'subscreen',
   title,
@@ -43,7 +70,7 @@ export function AppHeader({
       onBackPress();
       return;
     }
-    smartBack(router, '/(app)/home');
+    smartBack(router);
   };
 
   const isHome = variant === 'home';
@@ -61,7 +88,7 @@ export function AppHeader({
             <View style={styles.centeredLogoContainer}>
               <Image
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
-                source={require('../../../assets/Logo.avif')}
+                source={require('../../../assets/Logo.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -75,7 +102,7 @@ export function AppHeader({
                   onPress={() => router.push('/notifications')}
                 >
                   <Feather name="bell" size={22} color={theme.colors.textPrimary} />
-                  {hasUnreadNotifications && <View style={styles.unreadDot} />}
+                  {hasUnreadNotifications && <PulsingUnreadDot style={styles.unreadDot} />}
                 </PremiumPressable>
               )}
 
@@ -122,11 +149,13 @@ export function AppHeader({
                 rightAction
               ) : isTabRoot && showNotification ? (
                 <PremiumPressable
-                  style={styles.bellIconContainer}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={[styles.bellIconContainer, { marginRight: 0 }]}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   onPress={() => router.push('/notifications')}
+                  accessibilityLabel="Notifications"
+                  accessibilityRole="button"
                 >
-                  <Feather name="bell" size={22} color={theme.colors.textPrimary} />
+                  <Feather name="bell" size={21} color={theme.colors.textPrimary} />
                   {hasUnreadNotifications && <View style={styles.unreadDot} />}
                 </PremiumPressable>
               ) : null}

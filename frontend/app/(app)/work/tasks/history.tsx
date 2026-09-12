@@ -39,17 +39,23 @@ export default function WorkTaskHistoryScreen() {
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work')} hitSlop={8}>
-          <Feather name="arrow-left" size={22} color="#111827" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Task History</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.responsiveInner}>
+          <View style={styles.headerRow}>
+            <Pressable style={styles.backBtn} onPress={() => smartBack(router, '/work/index')} hitSlop={8}>
+              <Feather name="arrow-left" size={20} color="#111827" />
+            </Pressable>
+            <Text style={styles.headerTitle}>Task History</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
       >
+        <View style={styles.responsiveInner}>
         {isLoading ? (
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 40 }} />
         ) : history.length === 0 ? (
@@ -92,6 +98,7 @@ export default function WorkTaskHistoryScreen() {
             </View>
           ))
         )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -102,14 +109,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  responsiveInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backBtn: {
     width: 36,

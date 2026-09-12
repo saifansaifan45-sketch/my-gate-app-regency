@@ -194,7 +194,7 @@ export default function FamilyMembersScreen() {
     activeTab === 'vehicles' ? (item as HouseholdVehicleRecord).registrationNumber : (item as HouseholdMemberRecord | HouseholdPetRecord).name;
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader title="Family records" variant="subscreen" onBackPress={() => smartBack(router, '/profile')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 16 }]} showsVerticalScrollIndicator={false}>
         <ScreenEntrance delay={40}>

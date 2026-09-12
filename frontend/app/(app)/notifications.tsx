@@ -19,7 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export default function NotificationsScreen() {
   const router = useRouter();
   const { hasManagerAccess, hasLeadershipAccess } = useSession();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const queryClient = useQueryClient();
 
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'UNREAD'>('ALL');
@@ -94,12 +94,24 @@ export default function NotificationsScreen() {
       } else {
         router.push('/services/maintenance');
       }
+    } else if (metadata?.visitorId) {
+      if (hasManagerAccess()) {
+        router.push('/manager/visitors' as any);
+      } else {
+        router.push('/visitors' as any);
+      }
     }
   };
 
   const handleMarkAllRead = () => {
     markAllReadMutation.mutate();
   };
+
+  const defaultBackPath = hasManagerAccess()
+    ? '/manager/index'
+    : hasLeadershipAccess()
+    ? '/leadership/index'
+    : '/home';
 
   const displayedList =
     activeFilter === 'UNREAD' ? notifications.filter((n: NotificationItem) => !n.readStatus) : notifications;
@@ -114,11 +126,11 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Notifications"
-        onBackPress={() => smartBack(router, '/home')}
+        onBackPress={() => smartBack(router, defaultBackPath as any)}
         rightAction={
           unreadCount > 0 ? (
             <PremiumPressable onPress={handleMarkAllRead} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -132,7 +144,13 @@ export default function NotificationsScreen() {
         <PremiumPressable
           style={[styles.tab, activeFilter === 'ALL' && styles.tabActive]}
           onPress={() => setActiveFilter('ALL')}
+          scaleTo={0.96}
         >
+          <Feather
+            name="inbox"
+            size={13}
+            color={activeFilter === 'ALL' ? '#FFFFFF' : theme.colors.textSecondary}
+          />
           <Text style={[styles.tabText, activeFilter === 'ALL' && styles.tabTextActive]}>
             All ({notifications.length})
           </Text>
@@ -141,7 +159,13 @@ export default function NotificationsScreen() {
         <PremiumPressable
           style={[styles.tab, activeFilter === 'UNREAD' && styles.tabActive]}
           onPress={() => setActiveFilter('UNREAD')}
+          scaleTo={0.96}
         >
+          <Feather
+            name="bell"
+            size={13}
+            color={activeFilter === 'UNREAD' ? '#FFFFFF' : theme.colors.textSecondary}
+          />
           <Text style={[styles.tabText, activeFilter === 'UNREAD' && styles.tabTextActive]}>
             Unread ({unreadCount})
           </Text>
@@ -175,6 +199,7 @@ export default function NotificationsScreen() {
                 <PremiumPressable
                   style={[styles.notifCard, isUnread && styles.notifCardUnread]}
                   onPress={() => handleMarkRead(notif.id, notif.metadata)}
+                  scaleTo={0.98}
                 >
                   <View style={[styles.iconWrap, { backgroundColor: iconMeta.background }]}>
                     <Feather name={iconMeta.name as any} size={18} color={iconMeta.foreground} />
@@ -214,7 +239,13 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
   markAllText: {
     fontFamily: 'PlusJakartaSans_700Bold',
     fontSize: 13,
@@ -222,27 +253,41 @@ const styles = StyleSheet.create({
   },
   tabsBar: {
     flexDirection: 'row',
-    paddingHorizontal: cardSystem.pagePadding,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    gap: 8,
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: 'rgba(20, 61, 42, 0.06)',
   },
   tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 98,
-    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 100,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  tabActive: { backgroundColor: theme.colors.primary },
+  tabActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
   tabText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 13,
+    fontSize: 12.5,
     color: theme.colors.textSecondary,
   },
-  tabTextActive: { color: theme.colors.onPrimary },
-  list: { padding: 20, paddingTop: 14 },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: 'PlusJakartaSans_700Bold',
+  },
+  list: {
+    padding: 16,
+    paddingTop: 10,
+  },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'center',

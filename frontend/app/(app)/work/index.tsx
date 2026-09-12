@@ -14,9 +14,12 @@ import { getPersonnelRoleLabel } from '../../../src/utils/personnel';
 import { ScreenEntrance } from '../../../src/components/ui/ScreenEntrance';
 import { ConfirmationModal } from '../../../src/components/ui/ConfirmationModal';
 
+import { useResponsive } from '../../../src/hooks/useResponsive';
+
 export default function WorkforceDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isTablet, pagePadding } = useResponsive();
   const { logout, hasWorkforceAccess } = useSession();
   const { showToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -130,56 +133,60 @@ export default function WorkforceDashboard() {
     <View style={styles.container}>
       <ScreenEntrance animation="fade">
       <View style={[styles.hero, { paddingTop: Math.max(insets.top + 6, 26) }]}>
-        <View style={styles.headerTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroKicker}>REGENCY SALMA · SECURITY</Text>
-            <Text style={styles.greeting}>Good day, {firstName}</Text>
-            <Text style={styles.subGreeting}>{getPersonnelRoleLabel(personnel)} · {new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</Text>
+        <View style={styles.responsiveInner}>
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.heroKicker}>REGENCY SALMA · SECURITY</Text>
+              <Text style={styles.greeting} numberOfLines={1}>Good day, {firstName}</Text>
+              <Text style={styles.subGreeting}>{getPersonnelRoleLabel(personnel)} · {new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</Text>
+            </View>
+            <Pressable
+              style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
+              onPress={requestLogout}
+              disabled={isLoggingOut}
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+              accessibilityState={{ disabled: isLoggingOut }}
+              hitSlop={8}
+            >
+              {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={20} color="#EF4444" />}
+            </Pressable>
           </View>
-          <Pressable
-            style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
-            onPress={requestLogout}
-            disabled={isLoggingOut}
-            accessibilityRole="button"
-            accessibilityLabel="Log out"
-            accessibilityState={{ disabled: isLoggingOut }}
-            hitSlop={8}
-          >
-            {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={20} color="#EF4444" />}
-          </Pressable>
+          {!isSecurity && <View style={styles.heroStatus}>
+            <View style={styles.liveDot} />
+            <Text style={styles.heroStatusText}>{isCheckedIn ? 'On duty now' : 'Shift not started'}</Text>
+            <Text style={styles.heroStatusMeta}>{isCheckedIn ? `Since ${new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Check in to begin'}</Text>
+          </View>}
+          {!isSecurity && <View style={styles.heroMetrics}>
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{activeTasks.length}</Text>
+              <Text style={styles.heroMetricLabel}>Open tasks</Text>
+            </View>
+            <View style={styles.heroMetricDivider} />
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{urgentTasks.length}</Text>
+              <Text style={styles.heroMetricLabel}>Priority</Text>
+            </View>
+            <View style={styles.heroMetricDivider} />
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{isCheckedIn ? 'IN' : 'OFF'}</Text>
+              <Text style={styles.heroMetricLabel}>Attendance</Text>
+            </View>
+          </View>}
         </View>
-        {!isSecurity && <View style={styles.heroStatus}>
-          <View style={styles.liveDot} />
-          <Text style={styles.heroStatusText}>{isCheckedIn ? 'On duty now' : 'Shift not started'}</Text>
-          <Text style={styles.heroStatusMeta}>{isCheckedIn ? `Since ${new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Check in to begin'}</Text>
-        </View>}
-        {!isSecurity && <View style={styles.heroMetrics}>
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>{activeTasks.length}</Text>
-            <Text style={styles.heroMetricLabel}>Open tasks</Text>
-          </View>
-          <View style={styles.heroMetricDivider} />
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>{urgentTasks.length}</Text>
-            <Text style={styles.heroMetricLabel}>Priority</Text>
-          </View>
-          <View style={styles.heroMetricDivider} />
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>{isCheckedIn ? 'IN' : 'OFF'}</Text>
-            <Text style={styles.heroMetricLabel}>Attendance</Text>
-          </View>
-        </View>}
       </View>
       </ScreenEntrance>
 
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
       >
+        <View style={styles.responsiveInner}>
         <ScreenEntrance delay={80}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.sectionTitle}>Your shift</Text>
                 <Text style={styles.sectionHint}>Keep your attendance up to date</Text>
               </View>
@@ -192,11 +199,11 @@ export default function WorkforceDashboard() {
               <View style={styles.attendanceRow}>
                 <View style={styles.attendanceCopy}>
                   <View style={styles.attendanceIcon}><Feather name="radio" size={18} color="#166534" /></View>
-                  <View>
-                  <Text style={styles.attendanceStatus}>Checked In</Text>
-                  <Text style={styles.attendanceTime}>
-                    {new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.attendanceStatus}>Checked In</Text>
+                    <Text style={styles.attendanceTime}>
+                      {new Date(todayAttendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
                   </View>
                 </View>
                 <Pressable style={styles.buttonSecondary} onPress={handleCheckOut}>
@@ -207,9 +214,9 @@ export default function WorkforceDashboard() {
               <View style={styles.attendanceRow}>
                 <View style={styles.attendanceCopy}>
                   <View style={[styles.attendanceIcon, styles.attendanceIconIdle]}><Feather name="clock" size={18} color="#9A6700" /></View>
-                  <View>
-                  <Text style={styles.attendanceStatus}>Not Checked In</Text>
-                  <Text style={styles.attendanceTime}>Start your day</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.attendanceStatus}>Not Checked In</Text>
+                    <Text style={styles.attendanceTime}>Start your day</Text>
                   </View>
                 </View>
                 <Pressable style={styles.buttonPrimary} onPress={handleCheckIn}>
@@ -309,6 +316,7 @@ export default function WorkforceDashboard() {
         </Pressable>}
         </View>
         </ScreenEntrance>
+        </View>
       </ScrollView>
       <ConfirmationModal
         visible={isLogoutConfirmVisible}
@@ -330,9 +338,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7F3',
   },
+  responsiveInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
   hero: {
     backgroundColor: '#143D2A',
-    paddingHorizontal: cardSystem.pagePadding,
+    paddingHorizontal: 20,
     paddingBottom: 24,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,

@@ -13,7 +13,7 @@ import { visitorsApi } from '../../../../../src/api/visitors';
 export default function VisitorAuditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['visitor-audit', id],
@@ -32,7 +32,7 @@ export default function VisitorAuditScreen() {
   const isException = (visitor.visitorType === 'DELIVERY' && visitor.status === 'CHECKED_OUT' && !visitor.handoffTimestamp) || (visitor.status === 'CHECKED_IN' && visitor.checkInTime && ((new Date().getTime() - new Date(visitor.checkInTime).getTime()) / (1000 * 60 * 60) > 12));
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Audit Trail" onBackPress={() => smartBack(router, '/manager/visitors')} />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance + 40 }]} showsVerticalScrollIndicator={false}>

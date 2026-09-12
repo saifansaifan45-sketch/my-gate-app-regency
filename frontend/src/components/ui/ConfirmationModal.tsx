@@ -1,8 +1,10 @@
 import React from 'react';
-import { Modal, StyleSheet, View, Pressable } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from './Text';
 import { Button } from './Button';
+import { CenterModal } from './CenterModal';
+import * as Haptics from 'expo-haptics';
 
 type ConfirmationVariant = 'default' | 'danger' | 'warning';
 
@@ -55,65 +57,63 @@ export function ConfirmationModal({
 }: ConfirmationModalProps) {
   const variantStyles = VARIANT_STYLES[variant];
 
-  if (!visible) return null;
+  const handleConfirm = () => {
+    try {
+      if (variant === 'danger') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    } catch {
+      // Haptics fallback
+    }
+    onConfirm();
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.modal}>
-          <View style={[styles.iconContainer, { backgroundColor: variantStyles.iconBg }]}>
-            <Feather name={confirmIcon || variantStyles.iconName} size={24} color="#FFFFFF" />
-          </View>
+    <CenterModal visible={visible} onClose={onClose}>
+      <View style={styles.modal}>
+        <View style={[styles.iconContainer, { backgroundColor: variantStyles.iconBg }]}>
+          <Feather name={confirmIcon || variantStyles.iconName} size={24} color="#FFFFFF" />
+        </View>
 
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.message}>{message}</Text>
 
-          <View style={styles.buttonRow}>
-            <Button
-              label={cancelLabel}
-              variant="outline"
-              size="md"
-              onPress={onClose}
-              disabled={loading}
-              style={styles.cancelBtn}
-            />
-            <Button
-              label={confirmLabel}
-              variant={variantStyles.confirmVariant}
-              size="md"
-              onPress={onConfirm}
-              loading={loading}
-              disabled={loading}
-              style={styles.confirmBtn}
-            />
-          </View>
+        <View style={styles.buttonRow}>
+          <Button
+            label={cancelLabel}
+            variant="outline"
+            size="md"
+            onPress={onClose}
+            disabled={loading}
+            style={styles.cancelBtn}
+          />
+          <Button
+            label={confirmLabel}
+            variant={variantStyles.confirmVariant}
+            size="md"
+            onPress={handleConfirm}
+            loading={loading}
+            disabled={loading}
+            style={styles.confirmBtn}
+          />
         </View>
       </View>
-    </Modal>
+    </CenterModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(17, 24, 39, 0.42)',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
   modal: {
     width: '100%',
     maxWidth: 360,
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 24,
     shadowColor: '#111827',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 28,
     elevation: 8,
   },
@@ -128,10 +128,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 20,
+    fontSize: 19,
     color: '#111827',
     textAlign: 'center',
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   message: {
     fontFamily: 'PlusJakartaSans_400Regular',
@@ -147,9 +148,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cancelBtn: {
+    flex: 1,
     borderRadius: 100,
   },
   confirmBtn: {
+    flex: 1,
     borderRadius: 100,
   },
 });
+

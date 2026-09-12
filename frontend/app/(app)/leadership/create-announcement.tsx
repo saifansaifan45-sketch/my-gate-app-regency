@@ -14,7 +14,7 @@ import { parseApiError } from '../../../src/utils/api-error';
 
 export default function LeadershipCreateAnnouncementScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [title, setTitle] = useState('');
@@ -57,7 +57,7 @@ export default function LeadershipCreateAnnouncementScreen() {
         message: `Your notice has been published to ${selectedAudiences.map((audience) => audience === 'OWNERS' ? 'owners' : audience === 'LEADERSHIP' ? 'leadership' : 'residents').join(', ')}.`,
         type: 'success',
       });
-      smartBack(router, '/leadership');
+      smartBack(router, '/leadership/index');
     } catch (err) {
       showToast({
         title: 'Broadcast Failed',
@@ -70,11 +70,11 @@ export default function LeadershipCreateAnnouncementScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Broadcast Notice"
-        onBackPress={() => smartBack(router, '/leadership')}
+        onBackPress={() => smartBack(router, '/leadership/index')}
       />
 
       <ScrollView

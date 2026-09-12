@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { theme } from '../../src/theme';
 import { View, StyleSheet, Animated, Pressable, Platform, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -140,12 +140,12 @@ function BouncyTabItem({ activeIcon, inactiveIcon, label, isFocused, onPress }: 
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { hasManagerAccess, hasLeadershipAccess, hasResidentAccess, hasOwnerAccess, hasApprovedMembership } = useSession();
 
   const currentRoute = state.routes[state.index]?.name as string | undefined;
   const isOnLeadershipRoute =
-    (currentRoute?.startsWith('leadership/') ?? false) ||
-    currentRoute === 'announcements';
+    (currentRoute?.startsWith('leadership/') ?? false);
   const isOnManagerRoute = currentRoute?.startsWith('manager/') ?? false;
   const isLeadershipMember = hasApprovedMembership('LEADERSHIP');
   const isManagerMember = hasManagerAccess();
@@ -193,7 +193,7 @@ function CustomTabBar({ state, navigation }: any) {
   const visibleRoute = currentRoute ?? '';
   const isResidentTab = ['home', 'community', 'services', 'profile'].includes(visibleRoute);
   const isManagerTab = ['manager/index', 'manager/tickets/index', 'manager/personnel/index', 'manager/visitors', 'profile'].includes(visibleRoute);
-  const isLeadershipTab = ['leadership/index', 'leadership/approvals', 'leadership/tickets', 'announcements'].includes(visibleRoute);
+  const isLeadershipTab = ['leadership/index', 'leadership/approvals', 'leadership/tickets'].includes(visibleRoute);
   const isWorkforceTab = ['work/index', 'work/tasks/index', 'work/attendance', 'work/profile'].includes(visibleRoute);
 
   if (isWorkforceMode && !isWorkforceTab) {
@@ -304,8 +304,8 @@ function CustomTabBar({ state, navigation }: any) {
               activeIcon="volume-2"
               inactiveIcon="volume-2"
               label="Notices"
-              isFocused={getIsFocused('announcements')}
-              onPress={() => handleTabPress('announcements')}
+              isFocused={false}
+              onPress={() => router.push('/announcements')}
             />
           </>
         ) : isManagerMode ? (

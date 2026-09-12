@@ -69,66 +69,75 @@ export default function WorkTaskDetailScreen() {
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 20) }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => smartBack(router, '/work/tasks')} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#111827" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Task Detail</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.responsiveInner}>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => smartBack(router, '/work/tasks')} style={styles.backButton} hitSlop={8}>
+              <Feather name="arrow-left" size={20} color="#111827" />
+            </Pressable>
+            <Text style={styles.headerTitle}>Task Detail</Text>
+            <View style={{ width: 40 }} />
+          </View>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.infoCard}>
-          <View style={styles.detailTopline}>
-            <View style={styles.detailIcon}><Feather name="tool" size={22} color={theme.colors.primary} /></View>
-            <View style={styles.detailStatus}><Text style={styles.detailStatusText}>{task.status.replace('_', ' ')}</Text></View>
-          </View>
-          <Text style={styles.title}>{task.ticket.title}</Text>
-          <Text style={styles.description}>{task.ticket.description}</Text>
-          
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Location</Text>
-            <Text style={styles.metaValue}>{task.ticket.unitNumber}</Text>
-          </View>
-          
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Resident</Text>
-            <Text style={styles.metaValue}>{task.ticket.residentName}</Text>
-          </View>
-
-        </View>
-
-        {!isCompleted ? (
-          <View style={styles.completionSection}>
-            <Text style={styles.sectionTitle}>Complete Task</Text>
-            <Text style={styles.inputLabel}>Completion Notes (Required)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="E.g., Changed damaged valve"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-            />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.responsiveInner}>
+          <View style={styles.infoCard}>
+            <View style={styles.detailTopline}>
+              <View style={styles.detailIcon}><Feather name="tool" size={22} color={theme.colors.primary} /></View>
+              <View style={styles.detailStatus}><Text style={styles.detailStatusText}>{task.status.replace('_', ' ')}</Text></View>
+            </View>
+            <Text style={styles.title}>{task.ticket.title}</Text>
+            <Text style={styles.description}>{task.ticket.description}</Text>
             
-            <Pressable 
-              style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
-              onPress={handleComplete}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.submitButtonText}>
-                {isSubmitting ? 'Submitting...' : 'Mark as Completed'}
-              </Text>
-            </Pressable>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Location</Text>
+              <Text style={styles.metaValue}>{task.ticket.unitNumber}</Text>
+            </View>
+            
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Resident</Text>
+              <Text style={styles.metaValue}>{task.ticket.residentName}</Text>
+            </View>
           </View>
-        ) : (
-          <View style={styles.completionSection}>
-             <View style={styles.successBanner}>
-               <Feather name="check-circle" size={24} color="#166534" />
-               <Text style={styles.successText}>This task is marked as completed.</Text>
-             </View>
-             <Text style={styles.inputLabel}>Your Notes:</Text>
-             <Text style={styles.metaValue}>{task.remarks}</Text>
-          </View>
-        )}
+
+          {!isCompleted ? (
+            <View style={styles.completionSection}>
+              <Text style={styles.sectionTitle}>Complete Task</Text>
+              <Text style={styles.inputLabel}>Completion Notes (Required)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="E.g., Changed damaged valve"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+              />
+              
+              <Pressable 
+                style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
+                onPress={handleComplete}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.submitButtonText}>
+                  {isSubmitting ? 'Submitting...' : 'Mark as Completed'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.completionSection}>
+               <View style={styles.successBanner}>
+                 <Feather name="check-circle" size={24} color="#166534" />
+                 <Text style={styles.successText}>This task is marked as completed.</Text>
+               </View>
+               <Text style={styles.inputLabel}>Your Notes:</Text>
+               <Text style={styles.metaValue}>{task.remarks}</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -138,6 +147,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  responsiveInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   header: {
     flexDirection: 'row',

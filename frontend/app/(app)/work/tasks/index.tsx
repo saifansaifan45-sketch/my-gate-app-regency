@@ -46,25 +46,37 @@ export default function WorkTasksScreen() {
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.kicker}>FIELD WORK QUEUE</Text>
-          <Text style={styles.headerTitle}>My tasks</Text>
-          <Text style={styles.headerSubtitle}>{activeTasks.length ? `${activeTasks.length} open assignment${activeTasks.length === 1 ? '' : 's'}` : 'Your queue is clear'}</Text>
+        <View style={styles.responsiveInner}>
+          <View style={styles.headerInner}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.kicker}>FIELD WORK QUEUE</Text>
+              <Text style={styles.headerTitle} numberOfLines={1}>My tasks</Text>
+              <Text style={styles.headerSubtitle}>{activeTasks.length ? `${activeTasks.length} open assignment${activeTasks.length === 1 ? '' : 's'}` : 'Your queue is clear'}</Text>
+            </View>
+            <Pressable style={styles.historyBtn} onPress={() => router.push('/work/tasks/history')} hitSlop={8}>
+              <Feather name="clock" size={17} color={theme.colors.primary} />
+              <Text style={styles.historyBtnText}>History</Text>
+            </Pressable>
+          </View>
         </View>
-        <Pressable style={styles.historyBtn} onPress={() => router.push('/work/tasks/history')} hitSlop={8}>
-          <Feather name="clock" size={17} color={theme.colors.primary} />
-          <Text style={styles.historyBtnText}>History</Text>
-        </Pressable>
       </View>
-      <View style={styles.summaryStrip}>
-        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{activeTasks.length}</Text><Text style={styles.summaryLabel}>Open</Text></View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{urgentTasks.length}</Text><Text style={styles.summaryLabel}>Priority</Text></View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}><Text style={styles.summaryValue}>{tasks.length - activeTasks.length}</Text><Text style={styles.summaryLabel}>Done</Text></View>
+
+      <View style={styles.responsiveInner}>
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}><Text style={styles.summaryValue}>{activeTasks.length}</Text><Text style={styles.summaryLabel}>Open</Text></View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}><Text style={styles.summaryValue}>{urgentTasks.length}</Text><Text style={styles.summaryLabel}>Priority</Text></View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}><Text style={styles.summaryValue}>{tasks.length - activeTasks.length}</Text><Text style={styles.summaryLabel}>Done</Text></View>
+        </View>
       </View>
       
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
+      >
+        <View style={styles.responsiveInner}>
         {isError ? (
           <View style={styles.emptyState}>
             <Feather name="cloud-off" size={42} color="#A15C4B" />
@@ -104,6 +116,7 @@ export default function WorkTasksScreen() {
             </Pressable>
           ))
         )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -114,16 +127,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7F3',
   },
+  responsiveInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
   header: {
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 18,
     backgroundColor: '#143D2A',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+  headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
   },
   kicker: { fontSize: 10, letterSpacing: 1.2, color: '#B9D7C2', fontFamily: 'PlusJakartaSans_700Bold', marginBottom: 7 },
   headerSubtitle: { color: '#C6D9CC', fontSize: 12, fontFamily: 'PlusJakartaSans_500Medium', marginTop: 5 },

@@ -19,7 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function ManagerWorkforceApprovalsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -81,11 +81,11 @@ export default function ManagerWorkforceApprovalsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Workforce Approvals"
-        onBackPress={() => smartBack(router, '/manager')}
+        onBackPress={() => smartBack(router, '/manager/index')}
       />
 
       <ScrollView

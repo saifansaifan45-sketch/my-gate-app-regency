@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { storage } from './storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Base API URL
 const getBaseUrl = () => {
@@ -10,6 +11,16 @@ const getBaseUrl = () => {
   
   if (__DEV__) {
     if (Platform.OS === 'web') return 'http://localhost:3000';
+
+    // When running in Expo Go on a physical phone, automatically use the Mac's LAN IP
+    const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+    if (hostUri) {
+      const hostIp = hostUri.split(':')[0];
+      if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+        return `http://${hostIp}:3000`;
+      }
+    }
+
     if (Platform.OS === 'ios') return 'http://localhost:3000'; 
     if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
     return 'http://localhost:3000';

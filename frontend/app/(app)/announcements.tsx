@@ -27,7 +27,7 @@ function spaceMeta(space: CommunitySpaceItem) {
 }
 
 export default function AnnouncementsScreen() {
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const router = useRouter();
   const { hasLeadershipAccess } = useSession();
   const isLeadership = hasLeadershipAccess();
@@ -49,7 +49,7 @@ export default function AnnouncementsScreen() {
   const announcements = announcementsQuery.data?.announcements || [];
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Notice board" rightAction={isLeadership ? (
         <PremiumPressable style={styles.createBtn} onPress={() => router.push('/leadership/create-announcement')} scaleTo={0.94}>
           <Feather name="plus" size={18} color="#FFFFFF" />

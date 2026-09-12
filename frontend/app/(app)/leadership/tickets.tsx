@@ -48,7 +48,7 @@ function statusMeta(ticket: LeadershipTicketItem) {
 
 export default function LeadershipTicketsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const [tickets, setTickets] = useState<LeadershipTicketItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]['id']>('ALL');
   const [loading, setLoading] = useState(true);
@@ -87,11 +87,11 @@ export default function LeadershipTicketsScreen() {
   const resolvedCount = tickets.filter((ticket) => ticket.resolved).length;
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
-        title="Tickets Raised"
-        onBackPress={() => smartBack(router, '/leadership')}
+        title="Tickets & Issues"
+        onBackPress={() => smartBack(router, '/leadership/index')}
         showNotification={false}
       />
 
