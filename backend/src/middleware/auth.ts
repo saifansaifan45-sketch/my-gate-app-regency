@@ -101,20 +101,6 @@ export const requireLeadership = async (req: AuthRequest, res: Response, next: N
     return next();
   }
 
-  // NEW: Allow users with MANAGER, WORKFORCE, RESIDENT, OWNER, or LEADERSHIP roles
-  // to access leadership functions for view-only purposes
-  const userMembership = await prisma.membership.findFirst({
-    where: {
-      userId: req.user.userId,
-      status: 'APPROVED',
-    },
-  });
-
-  if (userMembership && ([Role.MANAGER, Role.WORKFORCE, Role.RESIDENT, Role.OWNER, Role.LEADERSHIP] as Role[]).includes(userMembership.role)) {
-    // Leadership view-only access granted
-    return next();
-  }
-
   return res.status(403).json({ error: { message: 'Access denied: Active Leadership membership required' } });
 };
 
