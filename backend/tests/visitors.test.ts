@@ -326,14 +326,16 @@ describe('Visitor Management Integration Tests', () => {
     it('15. Operator from a different community cannot check in, check out, or hand off a record from another community', async () => {
       // createdVisitorId is from the primary community
       // otherManagerToken is from the secondary community
+      // Policy: cross-community resources are intentionally invisible (404), not 403,
+      // to avoid disclosing existence of another community's visitor.
       const checkInRes = await request(app).post(`/visitors/${createdVisitorId}/check-in`).set('Authorization', `Bearer ${otherManagerToken}`).send({ otp: '000000' });
-      expect(checkInRes.status).toBe(403);
+      expect(checkInRes.status).toBe(404);
 
       const checkOutRes = await request(app).post(`/visitors/${createdVisitorId}/check-out`).set('Authorization', `Bearer ${otherManagerToken}`);
-      expect(checkOutRes.status).toBe(403);
+      expect(checkOutRes.status).toBe(404);
 
       const handoffRes = await request(app).post(`/visitors/${createdVisitorId}/handoff`).set('Authorization', `Bearer ${otherManagerToken}`).send({ recipientType: 'GATE' });
-      expect(handoffRes.status).toBe(403);
+      expect(handoffRes.status).toBe(404);
     });
 
     it('16. Duplicate handoff attempts are rejected to preserve immutability', async () => {
