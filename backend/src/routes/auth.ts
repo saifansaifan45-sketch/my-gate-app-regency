@@ -245,17 +245,22 @@ router.post('/register', registerLimiter, async (req, res, _next) => {
         body.relationship?.toUpperCase() === 'TENANT' || body.role?.toLowerCase() === 'tenant';
       const userRole = isTenant ? Role.TENANT : (body.role?.toUpperCase() === 'MANAGER' ? Role.MANAGER : Role.OWNER);
 
+      // Guard: public registration must not create APPROVED manager without leadership approval
+      const membershipStatus = userRole === Role.MANAGER ? 'PENDING' : 'APPROVED';
+
       _membership = await prisma.membership.create({
         data: {
           userId: user.id,
           communityId: community.id,
           unitId: unit.id,
           role: userRole,
-          status: 'APPROVED',
+          status: membershipStatus as any,
         },
       });
 
-      if (!isTenant) {
+      if (userRole === Role.MANAGER) {
+        // Manager via public registration stays PENDING — no ownership, no active residency until approved
+      } else if (!isTenant) {
         _createdOwnership = await prisma.unitOwnership.create({
           data: { userId: user.id, unitId: unit.id, status: OwnershipStatus.ACTIVE },
           include: { unit: true },
@@ -287,7 +292,7 @@ router.post('/register', registerLimiter, async (req, res, _next) => {
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { unitNumber, role: userRole },
+        data: { unitNumber, role: userRole === Role.MANAGER ? Role.RESIDENT : userRole },
       });
     }
 
