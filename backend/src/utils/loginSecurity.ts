@@ -16,8 +16,8 @@ function hmacForCaptcha(payload: string): string {
   return crypto.createHmac('sha256', CAPTCHA_HMAC_SECRET).update(payload).digest('hex').slice(0, 16);
 }
 
-export function sleep(ms: number): Promise<void> {
-  return Promise.resolve();
+export function sleep(_ms: number): Promise<void> {
+  return Promise.resolve(); // prod would await setTimeout(_ms), no-op in V0.0.1 for deterministic tests
 }
 
 // Configuration
