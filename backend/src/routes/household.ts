@@ -261,11 +261,16 @@ router.patch('/members/:id/status', requireVerifiedResidence, async (req: AuthRe
         include: { createdBy: { select: { firstName: true, lastName: true } } },
       });
 
-      // Revoke linked PermanentPass records atomically when member is REVOKED
+      // Atomically propagate member status to linked PermanentPass records
       if (status === 'REVOKED') {
         await tx.permanentPass.updateMany({
           where: { householdMemberId: record.id, status: 'ACTIVE' },
           data: { status: 'REVOKED' },
+        });
+      } else if (status === 'PAUSED') {
+        await tx.permanentPass.updateMany({
+          where: { householdMemberId: record.id, status: 'ACTIVE' },
+          data: { status: 'PAUSED' },
         });
       }
 
