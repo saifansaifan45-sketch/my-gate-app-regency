@@ -455,6 +455,14 @@ router.post('/permanent-passes/:id/renew', requireVerifiedResidence, async (req:
     const pass = await prisma.permanentPass.findFirst({ where: { id, unitId } });
     if (!pass) return res.status(404).json({ error: { message: 'Pass not found.' } });
 
+    // Guard: linked household member must be ACTIVE to renew
+    if (pass.householdMemberId) {
+      const linkedMember = await prisma.householdMember.findUnique({ where: { id: pass.householdMemberId } });
+      if (!linkedMember || linkedMember.status !== 'ACTIVE') {
+        return res.status(400).json({ error: { message: 'Linked household member is not active — cannot renew pass.' } });
+      }
+    }
+
     const now = new Date();
     const validUntil = new Date(now.getTime() + PASS_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
