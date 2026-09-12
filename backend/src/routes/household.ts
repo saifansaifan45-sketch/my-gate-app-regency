@@ -254,10 +254,22 @@ router.patch('/members/:id/status', requireVerifiedResidence, async (req: AuthRe
       return res.status(400).json({ error: { message: 'Cannot pause or revoke the property owner.' } });
     }
     
-    const updated = await householdDb.householdMember.update({
-      where: { id: record.id },
-      data: { status },
-      include: { createdBy: { select: { firstName: true, lastName: true } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      const member = await tx.householdMember.update({
+        where: { id: record.id },
+        data: { status },
+        include: { createdBy: { select: { firstName: true, lastName: true } } },
+      });
+
+      // Revoke linked PermanentPass records atomically when member is REVOKED
+      if (status === 'REVOKED') {
+        await tx.permanentPass.updateMany({
+          where: { householdMemberId: record.id, status: 'ACTIVE' },
+          data: { status: 'REVOKED' },
+        });
+      }
+
+      return member;
     });
     
     res.json({ member: updated });
