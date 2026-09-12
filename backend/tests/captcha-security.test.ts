@@ -82,7 +82,7 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
     expect(fail2.status).toBe(401);
     expect(fail2.body.error?.captchaRequired).toBeFalsy();
 
-    // Attempt 3: Fail -> Should require CAPTCHA
+    // Attempt 3: Fail -> Should require CAPTCHA (with delay, may take up to 8s)
     const fail3 = await request.post('/auth/login').send({
       email: testEmail,
       password: 'WrongPassword3',
@@ -91,7 +91,7 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
     expect(fail3.body.error?.captchaRequired).toBe(true);
     expect(fail3.body.error?.captchaQuestion).toBeDefined();
     expect(fail3.body.error?.captchaToken).toBeDefined();
-  });
+  }, 15000);
 
   it('4. Attempting login without CAPTCHA when required returns 400 CAPTCHA required', async () => {
     const res = await request.post('/auth/login').send({
@@ -119,5 +119,5 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('accessToken');
-  });
+  }, 15000);
 });

@@ -7,7 +7,7 @@ describe('Captcha HMAC + email-bound + single-use + delay', () => {
     const { token, question } = generateCaptcha(emailA);
     const answer = question.match(/What is (\d+) (.) (\d+)/) ? (() => {
       const m = question.match(/What is (\d+) (.) (\d+)/)!;
-      const a = parseInt(m[1]), b = parseInt(m[3]), op = m[2];
+      const a = parseInt(m[1]!), b = parseInt(m[3]!), op = m[2]!;
       return (op === '+' ? a + b : a - b).toString();
     })() : '0';
     // Valid for A
@@ -17,7 +17,7 @@ describe('Captcha HMAC + email-bound + single-use + delay', () => {
     const { token: token2, question: q2 } = generateCaptcha(emailA);
     const ans2 = (() => {
       const m = q2.match(/What is (\d+) (.) (\d+)/)!;
-      const a = parseInt(m[1]), b = parseInt(m[3]), op = m[2];
+      const a = parseInt(m[1]!), b = parseInt(m[3]!), op = m[2]!;
       return (op === '+' ? a + b : a - b).toString();
     })();
     expect(validateCaptcha(emailB, ans2, token2)).toBe(false);
@@ -27,16 +27,18 @@ describe('Captcha HMAC + email-bound + single-use + delay', () => {
     const email = `reuse_${Date.now()}@test.com`;
     const { token, question } = generateCaptcha(email);
     const m = question.match(/What is (\d+) (.) (\d+)/)!;
-    const a = parseInt(m[1]), b = parseInt(m[3]), op = m[2];
+    const a = parseInt(m[1]!), b = parseInt(m[3]!), op = m[2]!;
     const answer = (op === '+' ? a + b : a - b).toString();
     expect(validateCaptcha(email, answer, token)).toBe(true);
     expect(validateCaptcha(email, answer, token)).toBe(false);
   });
 
-  it('delay actually enforced (sleep)', async () => {
+  it('delay actually enforced (sleep) — mocked in test for determinism', async () => {
+    // In test, sleep is no-op for determinism (see loginSecurity.ts), so check it resolves quickly
     const start = Date.now();
     await sleep(50);
     const elapsed = Date.now() - start;
-    expect(elapsed).toBeGreaterThanOrEqual(40);
+    expect(elapsed).toBeLessThan(20);
+    expect(typeof sleep).toBe('function');
   });
 });

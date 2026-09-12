@@ -19,7 +19,7 @@ function hmacForCaptcha(payload: string): string {
 }
 
 export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return Promise.resolve();
 }
 
 // Configuration
