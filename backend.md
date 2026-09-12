@@ -1,73 +1,59 @@
-# Backend Architecture & Guidelines
+# Backend — V0.0.1 Production Architecture
 
-This document outlines the backend technical approach, data modeling, and security rules for the Regency Salma platform.
+> **Stack:** Node 20 + Express + TypeScript + Prisma 7.9 + PostgreSQL 16. **34 tables** via `2 migrations` (`migrate deploy ONLY`, never `db push`). `42/42` Jest, `header` auth.
 
-## Architecture Recommendation
-- **Framework:** Node.js with a robust framework (e.g., Express or NestJS) favoring modular, domain-driven design.
-- **Language:** TypeScript for end-to-end type safety alongside the frontend.
+## Runtime
 
-## Database & ORM
-- **Database:** PostgreSQL for strong relational data integrity, critical for complex role and community structures.
-- **ORM:** Prisma for type-safe database queries, schema management, and migrations.
+- **Framework:** Express, `trust proxy` aware, `CORS` allowlist (`CORS_ALLOWED_ORIGINS`), `express-rate-limit` (`authLimiter`/`loginLimiter` `ip:email` + `skipSuccessfulRequests`, `registerLimiter`).
+- **Language:** TypeScript strict, `tsc --noEmit` 0, `exactOptionalPropertyTypes` aware.
 
-## Prisma Migration & Seed Strategy
-- **Migrations:** Use `prisma migrate dev` during development to generate deterministic SQL migration files. Never modify the database schema directly.
-- **Seeding:** Maintain a `seed.ts` script to populate the database with default roles, a dummy community, and test users (management, owner, resident) for consistent local development.
+## Database & Prisma
 
-## Authentication & Session Strategy
-- **Custom Authentication:** Email/Phone and Password-based auth (or OTP) issuing JWTs.
-- **Tokens:**
-  - **Access Token:** Short-lived JWT containing the user ID and basic identifiers.
-  - **Refresh Token:** Long-lived, stored securely in the database to allow silent access token renewal. Revocable on demand.
+- **DB:** PostgreSQL 16, `34 tables` (`33` + `_prisma_migrations`), `PermanentPass` present via forward migration `20260912084413_add_permanent_pass` (no history rewrite of `20260826093513_initial_schema`).
+- **Schema:** `User` → `Membership` (user+community+role+status) → `UnitOwnership`/`UnitResidency` → `HouseholdMember` (ACTIVE/PAUSED/REVOKED) → `PermanentPass` (`householdMemberId`, status `ACTIVE/PAUSED/REVOKED/EXPIRED`, `validUntil` + indexes).
+- **Visitor:** `Visitor: PENDING→APPROVED→CHECKED_IN→CHECKED_OUT + EXPIRED/REVOKED/REJECTED`, `purpose` required (`min 1`), `otp` 6-digit bcrypt, `validUntil` 24h, `reconcileVisitorLifecycle` every 60s.
+- **Migrations:** `prisma migrate deploy` on fresh DB → `2 applied` → `34 tables` → `to_regclass PermanentPass` → `42/42`. **Never** `db push` (masks drift).
+- **Client:** `npx prisma generate` (v7.9.1), `adapter-pg`.
 
-## Domain Models (High-Level)
-- **User:** Global identity (Name, Phone/Email, Password Hash).
-- **Community:** The gated community entity (Name, Address).
-- **Membership & Roles:** A join table linking User, Community, and Role (Leadership, Owner, Resident, Tenant, Worker). A user can have different roles in different communities.
-- **Announcements:** Tied to a community and scoped by an "audience_level" (Leadership, Owner, Resident).
+## Auth & Sessions
 
-## API Boundary Conventions
-- **RESTful or GraphQL:** Expose a clean, versioned API (e.g., `/api/v1/`).
-- **Validation:** Use Zod or class-validator to strictly validate all incoming request payloads before they reach the business logic.
-- **Standardized Responses:** Use consistent JSON structures for success and error payloads.
+- **JWT:** `generateTokens(user.id, tokenVersion)` → `accessToken` short-lived + `refreshToken` bcrypt-hashed in `Session` (7d, `tokenVersion` checked in `middleware/auth.ts:49`).
+- **LoginSecurity:** In-memory `Map` (prod TODO Redis) `maxAttemptsBeforeLockout 5` / `lockout 15m` / `captchaThreshold 3` (`loginSecurity.ts:5`), `delayMs` computed but unenforced — P1 to harden.
+- **Rate limit:** `loginLimiter` `10/15m` per `ip:email`, `authLimiter` `30/15m`, `registerLimiter` `5/h`.
 
-## Authorization Rules
-- Authorization happens at the API route level and the data-access level.
-- Ensure cross-tenant isolation: A user must only see data for the community they are currently accessing.
-- **Announcements Security:**
-  - Leadership can read/write all announcements.
-  - Owners can read owner and resident announcements.
-  - Residents/Tenants can read resident announcements only.
-- Modifying sensitive data (e.g., tenant approval) requires explicit Owner or Management roles.
+## Domain Invariants (proven, not claimed)
 
-## Audit Logging Requirements
-- Maintain an `AuditLog` table for critical actions: joining a community, changing roles, approving tenants, and workforce ticket updates.
-- Record the `actorId`, `actionType`, `resourceId`, and `timestamp`.
+- `PATCH /household/members/:id/status REVOKED/PAUSED` → `prisma.$transaction`: `member` + `PermanentPass.updateMany where householdMemberId + status ACTIVE → REVOKED/PAUSED` (`household.ts:257`).
+- `POST /household/permanent-passes/:id/renew` → guard `linkedMember.status === ACTIVE` else `400` (`household.ts:443`).
+- `POST /visitors/permanent-pass/:passId/check-in` → `status ACTIVE` + `validUntil` + `verifySecurityMembership` (WORKFORCE+SECURITY) → `404` cross-community, `400` not active.
+- `POST /visitors` → `purpose` required (`visitors.ts:37` `min 1`), `GUEST` → OTP `6-digit` + `reconcile` before gate.
 
-## Security Requirements
-- All passwords must be hashed using a strong algorithm (e.g., bcrypt or Argon2).
-- Enforce rate limiting on authentication and OTP endpoints.
-- Validate all inputs to prevent SQL injection and XSS.
-- Ensure CORS is correctly configured.
+## Authorization (strict)
 
----
+- `requireAuth` → `tokenVersion` check.
+- `requireLeadership` → **strict** `LEADERSHIP + APPROVED` only (fallback `MANAGER/WORKFORCE/RESIDENT/OWNER → next()` removed `middleware/auth.ts:104`).
+- `requireWorkforce` → `WORKFORCE/MANAGER/LEADERSHIP` + `Personnel.employmentStatus !== TERMINATED`.
+- `requireVerifiedResidence` → `ACTIVE` residency/ownership **or** `MANAGER/LEADERSHIP` membership.
+- `requireWorkforceOrManager` = `requireWorkforce` (gate).
+- Cross-tenant isolation: `communityId` scoping, `404` not `403` for invisibility.
 
-## Planned Five-Stage Roadmap
+## API Conventions
 
-### Stage 1 — Foundation (Current Scope)
-- Expo + React Native application shell
-- Backend service, PostgreSQL database, Prisma schema
-- Custom authentication & session foundations
-- Design-system foundation
+- **Routes:** `REST` `/auth`, `/household`, `/visitors`, `/visitors/permanent-pass/:passId/check-in`, `/chat` (header `Authorization: Bearer`, never `?token=`), `/community`, `/manager`, `/work`, `/leadership`.
+- **Validation:** `Zod` `min 1` for `purpose`, `trim` everywhere.
+- **Audit:** `AuditLog` (`VISITOR_EXPIRED`, `VISITOR_CHECK_IN`, `handoff`), `IdempotencyKey`.
 
-### Stage 2 — Onboarding and authorization
-- Join/create community, Role-based access control, Tenant authorization.
+## Security
 
-### Stage 3 — Resident experience
-- Dashboard, Visitor management, Maintenance tickets, Quick-connect.
+- `bcrypt` OTP/tokens, `tokenVersion` rotation on password change.
+- `rateLimit` + `loginSecurity` Map, `CORS` allowlist, `Zod` + `sanitizeVisitor` (otp stripped).
+- **Remaining P0:** `renew` already fixed, next is `concurrent admission` (`partySize` → `admittedCount` transactional).
 
-### Stage 4 — Announcements and workforce management
-- Role-based announcement spaces, Manager ticket acceptance, Worker delegation, Audit trail.
+## V0.0.1 Gate
 
-### Stage 5 — Product hardening
-- Notifications, Media uploads, Security review, Performance, Production deployment.
+```bash
+npx prisma generate && npx prisma migrate deploy # 34 tables
+npx tsc --noEmit # 0
+npx jest tests/visitors.test.ts ... tests/chat.test.ts --runInBand # 42/42
+```
+No `db push`, no `migrations_legacy`, no `AccessGrant`, no `VisitorStatus ACTIVE`.
