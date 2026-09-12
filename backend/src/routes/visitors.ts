@@ -42,6 +42,7 @@ const createVisitorSchema = z.object({
   provider: z.string().trim().max(120).optional(),
   orderReference: z.string().trim().max(120).optional(),
   packageCount: z.number().int().optional(),
+  partySize: z.number().int().min(1).max(20).optional().default(1),
 });
 
 const unannouncedArrivalSchema = createVisitorSchema.extend({
@@ -396,6 +397,8 @@ router.post('/manager-invite', async (req: AuthRequest, res: Response, next: Nex
         provider: body.provider?.trim() || null,
         orderReference: body.orderReference?.trim() || null,
         packageCount: body.packageCount || null,
+        partySize: body.partySize ?? 1,
+        admittedCount: 0,
       },
       include: { hostUser: { select: { id: true, firstName: true, lastName: true, role: true } } },
     });
@@ -466,6 +469,8 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
         provider: body.provider ? body.provider.trim() : null,
         orderReference: body.orderReference ? body.orderReference.trim() : null,
         packageCount: body.packageCount ? body.packageCount : null,
+        partySize: body.partySize ?? 1,
+        admittedCount: 0,
       },
       include: { unit: true, createdBy: { select: { id: true, firstName: true, lastName: true, unitNumber: true } } },
     });
@@ -1140,11 +1145,24 @@ router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (r
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const updateResult = await tx.visitor.updateMany({
-        where: { id: visitorForCheckIn.id, status: 'APPROVED' },
-        data: { status: 'CHECKED_IN', checkInTime: new Date() }
-      });
-      if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
+      // Party admission: atomic admittedCount < partySize check
+      if (visitorForCheckIn.partySize > 1) {
+        const partyResult = await tx.visitor.updateMany({
+          where: { id: visitorForCheckIn.id, admittedCount: { lt: visitorForCheckIn.partySize } },
+          data: {
+            admittedCount: { increment: 1 },
+            checkInTime: new Date(),
+            status: visitorForCheckIn.admittedCount + 1 >= visitorForCheckIn.partySize ? 'CHECKED_IN' : 'APPROVED',
+          },
+        });
+        if (partyResult.count === 0) throw new Error('PARTY_FULL');
+      } else {
+        const updateResult = await tx.visitor.updateMany({
+          where: { id: visitorForCheckIn.id, status: 'APPROVED' },
+          data: { status: 'CHECKED_IN', checkInTime: new Date() }
+        });
+        if (updateResult.count === 0) throw new Error('CONCURRENCY_ERROR');
+      }
 
       const v = (await tx.visitor.findUnique({ where: { id: visitorId }, include: { unit: true } }))!;
       
@@ -1206,6 +1224,9 @@ router.post('/:id/check-in', requireWorkforceOrManager, checkInLimiter, async (r
          ? await prisma.visitor.findUnique({ where: { id: req.params.id } })
          : null;
        return res.status(409).json({ error: { message: 'Conflict: action already completed.', visitor: current ? sanitizeVisitor(current) : null } });
+    }
+    if (error instanceof Error && error.message === 'PARTY_FULL') {
+      return res.status(409).json({ error: { message: 'Party fully admitted' } });
     }
     console.error(error);
     next(error);

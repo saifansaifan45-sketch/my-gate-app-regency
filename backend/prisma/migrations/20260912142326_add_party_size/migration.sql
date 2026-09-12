@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Visitor" ADD COLUMN     "admittedCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "partySize" INTEGER NOT NULL DEFAULT 1;
