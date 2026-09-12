@@ -1,5 +1,3 @@
-import { prisma } from '../prisma';
-import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 
 // In-memory store for failed attempts (production should use Redis)
