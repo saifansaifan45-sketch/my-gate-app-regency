@@ -70,6 +70,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('generates a guest OTP for a resident-created pass and verifies it at the gate', async () => {
     const create = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'Rohan Guest',
+      purpose: 'Guest Visit',
       visitorType: 'GUEST',
       isPreApproved: false,
     });
@@ -94,6 +95,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('alerts the resident about an unannounced delivery, then allows security to confirm approved entry without OTP', async () => {
     const arrival = await api.post('/visitors/unannounced').set('Authorization', `Bearer ${securityToken}`).send({
       name: 'Anaya Delivery Agent',
+      purpose: 'Package Delivery',
       provider: 'Amazon',
       visitorType: 'DELIVERY',
       unitId,
@@ -119,6 +121,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('expires time-bound passes out of the active gate queue', async () => {
     const expiredPass = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'Expired Guest',
+      purpose: 'Guest Visit',
       visitorType: 'GUEST',
       validFrom: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       validUntil: new Date(Date.now() - 60 * 1000).toISOString(),
@@ -137,6 +140,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('automatically checks out visitors that remain inside past their validity window', async () => {
     const pass = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'Timed Guest',
+      purpose: 'Maintenance',
       visitorType: 'SERVICE',
       validUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
@@ -159,6 +163,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('locks repeated OTP guesses and allows the resident to regenerate the code', async () => {
     const created = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'OTP Lock Guest',
+      purpose: 'Guest Visit',
       visitorType: 'GUEST',
     });
     expect(created.status).toBe(201);
@@ -184,6 +189,7 @@ describe('Visitor resident approval and gate verification', () => {
   it('keeps resident handoff suggestions separate from the completed gate handoff', async () => {
     const created = await api.post('/visitors').set('Authorization', `Bearer ${residentToken}`).send({
       name: 'Suggested Delivery',
+      purpose: 'Package Delivery',
       visitorType: 'DELIVERY',
       provider: 'Parcel Service',
     });

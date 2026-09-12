@@ -34,7 +34,7 @@ router.use(requireAuth);
 const createVisitorSchema = z.object({
   name: z.string().trim().max(120).optional(),
   phone: z.string().trim().max(40).optional(),
-  purpose: z.string().trim().max(240).optional(),
+  purpose: z.string().trim().min(1, 'Purpose is required.').max(240),
   vehicleNumber: z.string().trim().max(40).optional(),
   visitorType: z.nativeEnum(VisitorType).default(VisitorType.GUEST),
   validFrom: z.string().trim().max(80).optional(),
