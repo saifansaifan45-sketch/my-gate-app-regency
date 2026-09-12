@@ -17,7 +17,7 @@ export default function ChangePasswordScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const { logout } = useSession();
-  const { top } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -54,7 +54,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Change Password" onBackPress={() => smartBack(router, '/profile-settings')} />
       <ScrollView contentContainerStyle={styles.content}>
         

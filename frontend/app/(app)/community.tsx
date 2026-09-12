@@ -1,14 +1,15 @@
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import React, { useMemo, useState, useRef } from 'react';
-import { Platform, View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert } from 'react-native';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
+import { Platform, View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert, InteractionManager } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { CommunityCreateMenu } from '../../src/components/community/CommunityCreateMenu';
+import { Skeleton } from '../../src/components/ui/Skeleton';
 import { Card } from '../../src/components/ui/Card';
 import { communityApi, CommunityAnnouncement, CommunityPoll, AnnouncementCategory, CreatePollPayload, CreateAnnouncementPayload } from '../../src/api/community';
 import { useSession } from '../../src/store/auth';
@@ -18,13 +19,13 @@ const TAB_PADDING = 20;
 const TAB_GAP = 8;
 
 export default function CommunityScreen() {
-  const { top } = useScreenInsets(true);
   const { bottomClearance } = useScreenInsets(true);
   const { width: screenWidth } = useWindowDimensions();
   const TAB_WIDTH = (screenWidth - TAB_PADDING * 2 - TAB_GAP) / 2;
   const { hasManagerAccess, hasApprovedMembership, hasOwnerAccess, hasResidentAccess, primaryResidency, primaryOwnership } = useSession();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'announcements' | 'polls'>('announcements');
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [category, setCategory] = useState<AnnouncementCategory | undefined>();
   const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
   const spacesQuery = useQuery({ queryKey: ['community', 'spaces'], queryFn: communityApi.getSpaces });
@@ -39,10 +40,11 @@ export default function CommunityScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
 
-  const switchTab = (tab: 'announcements' | 'polls') => {
+  const switchTab = useCallback((tab: 'announcements' | 'polls') => {
     if (tab === activeTab) return;
     const toValue = tab === 'polls' ? 1 : 0;
-    
+    setIsTransitioning(true);
+
     Animated.spring(slideAnim, {
       toValue,
       useNativeDriver: false,
@@ -52,35 +54,39 @@ export default function CommunityScreen() {
 
     Animated.timing(contentOpacity, {
       toValue: 0,
-      duration: 150,
-      useNativeDriver: Platform.OS !== 'web',
+      duration: 120,
+      useNativeDriver: false,
     }).start(() => {
-      setActiveTab(tab);
-      Animated.timing(contentOpacity, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start();
+      InteractionManager.runAfterInteractions(() => {
+        setActiveTab(tab);
+        requestAnimationFrame(() => {
+          Animated.timing(contentOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false,
+          }).start(() => setIsTransitioning(false));
+        });
+      });
     });
-  };
+  }, [activeTab, slideAnim, contentOpacity]);
 
-  const changeCategory = (item: AnnouncementCategory | undefined) => {
+  const changeCategory = useCallback((item: AnnouncementCategory | undefined) => {
     if (category === item) return;
     Animated.timing(contentOpacity, {
       toValue: 0.4,
       duration: 100,
       easing: Easing.inOut(Easing.ease),
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setCategory(item);
       Animated.timing(contentOpacity, {
         toValue: 1,
         duration: 200,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
       }).start();
     });
-  };
+  }, [category, contentOpacity]);
 
   const indicatorTranslateX = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -103,14 +109,67 @@ export default function CommunityScreen() {
   };
 
   const announcementsContent = useMemo(() => {
-    if (announcementsQuery.isLoading) return <Text style={styles.loading}>Loading community updates…</Text>;
+    if (announcementsQuery.isLoading) {
+      return (
+        <View style={{ gap: 14 }}>
+          {[1, 2, 3].map((key) => (
+            <View key={key} style={styles.skeletonCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Skeleton width={80} height={20} borderRadius={100} />
+                <Skeleton width={60} height={14} borderRadius={6} />
+              </View>
+              <Skeleton width="80%" height={18} borderRadius={8} style={{ marginBottom: 8 }} />
+              <Skeleton width="100%" height={14} borderRadius={6} style={{ marginBottom: 4 }} />
+              <Skeleton width="60%" height={14} borderRadius={6} />
+            </View>
+          ))}
+        </View>
+      );
+    }
     const announcements = announcementsQuery.data?.announcements ?? [];
     if (!announcements.length) return <EmptyState icon="bell" title="No community updates yet" description="Published notices from your community will appear here." />;
-    return announcements.map((announcement) => <AnnouncementCard key={announcement.id} announcement={announcement} onRead={async () => { if (!announcement.isRead) { await communityApi.markAnnouncementRead(announcement.id); await refreshCommunity(); } }} />);
+    
+    // Safety deduplication on client
+    const seen = new Set<string>();
+    const uniqueAnnouncements = announcements.filter((a) => {
+      const key = a.id || `${a.title}_${a.content}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return uniqueAnnouncements.map((announcement) => (
+      <AnnouncementCard
+        key={announcement.id}
+        announcement={announcement}
+        onRead={async () => {
+          if (!announcement.isRead) {
+            await communityApi.markAnnouncementRead(announcement.id);
+            await refreshCommunity();
+          }
+        }}
+      />
+    ));
   }, [announcementsQuery.data?.announcements, announcementsQuery.isLoading]);
 
   const pollsContent = useMemo(() => {
-    if (pollsQuery.isLoading) return <Text style={styles.loading}>Loading community polls…</Text>;
+    if (pollsQuery.isLoading) {
+      return (
+        <View style={{ gap: 14 }}>
+          {[1, 2].map((key) => (
+            <View key={key} style={styles.skeletonCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Skeleton width={90} height={20} borderRadius={100} />
+                <Skeleton width={70} height={14} borderRadius={6} />
+              </View>
+              <Skeleton width="85%" height={18} borderRadius={8} style={{ marginBottom: 12 }} />
+              <Skeleton width="100%" height={38} borderRadius={10} style={{ marginBottom: 8 }} />
+              <Skeleton width="100%" height={38} borderRadius={10} />
+            </View>
+          ))}
+        </View>
+      );
+    }
     const polls = pollsQuery.data?.polls ?? [];
     if (!polls.length) return <EmptyState icon="pie-chart" title="No active polls" description="Community polls will appear here when management opens one." />;
     return polls.map((poll) => (
@@ -118,7 +177,7 @@ export default function CommunityScreen() {
     ));
   }, [pollsQuery.data?.polls, pollsQuery.isLoading, isManagement]);
 
-  return (      <View style={[styles.container, { paddingTop: top }]}>
+  return (      <View style={styles.container}>
       <AppHeader
         variant="tabroot"
         title="Community"
@@ -153,7 +212,7 @@ export default function CommunityScreen() {
       </View>
 
       <Animated.View style={[styles.feedOuter, { opacity: contentOpacity }]}>
-        {activeTab === 'announcements' ? (
+        {!isTransitioning && activeTab === 'announcements' ? (
           <ScrollView contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               {([undefined, 'GENERAL', 'MAINTENANCE', 'SECURITY', 'EVENT', 'EMERGENCY'] as const).map((item) => (
@@ -168,13 +227,13 @@ export default function CommunityScreen() {
                 </PremiumPressable>
               ))}
             </ScrollView>
-            {announcementsContent}
+            {isTransitioning ? null : announcementsContent}
           </ScrollView>
-        ) : (
+        ) : !isTransitioning ? (
           <ScrollView contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}>
-            {pollsContent}
+            {isTransitioning ? null : pollsContent}
           </ScrollView>
-        )}
+        ) : null}
       </Animated.View>
 
       {canCreateContent ? (
@@ -242,6 +301,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   feed: { padding: 20, gap: 16 },
+  skeletonCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.05)',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+  },
   loading: { fontFamily: 'PlusJakartaSans_500Medium', color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 36 },
   updateCard: {
     width: '100%',

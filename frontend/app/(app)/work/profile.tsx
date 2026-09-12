@@ -76,102 +76,105 @@ export default function WorkProfileScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top + 6, 26) }]}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
       >
-        {isLoading ? (
-          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 40 }} />
-        ) : (
-          <>
-            {/* Identity Card */}
-            <View style={styles.identityCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{personnel?.name?.charAt(0) || user?.firstName?.charAt(0) || 'W'}</Text>
-              </View>
-              <Text style={styles.name}>{personnel?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Team Member'}</Text>
-              <Text style={styles.email}>{user?.email || personnel?.phone || ''}</Text>
+        <View style={styles.responsiveInner}>
+          {isLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 40 }} />
+          ) : (
+            <>
+              {/* Identity Card */}
+              <View style={styles.identityCard}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{personnel?.name?.charAt(0) || user?.firstName?.charAt(0) || 'W'}</Text>
+                </View>
+                <Text style={styles.name}>{personnel?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Team Member'}</Text>
+                <Text style={styles.email}>{user?.email || personnel?.phone || ''}</Text>
 
-              <View style={styles.rolePill}>
-                <Feather name="briefcase" size={13} color={theme.colors.primary} />
-                <Text style={styles.rolePillText}>
-                  {getPersonnelRoleLabel(personnel)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Duty Status */}
-            {!isSecurity && <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Duty Status</Text>
-              <View style={styles.card}>
-                <View style={styles.availabilityRow}>
-                  {AVAILABILITY_OPTIONS.map((opt) => {
-                    const active = personnel?.availabilityStatus === opt.value;
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        style={[styles.availOption, active && styles.availOptionActive]}
-                        disabled={updatingAvailability}
-                        onPress={() => handleSetAvailability(opt.value)}
-                      >
-                        <Text style={[styles.availOptionText, active && styles.availOptionTextActive]}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                <View style={styles.rolePill}>
+                  <Feather name="briefcase" size={13} color={theme.colors.primary} />
+                  <Text style={styles.rolePillText}>
+                    {getPersonnelRoleLabel(personnel)}
+                  </Text>
                 </View>
               </View>
-            </View>}
 
-            {/* Today's Attendance */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Today's Attendance</Text>
-              <View style={styles.attCard}>
-                <View style={styles.attItem}>
-                  <Text style={styles.attLabel}>Check In</Text>
-                  <Text style={styles.attValue}>{formatTime(todayAttendance?.checkIn) || '—'}</Text>
-                </View>
-                <View style={styles.attDivider} />
-                <View style={styles.attItem}>
-                  <Text style={styles.attLabel}>Check Out</Text>
-                  <Text style={styles.attValue}>{formatTime(todayAttendance?.checkOut) || '—'}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Links */}
-            {!isSecurity && <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Work</Text>
-              <View style={styles.linksCard}>
-                <Pressable style={styles.linkRow} onPress={() => router.push('/work/tasks/history')}>
-                  <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
-                    <Feather name="clock" size={20} color={theme.colors.primary} />
+              {/* Duty Status */}
+              {!isSecurity && <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Duty Status</Text>
+                <View style={styles.card}>
+                  <View style={styles.availabilityRow}>
+                    {AVAILABILITY_OPTIONS.map((opt) => {
+                      const active = personnel?.availabilityStatus === opt.value;
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          style={[styles.availOption, active && styles.availOptionActive]}
+                          disabled={updatingAvailability}
+                          onPress={() => handleSetAvailability(opt.value)}
+                        >
+                          <Text style={[styles.availOptionText, active && styles.availOptionTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.linkTitle}>Task History</Text>
-                    <Text style={styles.linkDesc}>Completed tasks & work notes</Text>
+                </View>
+              </View>}
+
+              {/* Today's Attendance */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Today's Attendance</Text>
+                <View style={styles.attCard}>
+                  <View style={styles.attItem}>
+                    <Text style={styles.attLabel}>Check In</Text>
+                    <Text style={styles.attValue}>{formatTime(todayAttendance?.checkIn) || '—'}</Text>
                   </View>
-                  <Feather name="chevron-right" size={18} color="#9CA3AF" />
+                  <View style={styles.attDivider} />
+                  <View style={styles.attItem}>
+                    <Text style={styles.attLabel}>Check Out</Text>
+                    <Text style={styles.attValue}>{formatTime(todayAttendance?.checkOut) || '—'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Links */}
+              {!isSecurity && <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Work</Text>
+                <View style={styles.linksCard}>
+                  <Pressable style={styles.linkRow} onPress={() => router.push('/work/tasks/history')}>
+                    <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
+                      <Feather name="clock" size={20} color={theme.colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.linkTitle}>Task History</Text>
+                      <Text style={styles.linkDesc}>Completed tasks & work notes</Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color="#9CA3AF" />
+                  </Pressable>
+                </View>
+              </View>}
+
+              {/* Account */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Account</Text>
+                <Pressable
+                  style={[styles.logoutButton, isLoggingOut && { opacity: 0.6 }]}
+                  onPress={requestLogout}
+                  disabled={isLoggingOut}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log out"
+                  accessibilityState={{ disabled: isLoggingOut }}
+                >
+                  {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={22} color="#EF4444" />}
+                  <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out…' : 'Log Out'}</Text>
                 </Pressable>
               </View>
-            </View>}
-
-            {/* Account */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Account</Text>
-              <Pressable
-                style={[styles.logoutButton, isLoggingOut && { opacity: 0.6 }]}
-                onPress={requestLogout}
-                disabled={isLoggingOut}
-                accessibilityRole="button"
-                accessibilityLabel="Log out"
-                accessibilityState={{ disabled: isLoggingOut }}
-              >
-                {isLoggingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Feather name="log-out" size={22} color="#EF4444" />}
-                <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out…' : 'Log Out'}</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
+            </>
+          )}
+        </View>
       </ScrollView>
       <ConfirmationModal
         visible={isLogoutConfirmVisible}
@@ -192,6 +195,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  responsiveInner: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
   },
   content: {
     padding: 20,

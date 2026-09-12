@@ -19,14 +19,14 @@ interface CommunitySheetProps {
 export function CommunitySheet({ visible, title, subtitle, onClose, children, footer, scrollable = true }: CommunitySheetProps) {
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', flex: 1, justifyContent: 'center' }}>
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
             <View style={styles.titleWrap}>
               <Text style={styles.sheetTitle}>{title}</Text>
               {subtitle ? <Text style={styles.sheetSubtitle}>{subtitle}</Text> : null}
             </View>
-            <PremiumPressable style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <PremiumPressable style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Feather name="x" size={22} color={theme.colors.textPrimary} />
             </PremiumPressable>
           </View>

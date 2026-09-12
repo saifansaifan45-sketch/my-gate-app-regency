@@ -27,13 +27,13 @@ export const cardSystem = {
 };
 
 export const cardSurface: ViewStyle = {
-  backgroundColor: theme.colors.surface,
-  borderRadius: cardSystem.radius,
+  backgroundColor: '#FFFFFF',
+  borderRadius: 18,
   borderWidth: 1,
-  borderColor: theme.colors.border,
-  shadowColor: theme.colors.primary,
-  shadowOffset: { width: 0, height: 5 },
-  shadowOpacity: 0.06,
-  shadowRadius: 14,
+  borderColor: 'rgba(20, 61, 42, 0.06)',
+  shadowColor: '#143D2A',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.04,
+  shadowRadius: 12,
   elevation: 2,
 };

@@ -34,7 +34,7 @@ const createDefaultPreferences = (role?: string): QuickActionPreference[] =>
 
 export default function QuickActionsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(true);
+  const { bottomClearance } = useScreenInsets(true);
   const { user } = useSession();
   const [preferences, setPreferences] = useState<QuickActionPreference[]>([]);
   const [isEmergencySOSVisible, setIsEmergencySOSVisible] = useState(false);
@@ -93,7 +93,7 @@ export default function QuickActionsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Quick actions" onBackPress={() => smartBack(router, '/home')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>

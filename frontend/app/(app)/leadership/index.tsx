@@ -117,18 +117,8 @@ export default function LeadershipOverviewScreen() {
         title="Leadership Governance"
         showBack
         onBackPress={handleLeaveLeadership}
-        rightAction={
-          <PremiumPressable
-            onPress={() => router.push('/notifications')}
-            style={styles.notifBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Notifications"
-            accessibilityRole="button"
-          >
-            <Feather name="bell" size={20} color={theme.colors.textPrimary} />
-            {pendingManagersCount > 0 && <View style={styles.notifDot} />}
-          </PremiumPressable>
-        }
+        showNotification={true}
+        hasUnreadNotifications={pendingManagersCount > 0}
       />
 
       <Animated.ScrollView
@@ -610,16 +600,16 @@ const styles = StyleSheet.create({
   metricRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: 'rgba(20, 61, 42, 0.05)',
     gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
     elevation: 1,
   },
   metricIconBox: {

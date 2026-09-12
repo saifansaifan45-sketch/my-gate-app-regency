@@ -23,7 +23,7 @@ const toDateStr = (year: number, month: number, day: number) => `${year}-${pad(m
 const toLocalDateStr = (date: Date) => toDateStr(date.getFullYear(), date.getMonth(), date.getDate());
 
 export default function CalendarScreen() {
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const events = useCalendarEvents();
 
   const todayStr = toLocalDateStr(new Date());
@@ -98,7 +98,7 @@ export default function CalendarScreen() {
   })();
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Community Calendar" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}>

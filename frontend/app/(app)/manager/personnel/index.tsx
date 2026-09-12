@@ -36,7 +36,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; selected: string }> = {
 
 export default function PersonnelListScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const [personnel, setPersonnel] = useState<PersonnelItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -140,11 +140,11 @@ export default function PersonnelListScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Personnel Management"
-        onBackPress={() => smartBack(router, '/manager')}
+        onBackPress={() => smartBack(router, '/manager/index')}
         rightAction={
           <PremiumPressable
             onPress={() => setModalVisible(true)}

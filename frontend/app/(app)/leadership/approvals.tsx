@@ -19,7 +19,7 @@ import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function LeadershipApprovalsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'managers' | 'workforce' | 'history'>('managers');
@@ -135,41 +135,65 @@ export default function LeadershipApprovalsScreen() {
   const stats = overviewData?.stats;
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Approval Center"
-        onBackPress={() => smartBack(router, '/leadership')}
+        onBackPress={() => smartBack(router, '/leadership/index')}
       />
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        <PremiumPressable
-          style={[styles.tabItem, activeTab === 'managers' && styles.tabItemActive]}
-          onPress={() => setActiveTab('managers')}
+      {/* Sliding Tabs */}
+      <View style={styles.tabBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarScroll}
         >
-          <Text style={[styles.tabText, activeTab === 'managers' && styles.tabTextActive]}>
-            Manager Requests ({pendingManagers.length})
-          </Text>
-        </PremiumPressable>
+          <PremiumPressable
+            style={[styles.tabItem, activeTab === 'managers' && styles.tabItemActive]}
+            onPress={() => setActiveTab('managers')}
+            scaleTo={0.96}
+          >
+            <Feather
+              name="users"
+              size={14}
+              color={activeTab === 'managers' ? '#FFFFFF' : theme.colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'managers' && styles.tabTextActive]}>
+              Manager Requests ({pendingManagers.length})
+            </Text>
+          </PremiumPressable>
 
-        <PremiumPressable
-          style={[styles.tabItem, activeTab === 'workforce' && styles.tabItemActive]}
-          onPress={() => setActiveTab('workforce')}
-        >
-          <Text style={[styles.tabText, activeTab === 'workforce' && styles.tabTextActive]}>
-            Workforce Overview
-          </Text>
-        </PremiumPressable>
+          <PremiumPressable
+            style={[styles.tabItem, activeTab === 'workforce' && styles.tabItemActive]}
+            onPress={() => setActiveTab('workforce')}
+            scaleTo={0.96}
+          >
+            <Feather
+              name="briefcase"
+              size={14}
+              color={activeTab === 'workforce' ? '#FFFFFF' : theme.colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'workforce' && styles.tabTextActive]}>
+              Workforce Overview
+            </Text>
+          </PremiumPressable>
 
-        <PremiumPressable
-          style={[styles.tabItem, activeTab === 'history' && styles.tabItemActive]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
-            History
-          </Text>
-        </PremiumPressable>
+          <PremiumPressable
+            style={[styles.tabItem, activeTab === 'history' && styles.tabItemActive]}
+            onPress={() => setActiveTab('history')}
+            scaleTo={0.96}
+          >
+            <Feather
+              name="clock"
+              size={14}
+              color={activeTab === 'history' ? '#FFFFFF' : theme.colors.textSecondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
+              History
+            </Text>
+          </PremiumPressable>
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -416,30 +440,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  tabBar: {
-    flexDirection: 'row',
+  tabBarWrapper: {
+    paddingBottom: 14,
+  },
+  tabBarScroll: {
     paddingHorizontal: cardSystem.pagePadding,
     gap: 8,
-    paddingBottom: 12,
+    alignItems: 'center',
   },
   tabItem: {
-    flex: 1,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 100,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 100,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   tabItemActive: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   tabText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
+    fontSize: 12.5,
     color: theme.colors.textSecondary,
   },
   tabTextActive: {
@@ -451,12 +488,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.shadows.card,
+    borderColor: 'rgba(20, 61, 42, 0.05)',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
   cardTop: {
     flexDirection: 'row',

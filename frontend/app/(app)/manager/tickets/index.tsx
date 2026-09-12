@@ -26,7 +26,7 @@ const STATUS_TABS = [
 
 export default function ManagerTicketsScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -99,11 +99,11 @@ export default function ManagerTicketsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Ticket Management"
-        onBackPress={() => smartBack(router, '/manager')}
+        onBackPress={() => smartBack(router, '/manager/index')}
       />
 
       {/* Search Input */}

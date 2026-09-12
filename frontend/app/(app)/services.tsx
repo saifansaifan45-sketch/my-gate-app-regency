@@ -13,7 +13,7 @@ import { cardSystem } from '../../src/components/ui/cardSystem';
 
 export default function ServicesScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(true);
+  const { bottomClearance } = useScreenInsets(true);
   const { user, hasRole } = useSession();
   const [isEmergencySOSVisible, setIsEmergencySOSVisible] = useState(false);
 
@@ -28,7 +28,7 @@ export default function ServicesScreen() {
     }
   });
 
-  return (      <View style={[styles.container, { paddingTop: top }]}>
+  return (      <View style={styles.container}>
       <AppHeader variant="tabroot" title="Services" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]} showsVerticalScrollIndicator={false}>
         
@@ -37,7 +37,7 @@ export default function ServicesScreen() {
              <Text style={styles.categoryTitle}>Manager Operations</Text>
              <ActionCard
                 style={{ backgroundColor: theme.colors.surfaceGreen, borderColor: theme.status.success.border, marginBottom: 12 }}
-                onPress={() => router.push('/manager')}
+                onPress={() => router.push('/manager/index')}
                 icon={<Feather name="shield" size={24} color={theme.colors.onPrimary} />}
                 iconBackground={theme.colors.primary}
                 title="Manager Dashboard"

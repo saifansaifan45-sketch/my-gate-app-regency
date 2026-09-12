@@ -1,11 +1,39 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Modal, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Image, Animated, Easing, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text } from '../ui/Text';
 import { PremiumPressable } from '../ui/PremiumPressable';
+import { CenterModal } from '../ui/CenterModal';
 import { TimePeriod, getTimeGreeting } from './TimeBasedBackground';
 import { useSession } from '../../store/auth';
+
+function PulsingUnreadDot({ style }: { style?: any }) {
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.35,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
+  return <Animated.View style={[style, { transform: [{ scale: pulseAnim }] }]} />;
+}
 
 interface HeroHeaderProps {
   displayName: string;
@@ -61,13 +89,13 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
     <>
       <View style={[styles.container, { paddingHorizontal: pagePadding, paddingTop: Math.max(topInset + 6, 22) }]}>
         <View style={styles.topBar}>
-          <View style={styles.logoContainer}>
+          <PremiumPressable style={styles.logoContainer} scaleTo={0.94}>
             <Image
-              source={require('../../../assets/Logo.avif')}
+              source={require('../../../assets/icon.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-          </View>
+          </PremiumPressable>
 
           <View style={styles.topRightColumn}>
             <View style={styles.topRightActions}>
@@ -79,7 +107,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
                 accessibilityLabel="Notifications"
               >
                 <Feather name="bell" size={20} color="#111827" />
-                <View style={styles.unreadDot} />
+                <PulsingUnreadDot style={styles.unreadDot} />
               </PremiumPressable>
 
               <PremiumPressable
@@ -92,14 +120,17 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
               </PremiumPressable>
             </View>
 
-            <TouchableOpacity
+            <PremiumPressable
               style={styles.rolesBadge}
               onPress={() => setRolesOpen(true)}
-              activeOpacity={0.7}
+              scaleTo={0.96}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Feather name="shield" size={11} color="#FFFFFF" />
-              <Text style={styles.rolesBadgeText}>Roles</Text>
-            </TouchableOpacity>
+              <Feather name="shield" size={12} color="#FFFFFF" />
+              <Text style={styles.rolesBadgeText}>
+                {activeRoles.length > 0 ? activeRoles.join(' · ') : 'Roles'}
+              </Text>
+            </PremiumPressable>
           </View>
         </View>
 
@@ -114,82 +145,79 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         </View>
       </View>
 
-      <Modal
-        visible={rolesOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRolesOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleRow}>
-                <Feather name="shield" size={18} color="#143D2A" />
-                <Text style={styles.cardTitle}>Your Roles</Text>
-              </View>
-              <TouchableOpacity onPress={() => setRolesOpen(false)} style={styles.closeBtn}>
-                <Feather name="x" size={20} color="#6B7280" />
-              </TouchableOpacity>
+      <CenterModal visible={rolesOpen} onClose={() => setRolesOpen(false)}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.titleRow}>
+              <Feather name="shield" size={18} color="#143D2A" />
+              <Text style={styles.cardTitle}>Your Roles</Text>
             </View>
+            <PremiumPressable
+              onPress={() => setRolesOpen(false)}
+              style={styles.closeBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="x" size={20} color="#6B7280" />
+            </PremiumPressable>
+          </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <Text style={styles.userText}>
+              {user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Anonymous'}
+            </Text>
+          </View>
+
+          {user?.memberships && user.memberships.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Account</Text>
-              <Text style={styles.userText}>
-                {user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Anonymous'}
-              </Text>
+              <Text style={styles.sectionTitle}>Memberships</Text>
+              {user.memberships.map((m, idx) => (
+                <View key={idx} style={styles.itemRow}>
+                  <Text style={styles.itemRole}>{m.role}</Text>
+                  <Text
+                    style={[
+                      styles.statusBadge,
+                      m.status === 'APPROVED' ? styles.statusApproved : styles.statusPending,
+                    ]}
+                  >
+                    {m.status}
+                  </Text>
+                </View>
+              ))}
             </View>
+          )}
 
-            {user?.memberships && user.memberships.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Memberships</Text>
-                {user.memberships.map((m, idx) => (
-                  <View key={idx} style={styles.itemRow}>
-                    <Text style={styles.itemRole}>{m.role}</Text>
-                    <Text
-                      style={[
-                        styles.statusBadge,
-                        m.status === 'APPROVED' ? styles.statusApproved : styles.statusPending,
-                      ]}
-                    >
-                      {m.status}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {user?.residencies && user.residencies.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Residencies</Text>
-                {user.residencies.map((r, idx) => (
-                  <View key={idx} style={styles.itemRow}>
-                    <Text style={styles.itemRole}>Unit {r.unitNumber || r.unitId}</Text>
-                    <Text style={[styles.statusBadge, styles.statusApproved]}>{r.status}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
+          {user?.residencies && user.residencies.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Capabilities</Text>
-              <View style={styles.capGrid}>
-                {capabilities.map((cap, idx) => (
-                  <View key={idx} style={styles.capItem}>
-                    <Feather
-                      name={cap.value ? 'check-circle' : 'x-circle'}
-                      size={14}
-                      color={cap.value ? '#10B981' : '#D1D5DB'}
-                    />
-                    <Text style={[styles.capText, cap.value && styles.capTextActive]}>
-                      {cap.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+              <Text style={styles.sectionTitle}>Residencies</Text>
+              {user.residencies.map((r, idx) => (
+                <View key={idx} style={styles.itemRow}>
+                  <Text style={styles.itemRole}>Unit {r.unitNumber || r.unitId}</Text>
+                  <Text style={[styles.statusBadge, styles.statusApproved]}>{r.status}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Capabilities</Text>
+            <View style={styles.capGrid}>
+              {capabilities.map((cap, idx) => (
+                <View key={idx} style={styles.capItem}>
+                  <Feather
+                    name={cap.value ? 'check-circle' : 'x-circle'}
+                    size={14}
+                    color={cap.value ? '#10B981' : '#D1D5DB'}
+                  />
+                  <Text style={[styles.capText, cap.value && styles.capTextActive]}>
+                    {cap.label}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         </View>
-      </Modal>
+      </CenterModal>
     </>
   );
 };
@@ -206,29 +234,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   logoContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 42,
+    height: 42,
+    borderRadius: 19,
+    backgroundColor: '#143D2A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
     shadowColor: '#0B1F16',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 5,
+    elevation: 4,
     overflow: 'hidden',
   },
   logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 17,
   },
   topRightColumn: {
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 8,
   },
   topRightActions: {
     flexDirection: 'row',
@@ -243,10 +271,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0B1F16',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
     position: 'relative',
   },
   unreadDot: {
@@ -268,12 +296,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0B1F16',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
   },
   avatarText: {
     fontFamily: 'PlusJakartaSans_700Bold',
@@ -284,24 +312,25 @@ const styles = StyleSheet.create({
   rolesBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.42)',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 98,
-    shadowColor: '#0B1F16',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowColor: '#0B2118',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rolesBadgeText: {
-    fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 11,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
     color: '#FFFFFF',
-    letterSpacing: 0.2,
+    letterSpacing: -0.1,
   },
   greetingSection: {
     maxWidth: 320,

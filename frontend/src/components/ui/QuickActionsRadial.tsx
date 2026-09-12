@@ -15,6 +15,7 @@ import { SERVICE_CATALOG, QUICK_ACTION_VISUALS, ServiceEntry } from '../../regis
 import { useSession } from '../../store/auth';
 import { theme } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { AddVisitorModal } from '../add-visitor-modal';
 import { EmergencySOSModal } from '../emergency-sos-modal';
 
@@ -163,6 +164,14 @@ export function QuickActionsRadial() {
     menuVisible.current = true;
     setIsOpen(true);
 
+    if (Platform.OS !== 'web') {
+      try {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {
+        // Haptics fallback
+      }
+    }
+
     // Reset all items
     radialActions.forEach((a) => {
       a.x.setValue(0);
@@ -171,84 +180,84 @@ export function QuickActionsRadial() {
       a.opacity.setValue(0);
     });
 
-    // Phase 1: Backdrop fades in, ring pulses out, center rotates
+    // Phase 1: Backdrop fades in, ring expands gently, center rotates
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 130,
+        duration: 220,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.sequence([
         Animated.spring(ringScale, {
-          toValue: 1.2,
-          friction: 7,
-          tension: 180,
+          toValue: 1.06,
+          friction: 12,
+          tension: 100,
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(ringScale, {
           toValue: 1,
-          friction: 9,
-          tension: 200,
+          friction: 14,
+          tension: 80,
           useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
       Animated.timing(ringOpacity, {
         toValue: 0.18,
-        duration: 100,
+        duration: 180,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(centerRotation, {
         toValue: 1,
-        friction: 8,
-        tension: 160,
+        friction: 12,
+        tension: 90,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(centerScale, {
         toValue: 0.9,
-        friction: 7,
-        tension: 220,
+        friction: 10,
+        tension: 120,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
 
-    // Phase 2: Items spring outward along orbit with crisp stagger
+    // Phase 2: Items spring outward along orbit with smooth stagger
     radialActions.forEach((action, index) => {
       const targetX = Math.cos(action.angle) * ORBIT_RADIUS;
       const targetY = Math.sin(action.angle) * ORBIT_RADIUS;
 
       Animated.parallel([
         Animated.sequence([
-          Animated.delay(15 + index * 20),
+          Animated.delay(40 + index * 35),
           Animated.spring(action.x, {
             toValue: targetX,
-            friction: 7,
-            tension: 180,
+            friction: 12,
+            tension: 90,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(15 + index * 20),
+          Animated.delay(40 + index * 35),
           Animated.spring(action.y, {
             toValue: targetY,
-            friction: 7,
-            tension: 180,
+            friction: 12,
+            tension: 90,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(20 + index * 20),
+          Animated.delay(50 + index * 35),
           Animated.spring(action.scale, {
             toValue: 1,
-            friction: 6,
-            tension: 200,
+            friction: 10,
+            tension: 110,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
         Animated.sequence([
-          Animated.delay(20 + index * 20),
+          Animated.delay(50 + index * 35),
           Animated.timing(action.opacity, {
             toValue: 1,
-            duration: 90,
+            duration: 160,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -259,16 +268,16 @@ export function QuickActionsRadial() {
   const closeMenu = useCallback((onComplete?: () => void) => {
     if (!menuVisible.current) return;
 
-    // Fast collapse inward
+    // Smooth collapse inward
     radialActions.forEach((action, index) => {
-      const delay = (radialActions.length - 1 - index) * 12;
+      const delay = (radialActions.length - 1 - index) * 20;
       Animated.parallel([
         Animated.sequence([
           Animated.delay(delay),
           Animated.spring(action.x, {
             toValue: 0,
-            friction: 8,
-            tension: 260,
+            friction: 12,
+            tension: 120,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -276,8 +285,8 @@ export function QuickActionsRadial() {
           Animated.delay(delay),
           Animated.spring(action.y, {
             toValue: 0,
-            friction: 8,
-            tension: 260,
+            friction: 12,
+            tension: 120,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -285,8 +294,8 @@ export function QuickActionsRadial() {
           Animated.delay(delay),
           Animated.spring(action.scale, {
             toValue: 0,
-            friction: 8,
-            tension: 260,
+            friction: 10,
+            tension: 140,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
@@ -294,39 +303,39 @@ export function QuickActionsRadial() {
           Animated.delay(delay),
           Animated.timing(action.opacity, {
             toValue: 0,
-            duration: 60,
+            duration: 120,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]),
       ]).start();
     });
 
-    // Fast collapse center, fade backdrop
+    // Smooth collapse center, fade backdrop
     Animated.parallel([
       Animated.spring(centerScale, {
         toValue: 1,
-        friction: 8,
-        tension: 200,
+        friction: 12,
+        tension: 100,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(centerRotation, {
         toValue: 0,
-        duration: 100,
+        duration: 180,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(ringOpacity, {
         toValue: 0,
-        duration: 90,
+        duration: 160,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(ringScale, {
         toValue: 0,
-        duration: 90,
+        duration: 160,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 100,
+        duration: 180,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
@@ -337,6 +346,14 @@ export function QuickActionsRadial() {
   }, [radialActions, centerScale, centerRotation, ringOpacity, ringScale, backdropOpacity]);
 
   const handleActionPress = useCallback((service: ServiceEntry) => {
+    if (Platform.OS !== 'web') {
+      try {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+        // Haptics fallback
+      }
+    }
+
     // 1. Immediately trigger destination action for zero felt latency
     if (service.id === 'sos') {
       setIsSOSVisible(true);
@@ -400,8 +417,8 @@ export function QuickActionsRadial() {
         <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => closeMenu()} />
 
-          {/* Radial menu container – elevated and centered above bottom nav */}
-          <View style={[styles.radialContainer, { bottom: Math.max(insets.bottom + 38, 48) }]}>
+          {/* Radial menu container – centered above bottom nav */}
+          <View style={[styles.radialContainer, { bottom: Math.max(insets.bottom - 40, 0) }]}>
             {/* Expanding orbit ring */}
             <Animated.View
               style={[
@@ -451,8 +468,8 @@ export function QuickActionsRadial() {
                     onPressIn={() => {
                       Animated.spring(action.scale, {
                         toValue: 0.9,
-                        friction: 6,
-                        tension: 200,
+                        friction: 10,
+                        tension: 140,
                         useNativeDriver: Platform.OS !== 'web',
                       }).start();
                     }}
@@ -460,8 +477,8 @@ export function QuickActionsRadial() {
                       if (menuVisible.current) {
                         Animated.spring(action.scale, {
                           toValue: 1,
-                          friction: 6,
-                          tension: 200,
+                          friction: 10,
+                          tension: 140,
                           useNativeDriver: Platform.OS !== 'web',
                         }).start();
                       }

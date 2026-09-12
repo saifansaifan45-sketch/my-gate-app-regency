@@ -32,7 +32,7 @@ export default function TicketDetailScreen() {
   const ticketId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
 
   const [ticket, setTicket] = useState<TicketItem | null>(null);
@@ -229,7 +229,7 @@ export default function TicketDetailScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title={`Ticket #${ticketId ? ticketId.slice(0, 6).toUpperCase() : ''}`}

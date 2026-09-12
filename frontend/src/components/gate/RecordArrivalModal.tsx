@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TextInput, Platform, KeyboardAvoidingView, useWindowDimensions, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, TextInput, Platform, KeyboardAvoidingView, useWindowDimensions, Modal, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { PremiumPressable } from '../ui/PremiumPressable';
 import { Button } from '../ui/Button';
@@ -35,7 +35,7 @@ export function RecordArrivalModal({
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const dialogHeight = Math.min(680, screenHeight - insets.top - insets.bottom - 32);
+  const dialogHeight = Math.min(680, screenHeight - insets.top - insets.bottom - 48);
 
   const [visitorType, setVisitorType] = useState<'GUEST' | 'CAB' | 'DELIVERY' | 'SERVICE'>('GUEST');
   const [targetType, setTargetType] = useState<'RESIDENCE' | 'MANAGER'>('RESIDENCE');
@@ -59,6 +59,7 @@ export function RecordArrivalModal({
   const [vehicleNumber, setVehicleNumber] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const isExternal = visitorType === 'CAB' || visitorType === 'DELIVERY';
   const requiresOtp = visitorType === 'GUEST';
@@ -158,242 +159,538 @@ export function RecordArrivalModal({
       setPhone('');
       setPurpose('');
       setVehicleNumber('');
+      setFocusedField(null);
     }
   }, [visible]);
 
-  if (!visible) return null;
-
   return (
-    <View style={[styles.overlay, { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.keyboardView, { maxHeight: dialogHeight }]}
-      >
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Record a new arrival</Text>
-            <PremiumPressable style={styles.closeBtn} onPress={onClose}>
-              <Feather name="x" size={18} color={theme.colors.textSecondary} />
-            </PremiumPressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
-            {/* Visitor Type */}
-            <Text style={styles.fieldLabel}>Type of Arrival</Text>
-            <View style={styles.typeRow}>
-              {VISITOR_TYPES.map((t) => (
-                <PremiumPressable
-                  key={t.type}
-                  style={[styles.typePill, visitorType === t.type && styles.typePillSelected]}
-                  onPress={() => { setVisitorType(t.type); setUnitId(''); setUnitSearch(''); }}
-                >
-                  <Feather name={t.icon} size={16} color={visitorType === t.type ? '#FFFFFF' : theme.colors.textSecondary} />
-                  <Text style={[styles.typePillText, visitorType === t.type && styles.typePillTextSelected]}>{t.label}</Text>
-                </PremiumPressable>
-              ))}
-            </View>
-
-            <Text style={[styles.fieldLabel, { marginTop: 2 }]}>Notify</Text>
-            <View style={styles.targetRow}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={[styles.overlay, { paddingTop: Math.max(insets.top + 16, 24), paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.keyboardView, { maxHeight: dialogHeight }]}
+        >
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle}>Record New Arrival</Text>
+                <Text style={styles.sheetSubtitle}>Generate instant pass and notify host</Text>
+              </View>
               <PremiumPressable
-                style={[styles.targetPill, targetType === 'RESIDENCE' && styles.targetPillSelected]}
-                onPress={() => { setTargetType('RESIDENCE'); clearTarget(); }}
+                style={styles.closeBtn}
+                onPress={onClose}
+                scaleTo={0.92}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Feather name="home" size={15} color={targetType === 'RESIDENCE' ? '#FFFFFF' : theme.colors.textSecondary} />
-                <Text style={[styles.targetPillText, targetType === 'RESIDENCE' && styles.targetPillTextSelected]}>Residence</Text>
-              </PremiumPressable>
-              <PremiumPressable
-                style={[styles.targetPill, targetType === 'MANAGER' && styles.targetPillSelected]}
-                onPress={() => { setTargetType('MANAGER'); clearTarget(); }}
-              >
-                <Feather name="user" size={15} color={targetType === 'MANAGER' ? '#FFFFFF' : theme.colors.textSecondary} />
-                <Text style={[styles.targetPillText, targetType === 'MANAGER' && styles.targetPillTextSelected]}>Manager</Text>
+                <Feather name="x" size={18} color={theme.colors.textSecondary} />
               </PremiumPressable>
             </View>
 
-            {/* Unit Selection */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>{targetType === 'RESIDENCE' ? 'Residence' : 'Manager'} <Text style={styles.required}>*</Text></Text>
-            <View style={styles.unitSearchWrapper}>
-              <Feather name={targetType === 'RESIDENCE' ? 'home' : 'user'} size={16} color={theme.colors.textSecondary} style={styles.unitIcon} />
-              <TextInput
-                style={styles.unitInput}
-                placeholder={targetType === 'RESIDENCE' ? 'Search unit number (e.g. 7B)' : 'Search manager name'}
-                placeholderTextColor={theme.colors.textSecondary}
-                value={targetType === 'RESIDENCE' ? unitSearch : hostSearch}
-                onChangeText={(v) => targetType === 'RESIDENCE'
-                  ? (setUnitSearch(v.toUpperCase()), setShowUnitDropdown(true))
-                  : (setHostSearch(v), setShowHostDropdown(true))}
-                onFocus={() => targetType === 'RESIDENCE' ? setShowUnitDropdown(true) : setShowHostDropdown(true)}
-                onBlur={() => setTimeout(() => { setShowUnitDropdown(false); setShowHostDropdown(false); }, 200)}
-                autoCapitalize={targetType === 'RESIDENCE' ? 'characters' : 'words'}
-              />
-              {(unitId || hostUserId) && (
-                <PremiumPressable onPress={clearTarget} hitSlop={8}>
-                  <Feather name="x" size={14} color={theme.colors.textSecondary} />
-                </PremiumPressable>
-              )}
-            </View>
-
-            {targetType === 'RESIDENCE' && showUnitDropdown && unitSuggestions.length > 0 && (
-              <View style={styles.unitDropdown}>
-                {unitSuggestions.map((u) => (
-                  <PremiumPressable key={u.id} style={styles.unitOption} onPress={() => { setUnitId(u.id); setUnitSearch(u.unitNumber); setShowUnitDropdown(false); }}>
-                    <Text style={styles.unitOptionText}>{u.unitNumber}</Text>
-                  </PremiumPressable>
-                ))}
-              </View>
-            )}
-
-            {targetType === 'MANAGER' && showHostDropdown && hostSuggestions.length > 0 && (
-              <View style={styles.unitDropdown}>
-                {hostSuggestions.map((host) => (
-                  <PremiumPressable key={host.id} style={styles.unitOption} onPress={() => { setHostUserId(host.id); setHostSearch(hostLabel(host)); setShowHostDropdown(false); }}>
-                    <Text style={styles.unitOptionText}>{hostLabel(host)}</Text>
-                    <Text style={styles.hostRole}>{host.role === 'LEADERSHIP' ? 'Leadership' : 'Manager'}</Text>
-                  </PremiumPressable>
-                ))}
-              </View>
-            )}
-
-            {/* External Service Fields */}
-            {isExternal && (
-              <>
-                <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Provider <Text style={styles.required}>*</Text></Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter provider name (e.g. Amazon, Uber)"
-                  value={provider}
-                  onChangeText={setProvider}
-                  placeholderTextColor={theme.colors.textSecondary}
-                  autoCapitalize="words"
-                />
-
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Access Window *</Text>
-                <View style={styles.chipsRow}>
-                  {DURATIONS.map((d) => (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              {/* Visitor Type */}
+              <Text style={styles.fieldLabel}>Type of Arrival</Text>
+              <View style={styles.typeRow}>
+                {VISITOR_TYPES.map((t) => {
+                  const isSelected = visitorType === t.type;
+                  return (
                     <PremiumPressable
-                      key={d.minutes}
-                      style={[styles.chip, duration === d.minutes && styles.chipSelected]}
-                      onPress={() => setDuration(d.minutes)}
+                      key={t.type}
+                      style={[styles.typePill, isSelected && styles.typePillSelected]}
+                      onPress={() => { setVisitorType(t.type); setUnitId(''); setUnitSearch(''); }}
+                      scaleTo={0.96}
                     >
-                      <Text style={[styles.chipText, duration === d.minutes && styles.chipTextSelected]}>{d.label}</Text>
+                      <Feather name={t.icon} size={15} color={isSelected ? '#FFFFFF' : theme.colors.textSecondary} />
+                      <Text style={[styles.typePillText, isSelected && styles.typePillTextSelected]}>{t.label}</Text>
                     </PremiumPressable>
-                  ))}
+                  );
+                })}
+              </View>
+
+              <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Notify Target</Text>
+              <View style={styles.targetRow}>
+                <PremiumPressable
+                  style={[styles.targetPill, targetType === 'RESIDENCE' && styles.targetPillSelected]}
+                  onPress={() => { setTargetType('RESIDENCE'); clearTarget(); }}
+                  scaleTo={0.97}
+                >
+                  <Feather name="home" size={15} color={targetType === 'RESIDENCE' ? '#FFFFFF' : theme.colors.textSecondary} />
+                  <Text style={[styles.targetPillText, targetType === 'RESIDENCE' && styles.targetPillTextSelected]}>Residence</Text>
+                </PremiumPressable>
+                <PremiumPressable
+                  style={[styles.targetPill, targetType === 'MANAGER' && styles.targetPillSelected]}
+                  onPress={() => { setTargetType('MANAGER'); clearTarget(); }}
+                  scaleTo={0.97}
+                >
+                  <Feather name="shield" size={15} color={targetType === 'MANAGER' ? '#FFFFFF' : theme.colors.textSecondary} />
+                  <Text style={[styles.targetPillText, targetType === 'MANAGER' && styles.targetPillTextSelected]}>Manager</Text>
+                </PremiumPressable>
+              </View>
+
+              {/* Unit Selection */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldLabel}>
+                  {targetType === 'RESIDENCE' ? 'Residence Unit ' : 'Manager '}
+                  <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={[styles.unitSearchWrapper, focusedField === 'unit' && styles.inputFocused]}>
+                  <Feather name={targetType === 'RESIDENCE' ? 'home' : 'user'} size={16} color={theme.colors.textSecondary} style={styles.unitIcon} />
+                  <TextInput
+                    style={styles.unitInput}
+                    placeholder={targetType === 'RESIDENCE' ? 'Search unit number (e.g. 7B)' : 'Search manager name'}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={targetType === 'RESIDENCE' ? unitSearch : hostSearch}
+                    onChangeText={(v) => {
+                      if (targetType === 'RESIDENCE') {
+                        setUnitSearch(v.toUpperCase());
+                        setShowUnitDropdown(true);
+                      } else {
+                        setHostSearch(v);
+                        setShowHostDropdown(true);
+                      }
+                    }}
+                    onFocus={() => {
+                      setFocusedField('unit');
+                      if (targetType === 'RESIDENCE') {
+                        setShowUnitDropdown(true);
+                      } else {
+                        setShowHostDropdown(true);
+                      }
+                    }}
+                    onBlur={() => { setFocusedField(null); setTimeout(() => { setShowUnitDropdown(false); setShowHostDropdown(false); }, 200); }}
+                    autoCapitalize={targetType === 'RESIDENCE' ? 'characters' : 'words'}
+                  />
+                  {(unitId || hostUserId) ? (
+                    <PremiumPressable onPress={clearTarget} hitSlop={8}>
+                      <Feather name="x" size={14} color={theme.colors.textSecondary} />
+                    </PremiumPressable>
+                  ) : null}
                 </View>
-              </>
-            )}
 
-            {/* Guest/Service Fields */}
-            {!isExternal && (
-              <>
-                <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Visitor name <Text style={styles.required}>*</Text></Text>
+                {targetType === 'RESIDENCE' && showUnitDropdown && unitSuggestions.length > 0 && (
+                  <View style={styles.unitDropdown}>
+                    {unitSuggestions.map((u) => (
+                      <PremiumPressable key={u.id} style={styles.unitOption} onPress={() => { setUnitId(u.id); setUnitSearch(u.unitNumber); setShowUnitDropdown(false); }}>
+                        <Text style={styles.unitOptionText}>{u.unitNumber}</Text>
+                      </PremiumPressable>
+                    ))}
+                  </View>
+                )}
+
+                {targetType === 'MANAGER' && showHostDropdown && hostSuggestions.length > 0 && (
+                  <View style={styles.unitDropdown}>
+                    {hostSuggestions.map((host) => (
+                      <PremiumPressable key={host.id} style={styles.unitOption} onPress={() => { setHostUserId(host.id); setHostSearch(hostLabel(host)); setShowHostDropdown(false); }}>
+                        <Text style={styles.unitOptionText}>{hostLabel(host)}</Text>
+                        <Text style={styles.hostRole}>{host.role === 'LEADERSHIP' ? 'Leadership' : 'Manager'}</Text>
+                      </PremiumPressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* External Service Fields */}
+              {isExternal && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.fieldLabel}>
+                    {'Provider '}
+                    <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, focusedField === 'provider' && styles.inputFocused]}
+                    placeholder="Enter provider name (e.g. Amazon, Uber, Swiggy)"
+                    value={provider}
+                    onChangeText={setProvider}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    autoCapitalize="words"
+                    onFocus={() => setFocusedField('provider')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+
+                  <Text style={[styles.fieldLabel, { marginTop: 4 }]}>
+                    {'Access Window '}
+                    <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={styles.chipsRow}>
+                    {DURATIONS.map((d) => (
+                      <PremiumPressable
+                        key={d.minutes}
+                        style={[styles.chip, duration === d.minutes && styles.chipSelected]}
+                        onPress={() => setDuration(d.minutes)}
+                        scaleTo={0.96}
+                      >
+                        <Text style={[styles.chipText, duration === d.minutes && styles.chipTextSelected]}>{d.label}</Text>
+                      </PremiumPressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Guest/Service Fields */}
+              {!isExternal && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.fieldLabel}>
+                    {'Visitor Name '}
+                    <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, focusedField === 'name' && styles.inputFocused]}
+                    placeholder="Enter visitor name"
+                    value={name}
+                    onChangeText={setName}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    onFocus={() => setFocusedField('name')}
+                    onBlur={() => setFocusedField(null)}
+                  />
+                </View>
+              )}
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldLabel}>
+                  {visitorType === 'SERVICE' ? 'Service Purpose ' : 'Purpose (Optional)'}
+                  {visitorType === 'SERVICE' ? <Text style={styles.required}>*</Text> : null}
+                </Text>
                 <TextInput
-                  style={styles.input}
-                  placeholder="Enter visitor name"
-                  value={name}
-                  onChangeText={setName}
+                  style={[styles.input, focusedField === 'purpose' && styles.inputFocused]}
+                  placeholder={visitorType === 'SERVICE' ? 'e.g. AC Repair, Plumbing' : 'e.g. Family visit, Meeting'}
+                  value={purpose}
+                  onChangeText={setPurpose}
                   placeholderTextColor={theme.colors.textSecondary}
+                  onFocus={() => setFocusedField('purpose')}
+                  onBlur={() => setFocusedField(null)}
                 />
-              </>
-            )}
-
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Purpose</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={visitorType === 'SERVICE' ? 'Enter purpose *' : 'Enter purpose'}
-              value={purpose}
-              onChangeText={setPurpose}
-              placeholderTextColor={theme.colors.textSecondary}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Vehicle number (optional)"
-              value={vehicleNumber}
-              onChangeText={setVehicleNumber}
-              autoCapitalize="characters"
-              placeholderTextColor={theme.colors.textSecondary}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Mobile number (optional)"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              placeholderTextColor={theme.colors.textSecondary}
-            />
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoIcon}>
-                <Feather name={requiresOtp ? 'shield' : 'check-circle'} size={20} color={requiresOtp ? theme.colors.primary : '#10B981'} />
               </View>
-              <View style={styles.infoText}>
-                <Text style={styles.infoTitle}>
-                  {requiresOtp ? 'OTP will be generated for guest' : 'No OTP needed - gate confirms on arrival'}
-                </Text>
-                <Text style={styles.infoDesc}>
-                  {requiresOtp
-                    ? 'Share the OTP with your guest. The watchman will verify it at the gate.'
-                    : 'The watchman will confirm their approved arrival and record entry. No OTP required.'}
-                </Text>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldLabel}>Vehicle Number (Optional)</Text>
+                <TextInput
+                  style={[styles.input, focusedField === 'vehicle' && styles.inputFocused]}
+                  placeholder="e.g. KA-01-AB-1234"
+                  value={vehicleNumber}
+                  onChangeText={setVehicleNumber}
+                  autoCapitalize="characters"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  onFocus={() => setFocusedField('vehicle')}
+                  onBlur={() => setFocusedField(null)}
+                />
               </View>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldLabel}>Mobile Number (Optional)</Text>
+                <TextInput
+                  style={[styles.input, focusedField === 'phone' && styles.inputFocused]}
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  onFocus={() => setFocusedField('phone')}
+                  onBlur={() => setFocusedField(null)}
+                />
+              </View>
+
+              <View style={[styles.infoCard, { marginTop: 12 }]}>
+                <View style={styles.infoIcon}>
+                  <Feather name={requiresOtp ? 'shield' : 'check-circle'} size={18} color={requiresOtp ? theme.colors.primary : '#10B981'} />
+                </View>
+                <View style={styles.infoText}>
+                  <Text style={styles.infoTitle}>
+                    {requiresOtp ? 'OTP will be generated for guest' : 'Instant Gate Access'}
+                  </Text>
+                  <Text style={styles.infoDesc}>
+                    {requiresOtp
+                      ? 'Share the 6-digit OTP with your guest. Security will verify it upon arrival.'
+                      : 'The security watchman will record entry directly. No OTP needed.'}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={{ paddingHorizontal: 20 }}>
+              <Button
+                label={targetType === 'MANAGER' ? 'Alert Manager' : 'Alert Residence'}
+                icon="shield"
+                onPress={handleCreate}
+                loading={submitting}
+                disabled={!canSubmit() || submitting}
+                style={styles.actionBtn}
+              />
             </View>
-          </ScrollView>
-
-          <Button
-            label={targetType === 'MANAGER' ? 'Alert manager' : 'Alert residence'}
-            icon="shield"
-            onPress={handleCreate}
-            loading={submitting}
-            disabled={!canSubmit() || submitting}
-            style={styles.actionBtn}
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
-  keyboardView: { width: '100%', maxWidth: 520 },
-  sheet: { backgroundColor: theme.colors.surface, borderRadius: 22, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, shadowColor: '#143D2A', shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.2, shadowRadius: 28, elevation: 12 },
-  grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)', marginBottom: 12 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  sheetTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, letterSpacing: -0.3, color: theme.colors.textPrimary },
-  closeBtn: { width: 38, height: 38, borderRadius: 18, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' },
-  fieldLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textPrimary, marginBottom: 6 },
-  required: { color: '#DC2626' },
-  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
-  typePill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 98 },
-  typePillSelected: { backgroundColor: theme.colors.primary },
-  typePillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textPrimary },
-  typePillTextSelected: { color: '#FFFFFF' },
-  targetRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  targetPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F3F4F6', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-  targetPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  targetPillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textPrimary },
-  targetPillTextSelected: { color: '#FFFFFF' },
-  unitSearchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, height: 48 },
-  unitIcon: { marginRight: 4 },
-  unitInput: { flex: 1, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary },
-  unitDropdown: { marginTop: 4, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, overflow: 'hidden' },
-  unitOption: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  unitOptionText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 14, color: theme.colors.textPrimary },
-  hostRole: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 },
-  chip: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  chipSelected: { backgroundColor: '#F3F8F5', borderColor: theme.colors.primary },
-  chipText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 12.5, color: '#4B5563' },
-  chipTextSelected: { color: theme.colors.primary, fontFamily: 'PlusJakartaSans_600SemiBold' },
-  input: { height: 46, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, fontFamily: 'PlusJakartaSans_500Medium', fontSize: 13.5, color: theme.colors.textPrimary, backgroundColor: '#FFFFFF', marginBottom: 10 },
-  infoCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F3F8F5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(20,61,42,0.08)', marginTop: 6, marginBottom: 16, gap: 10 },
-  infoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
-  infoText: { flex: 1 },
-  infoTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.primary, marginBottom: 1 },
-  infoDesc: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 11.5, lineHeight: 15, color: theme.colors.textSecondary },
-  actionBtn: { width: '100%', marginTop: 4 },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+  },
+  keyboardView: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(20, 61, 42, 0.06)',
+  },
+  sheetTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 18,
+    letterSpacing: -0.3,
+    color: theme.colors.textPrimary,
+  },
+  sheetSubtitle: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fieldLabel: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12.5,
+    color: theme.colors.textPrimary,
+    marginBottom: 6,
+  },
+  required: {
+    color: '#DC2626',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  typePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 98,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.06)',
+  },
+  typePillSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  typePillText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    color: theme.colors.textPrimary,
+  },
+  typePillTextSelected: {
+    color: '#FFFFFF',
+    fontFamily: 'PlusJakartaSans_700Bold',
+  },
+  targetRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  targetPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 98,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+  },
+  targetPillSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  targetPillText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12.5,
+    color: theme.colors.textPrimary,
+  },
+  targetPillTextSelected: {
+    color: '#FFFFFF',
+    fontFamily: 'PlusJakartaSans_700Bold',
+  },
+  unitSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  unitIcon: {
+    marginRight: 4,
+  },
+  unitInput: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13.5,
+    color: theme.colors.textPrimary,
+  },
+  unitDropdown: {
+    marginTop: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#143D2A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  unitOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  unitOptionText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13.5,
+    color: theme.colors.textPrimary,
+  },
+  hostRole: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 98,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+  },
+  chipSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12,
+    color: '#4B5563',
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+    fontFamily: 'PlusJakartaSans_700Bold',
+  },
+  input: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 14,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13.5,
+    color: theme.colors.textPrimary,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EAF4EC',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CFE3D3',
+    marginTop: 6,
+    marginBottom: 12,
+    gap: 10,
+  },
+  infoIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  infoText: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12.5,
+    color: theme.colors.primary,
+    marginBottom: 2,
+  },
+  infoDesc: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: '#4A6B56',
+  },
+  actionBtn: {
+    width: '100%',
+  },
+  inputFocused: {
+    borderColor: theme.colors.primary,
+  },
 });

@@ -500,7 +500,7 @@ export default function HomeScreen() {
                 <Text style={styles.leadershipSectionTitle}>Leadership</Text>
                 <PremiumPressable
                   style={styles.leadershipCard}
-                  onPress={() => router.push('/leadership')}
+                  onPress={() => router.push('/leadership/index')}
                   scaleTo={0.97}
                 >
                   <View style={styles.leadershipIconBox}>

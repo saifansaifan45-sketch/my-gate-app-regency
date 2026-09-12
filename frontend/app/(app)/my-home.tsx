@@ -3,6 +3,7 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { View, StyleSheet, ScrollView, Image, RefreshControl } from 'react-native';
+import { getTimePeriod, TimePeriod } from '../../src/components/home/TimeBasedBackground';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
@@ -36,9 +37,16 @@ function residentFullName(r: UnitResidencyRecord['user']) {
   return `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Resident';
 }
 
+const PERIOD_IMAGES: Record<TimePeriod, ReturnType<typeof require>> = {
+  morning: require('../../assets/morning.webp'),
+  afternoon: require('../../assets/afternoon.webp'),
+  evening: require('../../assets/evening.webp'),
+  night: require('../../assets/night.webp'),
+};
+
 export default function MyHomeScreen() {
   const router = useRouter();
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const { user, primaryResidency } = useSession() || {};
 
   const unitNumber = primaryResidency?.unitNumber || user?.unitNumber || '9A';
@@ -64,6 +72,7 @@ export default function MyHomeScreen() {
   const householdMembers = householdData?.members || [];
   const vehicles = householdData?.vehicles || [];
   const pets = householdData?.pets || [];
+  const currentPeriod: TimePeriod = getTimePeriod();
 
   const onRefresh = () => {
     refetchResidencies();
@@ -71,7 +80,7 @@ export default function MyHomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title={`Unit ${unitNumber}`}
@@ -95,7 +104,7 @@ export default function MyHomeScreen() {
         <ScreenEntrance>
           <View style={styles.heroContainer}>
             <Image
-              source={require('../../assets/home-residential-hero.png')}
+              source={PERIOD_IMAGES[currentPeriod]}
               style={styles.heroImage}
               resizeMode="cover"
             />
@@ -373,7 +382,8 @@ const styles = StyleSheet.create({
 
   /* Hero */
   heroContainer: {
-    height: 180,
+    aspectRatio: 2.4,
+    minHeight: 160,
     borderRadius: cardSystem.radius,
     marginHorizontal: cardSystem.pagePadding,
     marginBottom: cardSystem.sectionSpacing,
@@ -383,13 +393,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFill,
   },
   heroGradient: {
     position: 'absolute',

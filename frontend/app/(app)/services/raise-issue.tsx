@@ -70,7 +70,7 @@ export default function RaiseIssueScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Help Desk"

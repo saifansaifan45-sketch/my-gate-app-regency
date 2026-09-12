@@ -47,7 +47,7 @@ function timeLabel(value: string) {
 }
 
 export default function ActivityOverviewScreen() {
-  const { top, bottomClearance } = useScreenInsets(false);
+  const { bottomClearance } = useScreenInsets(false);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [dateRange, setDateRange] = useState<DateRange>('ALL');
   const [startDate, setStartDate] = useState(dateKey(new Date()));
@@ -64,7 +64,7 @@ export default function ActivityOverviewScreen() {
   const activities = useMemo(() => (data?.activities || []).filter((activity) => filter === 'ALL' || activity.kind === filter), [data, filter]);
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader variant="subscreen" title="Household activity" />
       <View style={styles.intro}>
         <View style={styles.introIcon}><Feather name="eye" size={19} color={theme.colors.primary} /></View>
@@ -106,7 +106,7 @@ export default function ActivityOverviewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   intro: { marginHorizontal: 20, marginTop: 16, padding: 16, borderRadius: 16, flexDirection: 'row', backgroundColor: '#EDF6F0' }, introIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D6EBDD', marginRight: 12 }, introCopy: { flex: 1 }, introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 }, introText: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: '#52705F' },
-  filterScroll: { flexGrow: 0, marginTop: 16 }, filterRow: { paddingHorizontal: 20, gap: 8 }, filter: { paddingHorizontal: 14, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#ECECE5' }, filterSelected: { backgroundColor: theme.colors.primary }, filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textSecondary }, filterTextSelected: { color: '#FFFFFF' },
-  dateScroll: { flexGrow: 0, marginTop: 10 }, dateRow: { paddingHorizontal: 20, gap: 8 }, dateChip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F4F2EC', flexDirection: 'row', alignItems: 'center', gap: 5 }, dateChipSelected: { backgroundColor: '#365F4A' }, dateChipText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary }, dateChipTextSelected: { color: '#FFFFFF' }, customDates: { marginHorizontal: 20, marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8, ...theme.shadows.card }, dateInputWrap: { flex: 1 }, dateInputLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary, marginBottom: 3 }, dateInput: { minHeight: 32, padding: 0, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.textPrimary },
+  filterScroll: { flexGrow: 0, marginTop: 16 }, filterRow: { paddingHorizontal: 20, paddingVertical: 4, gap: 8 }, filter: { paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#ECECE5' }, filterSelected: { backgroundColor: theme.colors.primary }, filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12.5, color: theme.colors.textSecondary }, filterTextSelected: { color: '#FFFFFF' },
+  dateScroll: { flexGrow: 0, marginTop: 12 }, dateRow: { paddingHorizontal: 20, paddingVertical: 4, gap: 8 }, dateChip: { paddingHorizontal: 12, paddingVertical: 8, minHeight: 34, borderRadius: 12, backgroundColor: '#F4F2EC', flexDirection: 'row', alignItems: 'center', gap: 5 }, dateChipSelected: { backgroundColor: '#365F4A' }, dateChipText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary }, dateChipTextSelected: { color: '#FFFFFF' }, customDates: { marginHorizontal: 20, marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8, ...theme.shadows.card }, dateInputWrap: { flex: 1 }, dateInputLabel: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 11, color: theme.colors.textSecondary, marginBottom: 3 }, dateInput: { minHeight: 32, padding: 0, fontFamily: 'PlusJakartaSans_700Bold', fontSize: 13, color: theme.colors.textPrimary },
   list: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 18, gap: 10 }, loader: { paddingVertical: 54, alignItems: 'center' }, row: { minHeight: 76, padding: 14, borderRadius: 16, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', ...theme.shadows.card }, iconBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, activityCopy: { flex: 1, paddingRight: 10 }, activityTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, lineHeight: 19, color: theme.colors.textPrimary }, activityDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 12.5, lineHeight: 18, color: theme.colors.textSecondary, marginTop: 2 }, time: { width: 66, textAlign: 'right', fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, lineHeight: 15, color: theme.colors.textSecondary },
 });

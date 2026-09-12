@@ -112,7 +112,7 @@ export function CreatePollModal({ visible, onClose, onSubmit, canChooseAudience 
   );
 
   return (
-    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose} footer={created ? undefined : actionButtons}>
+    <CommunitySheet visible={visible} title="Create Poll" onClose={handleClose} footer={created ? undefined : actionButtons} scrollable={!created}>
       {created ? (
         <View style={styles.successContent}>
           <View style={styles.successIcon}>

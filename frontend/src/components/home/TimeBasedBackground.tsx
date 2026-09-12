@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React, { useEffect, useState, useRef } from 'react';
-import { Platform, View, StyleSheet, Animated, ImageBackground, ImageSourcePropType } from 'react-native';
+import { Platform, View, StyleSheet, Animated, Image, ImageSourcePropType } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 
 export type TimePeriod = 'morning' | 'afternoon' | 'evening' | 'night';
@@ -40,20 +40,26 @@ export const getTimeGreeting = (period: TimePeriod): string => {
   }
 };
 
-const PERIOD_IMAGES: Record<TimePeriod, ImageSourcePropType> = {
-  morning: require('../../../assets/morning.avif'),
-  afternoon: require('../../../assets/afternoon.avif'),
-  evening: require('../../../assets/evening.avif'),
-  night: require('../../../assets/night.avif'),
+const PERIOD_HIGH_IMAGES: Record<TimePeriod, ImageSourcePropType> = {
+  morning: require('../../../assets/morning.webp'),
+  afternoon: require('../../../assets/afternoon.webp'),
+  evening: require('../../../assets/evening.webp'),
+  night: require('../../../assets/night.webp'),
 };
 
-// Sampled from the dominant light in each approved hero asset. This is the
-// surrounding home canvas, while the dashboard remains a stable readable surface.
+const PERIOD_THUMB_IMAGES: Record<TimePeriod, ImageSourcePropType> = {
+  morning: require('../../../assets/morning-thumb.jpg'),
+  afternoon: require('../../../assets/afternoon-thumb.jpg'),
+  evening: require('../../../assets/evening-thumb.jpg'),
+  night: require('../../../assets/night-thumb.jpg'),
+};
+
+// Subtle dark surface fallback color instead of harsh bright blue
 const PERIOD_SURFACE_COLORS: Record<TimePeriod, string> = {
-  morning: '#C7A36B',
-  afternoon: '#5EA5D7',
-  evening: '#9E625A',
-  night: '#163D70',
+  morning: '#1F1B14',
+  afternoon: '#141E28',
+  evening: '#1E1413',
+  night: '#0B1522',
 };
 
 export const getHeroSurfaceColor = (period: TimePeriod): string => PERIOD_SURFACE_COLORS[period];
@@ -64,7 +70,17 @@ interface TimeBasedBackgroundProps {
 
 export const TimeBasedBackground: React.FC<TimeBasedBackgroundProps> = ({ currentPeriod }) => {
   const [displayedPeriod, setDisplayedPeriod] = useState<TimePeriod>(currentPeriod);
+  const highResOpacity = useRef(new Animated.Value(0)).current;
   const crossfadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Trigger progressive fade-in for high-res asset
+    Animated.timing(highResOpacity, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [displayedPeriod, highResOpacity]);
 
   useEffect(() => {
     if (currentPeriod !== displayedPeriod) {
@@ -82,27 +98,41 @@ export const TimeBasedBackground: React.FC<TimeBasedBackgroundProps> = ({ curren
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      {/* The current time asset stays unfiltered and is swapped with a soft crossfade. */}
-      <Animated.View style={StyleSheet.absoluteFill}>
-        <ImageBackground
-          source={PERIOD_IMAGES[displayedPeriod]}
+      {/* 1. Base Layer: Instant Ultra-Lightweight Blurred Low-Res Dynamic Thumbnail (~500 bytes) */}
+      <Image
+        source={PERIOD_THUMB_IMAGES[displayedPeriod]}
+        style={styles.imageBackground}
+        resizeMode="cover"
+        blurRadius={Platform.OS === 'web' ? 8 : 12}
+      />
+
+      {/* 2. High-Res Image Layer fading in smoothly over thumbnail */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: highResOpacity }]}>
+        <Image
+          source={PERIOD_HIGH_IMAGES[displayedPeriod]}
           style={styles.imageBackground}
           resizeMode="cover"
         />
       </Animated.View>
 
-      {/* Crossfade Layer */}
+      {/* 3. Time Period Dynamic Crossfade Layer */}
       {currentPeriod !== displayedPeriod && (
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: crossfadeAnim }]}>
-          <ImageBackground
-            source={PERIOD_IMAGES[currentPeriod]}
+          <Image
+            source={PERIOD_THUMB_IMAGES[currentPeriod]}
+            style={styles.imageBackground}
+            resizeMode="cover"
+            blurRadius={Platform.OS === 'web' ? 8 : 12}
+          />
+          <Image
+            source={PERIOD_HIGH_IMAGES[currentPeriod]}
             style={styles.imageBackground}
             resizeMode="cover"
           />
         </Animated.View>
       )}
 
-      {/* Left-to-right dark forest gradient overlay to ensure high contrast for text on the left while keeping right image details visible */}
+      {/* 4. Left-to-right dark forest gradient overlay */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
           <Defs>
@@ -122,6 +152,11 @@ export const TimeBasedBackground: React.FC<TimeBasedBackgroundProps> = ({ curren
 
 const styles = StyleSheet.create({
   imageBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: '100%',
     height: '100%',
   },

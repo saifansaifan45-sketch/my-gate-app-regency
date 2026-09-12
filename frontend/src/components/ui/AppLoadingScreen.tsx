@@ -29,7 +29,7 @@ export function AppLoadingScreen() {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Animated.View style={{ opacity }}>
         <Image
-          source={require('../../../../assets/regency-salma-typographic-logo.png')}
+          source={require('../../../assets/regency-salma-typographic-logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />

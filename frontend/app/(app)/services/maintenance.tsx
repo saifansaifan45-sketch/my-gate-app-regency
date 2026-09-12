@@ -16,6 +16,7 @@ import { TicketItem } from '../../../src/api/manager';
 import { useToast } from '../../../src/store/toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { homeDashboardQueryKey } from '../../../src/api/home-dashboard';
+import { Skeleton } from '../../../src/components/ui/Skeleton';
 import { cardSystem } from '../../../src/components/ui/cardSystem';
 
 export default function MaintenanceScreen() {
@@ -25,7 +26,7 @@ export default function MaintenanceScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'my' | 'all'>('my');
   const [serverTickets, setServerTickets] = useState<TicketItem[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ticketToDelete, setTicketToDelete] = useState<{ id: string; realId?: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -145,7 +146,7 @@ export default function MaintenanceScreen() {
         );
 
   return (
-    <View style={[styles.container, { paddingTop: top }]}>
+    <View style={styles.container}>
       <AppHeader
         variant="subscreen"
         title="Maintenance"
@@ -171,7 +172,25 @@ export default function MaintenanceScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 60 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
-        {requests.length > 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 14 }}>
+            {[1, 2, 3].map((key) => (
+              <View key={key} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Skeleton width={100} height={16} borderRadius={6} />
+                  <Skeleton width={60} height={16} borderRadius={6} />
+                </View>
+                <Skeleton width="75%" height={20} borderRadius={8} style={{ marginBottom: 10 }} />
+                <Skeleton width="100%" height={14} borderRadius={6} style={{ marginBottom: 6 }} />
+                <Skeleton width="60%" height={14} borderRadius={6} style={{ marginBottom: 16 }} />
+                <View style={styles.cardFooter}>
+                  <Skeleton width={80} height={14} borderRadius={6} />
+                  <Skeleton width={90} height={24} borderRadius={100} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : requests.length > 0 ? (
           requests.map((req, index) => {
             const isDeleted = Boolean(req.deletedAt) || req.status === 'CANCELLED';
             const isClosed = req.status === 'CLOSED';
@@ -209,45 +228,54 @@ export default function MaintenanceScreen() {
                       <Text style={styles.ticketId}>{req.id}</Text>
                       {!isDeleted && (
                         <PremiumPressable
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           onPress={() => handleDeletePress({ id: req.id, realId: req.realId, title: req.title })}
                         >
-                          <Feather name="trash-2" size={14} color={theme.colors.error} />
+                          <Feather name="trash-2" size={14} color={theme.colors.textTertiary} />
                         </PremiumPressable>
                       )}
                     </View>
                   </View>
 
                   <Text style={[styles.title, isDeleted && styles.titleDeleted]}>{req.title}</Text>
-                  {'description' in req && req.description ? (
-                    <Text style={styles.desc}>{req.description}</Text>
-                  ) : null}
+                  {Boolean(req.description) && (
+                    <Text style={styles.desc} numberOfLines={2}>{req.description}</Text>
+                  )}
 
-                  {'assignedStaff' in req && req.assignedStaff && !isDeleted ? (
+                  {req.assignedStaff && !isDeleted && (
                     <View style={styles.staffPill}>
-                      <Feather name="user-check" size={12} color="#0284C7" />
+                      <Feather name="user" size={12} color="#0284C7" />
                       <Text style={styles.staffPillText}>
-                        Assigned: {req.assignedStaff} ({req.staffCategory})
+                        Assigned: {req.assignedStaff}
+                        {req.staffCategory ? ` (${req.staffCategory})` : ''}
                       </Text>
                     </View>
-                  ) : null}
+                  )}
 
-                  {isPendingVerification && Boolean(req.realId) && (
-                    <View style={styles.verificationBox}>
-                      <Text style={styles.verificationTitle}>Work completed. Is the issue resolved?</Text>
+                  {isPendingVerification && (
+                    <View style={styles.verificationBanner}>
+                      <View style={styles.verificationHeader}>
+                        <Feather name="check-circle" size={16} color={theme.colors.primary} />
+                        <Text style={styles.verificationTitle}>Work Marked Complete</Text>
+                      </View>
+                      <Text style={styles.verificationPrompt}>
+                        The assigned personnel marked this task as resolved. Did everything get completed to your satisfaction?
+                      </Text>
                       <View style={styles.verificationActions}>
-                        <TouchableOpacity
-                          style={styles.verifyAcceptBtn}
+                        <PremiumPressable
+                          style={[styles.verificationButton, styles.verificationButtonConfirm]}
                           onPress={() => handleVerifyTicket(req.realId!, 'ACCEPTED')}
                         >
-                          <Text style={styles.verifyAcceptText}>Confirm & Close</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.verifyRejectBtn}
+                          <Feather name="check" size={14} color="#FFFFFF" />
+                          <Text style={styles.verificationButtonTextConfirm}>Confirm & Close</Text>
+                        </PremiumPressable>
+                        <PremiumPressable
+                          style={[styles.verificationButton, styles.verificationButtonReject]}
                           onPress={() => handleVerifyTicket(req.realId!, 'REJECTED')}
                         >
-                          <Text style={styles.verifyRejectText}>Still An Issue</Text>
-                        </TouchableOpacity>
+                          <Feather name="rotate-ccw" size={14} color="#B45309" />
+                          <Text style={styles.verificationButtonTextReject}>Reopen Issue</Text>
+                        </PremiumPressable>
                       </View>
                     </View>
                   )}
@@ -413,6 +441,62 @@ const styles = StyleSheet.create({
   statusTextInProgress: { color: '#1D4ED8' },
   statusTextClosed: { color: '#047857' },
   statusTextDeleted: { color: '#DC2626' },
+  verificationBanner: {
+    backgroundColor: '#F4F9F5',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 61, 42, 0.08)',
+  },
+  verificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  verificationTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 13,
+    color: theme.colors.primary,
+  },
+  verificationPrompt: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: theme.colors.textSecondary,
+    marginBottom: 12,
+  },
+  verificationActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  verificationButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  verificationButtonConfirm: {
+    backgroundColor: theme.colors.primary,
+  },
+  verificationButtonReject: {
+    backgroundColor: '#FEF3C7',
+  },
+  verificationButtonTextConfirm: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  verificationButtonTextReject: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 12,
+    color: '#B45309',
+  },
   bottomAction: {
     position: 'absolute',
     bottom: 0,
@@ -504,56 +588,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
-  verificationBox: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-  },
-  verificationTitle: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 13,
-    color: '#166534',
-    marginBottom: 10,
-  },
-  verificationActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  verifyAcceptBtn: {
-    flex: 1,
-    backgroundColor: '#16A34A',
-    minHeight: 44,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  verifyAcceptText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  verifyRejectBtn: {
-    flex: 1,
-    backgroundColor: '#FEE2E2',
-    minHeight: 44,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  verifyRejectText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    color: '#991B1B',
-  },
   statusPendingVerification: {
-    backgroundColor: '#FEF08A',
+    backgroundColor: '#FEF3C7',
   },
   statusTextPendingVerification: {
-    color: '#854D0E',
+    color: '#B45309',
   },
 });

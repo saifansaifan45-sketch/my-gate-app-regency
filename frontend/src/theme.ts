@@ -2,8 +2,9 @@ import { shadowBox } from './utils/shadow';
 
 export const theme = {
   colors: {
-    primary: '#1B4D36',
-    primaryPressed: '#123A28',
+    primary: '#143D2A',
+    primaryDeep: '#1B4D36',
+    primaryPressed: '#0F2D1F',
     onPrimary: '#FFFFFF',
     background: '#F4F6F1',
     surface: '#FCFDF9',
@@ -18,7 +19,7 @@ export const theme = {
     textTertiary: '#718078',
     accent: '#B06A3C',
     community: '#3E5E4C',
-    border: '#D7E0D8',
+    border: '#E2E9E2',
     focus: '#1C6A9E',
     error: '#B42318',
     errorBackground: '#FDECEA',

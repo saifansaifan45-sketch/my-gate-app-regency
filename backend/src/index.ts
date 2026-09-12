@@ -14,6 +14,7 @@ import workforceRoutes from './routes/workforce';
 import emergencyRoutes from './routes/emergency';
 import householdRoutes from './routes/household';
 import activityLogRoutes from './routes/activity-log';
+import chatRoutes from './routes/chat';
 // Disabled feature: no lost-found route or persistence implementation exists yet.
 // import lostFoundRoutes from './routes/lost-found';
 
@@ -99,6 +100,7 @@ app.use('/visitors', visitorsRoutes);
 app.use('/emergency', emergencyRoutes);
 app.use('/household', householdRoutes);
 app.use('/activity-log', activityLogRoutes);
+app.use('/chat', chatRoutes);
 
 // Keep time-bound gate passes accurate even when no watchman is actively viewing the queue.
 const visitorLifecycleTimer = setInterval(() => {
