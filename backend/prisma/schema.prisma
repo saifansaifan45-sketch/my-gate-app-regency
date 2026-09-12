@@ -796,6 +796,8 @@ model Visitor {
   provider              String?
   orderReference        String?
   packageCount          Int?
+  partySize             Int           @default(1)
+  admittedCount         Int           @default(0)
   handoffSuggestionType String?
   handoffSuggestionName String?
   handoffRecipientType  String?
