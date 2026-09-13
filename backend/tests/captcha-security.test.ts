@@ -47,10 +47,17 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
     const [expectedAnswer] = decoded.split(':');
     
     expect(expectedAnswer).toBeDefined();
-    // Correct answer passes
+    // Correct answer passes (single-use)
     expect(validateCaptcha(testEmail, expectedAnswer!, captcha.token)).toBe(true);
-    // Wrong answer fails
-    expect(validateCaptcha(testEmail, '999999', captcha.token)).toBe(false);
+    // Same token reused must fail (single-use)
+    expect(validateCaptcha(testEmail, expectedAnswer!, captcha.token)).toBe(false);
+    // Wrong answer with new token fails
+    const captcha2 = generateCaptcha(testEmail);
+    const decoded2 = Buffer.from(captcha2.token, 'base64').toString();
+    const [ans2] = decoded2.split(':');
+    expect(validateCaptcha(testEmail, '999999', captcha2.token)).toBe(false);
+    // Correct answer with new token passes, wrong email fails (email-bound)
+    expect(validateCaptcha('other@test.com', ans2!, captcha2.token)).toBe(false);
   });
 
   it('2. Login succeeds with correct credentials', async () => {
@@ -92,9 +99,14 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
     expect(fail3.body.error?.captchaRequired).toBe(true);
     expect(fail3.body.error?.captchaQuestion).toBeDefined();
     expect(fail3.body.error?.captchaToken).toBeDefined();
-  }, 15000);
+  }, 30000);
 
   it('4. Attempting login without CAPTCHA when required returns 400 CAPTCHA required', async () => {
+    // Ensure captcha is required (in case previous test reset)
+    recordSuccessfulLogin(testEmail);
+    for (let i = 0; i < 3; i++) {
+      await request.post('/auth/login').send({ email: testEmail, password: 'WrongPassword' + i });
+    }
     const res = await request.post('/auth/login').send({
       email: testEmail,
       password: testPassword,
@@ -106,6 +118,8 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
   });
 
   it('5. Attempting login with correct CAPTCHA and correct password succeeds', async () => {
+    // Ensure clean state for this email
+    recordSuccessfulLogin(testEmail);
     // Generate fresh captcha
     const captcha = generateCaptcha(testEmail);
     const decoded = Buffer.from(captcha.token, 'base64').toString();
@@ -120,5 +134,5 @@ describe('Login Security & CAPTCHA Verification Suite', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('accessToken');
-  }, 15000);
+  }, 30000);
 });

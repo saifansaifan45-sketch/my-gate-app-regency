@@ -82,6 +82,7 @@ describe('Authentication Lifecycle & Role Verification Suite', () => {
     expect(res.body.memberships.length).toBeGreaterThanOrEqual(1);
 
     _accessToken = res.body.accessToken;
+    refreshToken = res.body.refreshToken;
     
   });
 
