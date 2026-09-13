@@ -3,6 +3,7 @@ import app from '../src/index';
 import { prisma } from '../src/prisma';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { generateTokens } from '../src/utils/jwt';
 
 const request = supertest(app);
