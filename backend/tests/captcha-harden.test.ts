@@ -1,4 +1,5 @@
 import { generateCaptcha, validateCaptcha, sleep } from '../src/utils/loginSecurity';
+import { describe, it, expect } from '@jest/globals';
 
 describe('Captcha HMAC + email-bound + single-use + delay', () => {
   it('same token + different email → 400 (email-bound)', () => {
