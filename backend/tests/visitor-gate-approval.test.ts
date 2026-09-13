@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Department, MembershipStatus, PersonnelCategory, Role, VisitorStatus } from '@prisma/client';
 import app from '../src/index';
 import { prisma } from '../src/prisma';
