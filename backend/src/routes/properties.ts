@@ -106,7 +106,7 @@ router.get('/my-properties', async (req: AuthRequest, res: Response, next: NextF
 // Tenant applies for residency -> creates UnitResidency(PENDING) & notifies unit owners
 // ----------------------------------------------------
 const residencyRequestSchema = z.object({
-  relationshipType: z.enum(['TENANT', 'FAMILY_MEMBER']).optional(),
+  relationshipType: z.enum(['TENANT', 'CO_OWNER', 'FAMILY_MEMBER']).optional(),
   notes: z.string().optional(),
 });
 
@@ -216,7 +216,7 @@ router.get('/units/:unitId/residencies', async (req: AuthRequest, res: Response,
     const residencies = await prisma.unitResidency.findMany({
       where: { unitId },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } },
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true, availabilityStatus: true, availabilityUntil: true } },
         verifiedBy: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -261,6 +261,11 @@ router.post('/units/:unitId/residencies/:residencyId/approve', async (req: AuthR
       return res.status(404).json({ error: { message: 'Residency request not found' } });
     }
 
+    if (residency.relationshipType === ResidencyType.CO_OWNER) {
+      const coOwnerCount = await prisma.unitResidency.count({ where: { unitId, relationshipType: ResidencyType.CO_OWNER, status: ResidencyStatus.ACTIVE } });
+      if (coOwnerCount >= 2) return res.status(409).json({ error: { message: 'A unit can have at most 2 active co-owners besides the owner.' } });
+    }
+
     // Activate residency
     const updated = await prisma.unitResidency.update({
       where: { id: residencyId },
@@ -277,10 +282,13 @@ router.post('/units/:unitId/residencies/:residencyId/approve', async (req: AuthR
     // onboarding flow appear in the family / household records section.
     if (
       residency.relationshipType === ResidencyType.OWNER ||
+      residency.relationshipType === ResidencyType.CO_OWNER ||
       residency.relationshipType === ResidencyType.FAMILY_MEMBER
     ) {
       const relationshipLabel =
-        residency.relationshipType === ResidencyType.OWNER ? 'OWNER' : 'Family Member';
+        residency.relationshipType === ResidencyType.OWNER ? 'OWNER'
+        : residency.relationshipType === ResidencyType.CO_OWNER ? 'Co-Owner'
+        : 'Family Member';
 
       const existingMember = await prisma.householdMember.findFirst({
         where: {
@@ -397,6 +405,57 @@ router.post('/units/:unitId/residencies/:residencyId/reject', async (req: AuthRe
 // 6. PATCH /properties/units/:unitId/residencies/:residencyId/access
 // Owner pauses, restores, or permanently revokes resident access
 // ----------------------------------------------------
+const residencyRoleSchema = z.object({
+  relationshipType: z.enum(['TENANT', 'CO_OWNER', 'FAMILY_MEMBER']),
+});
+
+// An existing active resident can be promoted by the property owner without
+// creating a second account or asking them to submit a new residency request.
+// The lock makes the two-co-owner limit safe when two owner devices act at once.
+router.patch('/units/:unitId/residencies/:residencyId/role', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const unitId = Array.isArray(req.params.unitId) ? req.params.unitId[0] : req.params.unitId;
+    const residencyId = Array.isArray(req.params.residencyId) ? req.params.residencyId[0] : req.params.residencyId;
+    const { relationshipType } = residencyRoleSchema.parse(req.body);
+    if (!unitId || !residencyId) return res.status(400).json({ error: { message: 'Missing unitId or residencyId' } });
+
+    const isOwner = await prisma.unitOwnership.findFirst({ where: { userId, unitId, status: OwnershipStatus.ACTIVE } });
+    if (!isOwner) return res.status(403).json({ error: { message: 'Only the active property owner can change resident roles' } });
+
+    const current = await prisma.unitResidency.findUnique({
+      where: { id: residencyId },
+      include: { unit: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    });
+    if (!current || current.unitId !== unitId) return res.status(404).json({ error: { message: 'Residency record not found' } });
+    if (current.relationshipType === ResidencyType.OWNER) return res.status(403).json({ error: { message: 'The property owner role cannot be changed here' } });
+    if (!([ResidencyStatus.ACTIVE, ResidencyStatus.PAUSED] as ResidencyStatus[]).includes(current.status)) return res.status(409).json({ error: { message: 'Only an existing active resident can be assigned a role' } });
+    if (current.relationshipType === relationshipType) {
+      return res.json({ success: true, message: 'Resident role is already up to date.', residency: current });
+    }
+
+    const roleResult = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${unitId}))`;
+      const locked = await tx.unitResidency.findUnique({ where: { id: residencyId }, select: { relationshipType: true, status: true } });
+      if (!locked || locked.status !== ResidencyStatus.ACTIVE && locked.status !== ResidencyStatus.PAUSED) throw Object.assign(new Error('Only an existing active resident can be assigned a role'), { statusCode: 409 });
+      if (locked.relationshipType === relationshipType) return { updated: current, changed: false, from: locked.relationshipType };
+      if (relationshipType === 'CO_OWNER' && locked.relationshipType !== ResidencyType.CO_OWNER) {
+        const count = await tx.unitResidency.count({ where: { unitId, relationshipType: ResidencyType.CO_OWNER, status: ResidencyStatus.ACTIVE } });
+        if (count >= 2) throw Object.assign(new Error('A unit can have at most 2 active co-owners besides the owner.'), { statusCode: 409 });
+      }
+      return { updated: await tx.unitResidency.update({ where: { id: residencyId }, data: { relationshipType: relationshipType as ResidencyType }, include: { unit: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } } }), changed: true, from: locked.relationshipType };
+    });
+
+    if (!roleResult.changed) return res.json({ success: true, message: 'Resident role is already up to date.', residency: roleResult.updated });
+    await prisma.notification.create({ data: { userId: current.userId, type: 'RESIDENCY_ROLE_UPDATED', title: 'Residence role updated', message: `Your role for Unit ${current.unit.unitNumber} is now ${relationshipType.replace('_', ' ')}.`, metadata: { unitId, residencyId, relationshipType } } });
+    await prisma.auditLog.create({ data: { communityId: current.unit.communityId, actorId: userId, targetId: current.userId, action: 'RESIDENCY_ROLE_UPDATED', metadata: { unitId, residencyId, from: roleResult.from, to: relationshipType } } });
+    res.json({ success: true, message: `${current.user.firstName || 'Resident'} is now a ${relationshipType.replace('_', ' ').toLowerCase()}.`, residency: roleResult.updated });
+  } catch (error: any) {
+    if (error?.statusCode === 409) return res.status(409).json({ error: { message: error.message } });
+    next(error);
+  }
+});
+
 const residencyAccessSchema = z.object({
   action: z.enum(['pause', 'resume', 'revoke']),
 });
@@ -436,7 +495,7 @@ router.patch('/units/:unitId/residencies/:residencyId/access', async (req: AuthR
     const targetOwnsUnit = await prisma.unitOwnership.findFirst({
       where: { userId: residency.userId, unitId, status: OwnershipStatus.ACTIVE },
     });
-    if (targetOwnsUnit || residency.relationshipType === ResidencyType.OWNER) {
+    if (targetOwnsUnit || residency.relationshipType === ResidencyType.OWNER || residency.relationshipType === ResidencyType.CO_OWNER) {
       return res.status(403).json({ error: { message: 'Owner access cannot be paused or revoked from this screen' } });
     }
 

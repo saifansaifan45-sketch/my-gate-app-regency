@@ -3,9 +3,11 @@ import { api } from './client';
 export interface HouseholdMemberRecord {
   id: string;
   name: string;
+  personType?: string | null;
   relationship: string;
   phone?: string | null;
   email?: string | null;
+  notes?: string | null;
   status?: 'ACTIVE' | 'PAUSED' | 'REVOKED';
   createdBy?: {
     firstName?: string | null;
@@ -16,9 +18,14 @@ export interface HouseholdMemberRecord {
 export interface HouseholdVehicleRecord {
   id: string;
   registrationNumber: string;
+  vehicleType?: 'TWO_WHEELER' | 'FOUR_WHEELER' | 'OTHER' | string | null;
   make?: string | null;
   model?: string | null;
   color?: string | null;
+  parkingCode?: string | null;
+  parkingSlot?: string | null;
+  status?: 'ACTIVE' | 'PAUSED' | 'REVOKED' | string;
+  notes?: string | null;
 }
 
 export interface HouseholdPetRecord {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,7 +22,7 @@ import { theme } from '../../../src/theme';
 import { useSession } from '../../../src/store/auth';
 import { useToast } from '../../../src/store/toast';
 import { EmployeeRole } from '../../../src/api/auth';
-import { propertiesApi, UnitWithOwnershipStatus } from '../../../src/api/properties';
+import { propertiesApi } from '../../../src/api/properties';
 
 import { formatErrorMessage } from '../../../src/utils/errors';
 
@@ -61,20 +61,13 @@ export default function RelationshipOnboardingScreen() {
   });
   const unitsWithOwnership = unitsData?.units || [];
 
-  // Fetch manager status
-  const { data: managerData } = useQuery({
-    queryKey: ['has-manager'],
-    queryFn: () => propertiesApi.hasManager(),
-  });
-  const hasRegisteredManager = managerData?.hasManager || false;
-
   // Owner Form State
   const [ownerFlat, setOwnerFlat] = useState('9A');
   const [livesHere, setLivesHere] = useState(true);
 
   // Resident Form State
   const [residentFlat, setResidentFlat] = useState('9B');
-  const [relationshipType, setRelationshipType] = useState<'TENANT' | 'FAMILY_MEMBER'>('TENANT');
+  const [relationshipType, setRelationshipType] = useState<'TENANT' | 'CO_OWNER' | 'FAMILY_MEMBER'>('TENANT');
 
   // Employee Form State
   const [employeeRole, setEmployeeRole] = useState<EmployeeRole>('SECURITY');
@@ -529,16 +522,27 @@ export default function RelationshipOnboardingScreen() {
                     style={[styles.roleChoiceBtn, relationshipType === 'TENANT' && styles.roleChoiceBtnActive]}
                     onPress={() => setRelationshipType('TENANT')}
                   >
+                    <Feather name="key" size={14} color={relationshipType === 'TENANT' ? theme.colors.primary : theme.colors.textSecondary} />
                     <Text style={[styles.roleChoiceText, relationshipType === 'TENANT' && styles.roleChoiceTextActive]}>
                       Tenant
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.roleChoiceBtn, relationshipType === 'CO_OWNER' && styles.roleChoiceBtnActive]}
+                    onPress={() => setRelationshipType('CO_OWNER')}
+                  >
+                    <Feather name="users" size={14} color={relationshipType === 'CO_OWNER' ? theme.colors.primary : theme.colors.textSecondary} />
+                    <Text style={[styles.roleChoiceText, relationshipType === 'CO_OWNER' && styles.roleChoiceTextActive]}>
+                      Co-Owner
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.roleChoiceBtn, relationshipType === 'FAMILY_MEMBER' && styles.roleChoiceBtnActive]}
                     onPress={() => setRelationshipType('FAMILY_MEMBER')}
                   >
+                    <Feather name="heart" size={14} color={relationshipType === 'FAMILY_MEMBER' ? theme.colors.primary : theme.colors.textSecondary} />
                     <Text style={[styles.roleChoiceText, relationshipType === 'FAMILY_MEMBER' && styles.roleChoiceTextActive]}>
-                      Family Member
+                      Family
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -825,18 +829,20 @@ const styles = StyleSheet.create({
   },
   roleChoiceRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginBottom: 16,
   },
   roleChoiceBtn: {
     flex: 1,
-    height: 44,
+    height: 48,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    gap: 6,
   },
   roleChoiceBtnActive: {
     borderColor: theme.colors.primary,

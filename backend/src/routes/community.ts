@@ -37,13 +37,33 @@ async function notifySpaceMembers(
     select: { id: true },
   });
 
-  const recipients = (await Promise.all(
-    members.map(async ({ id }) => ((await canUserAccessSpace(id, spaceId)) ? id : null))
-  )).filter((id): id is string => id !== null);
+  const recipients: string[] = [];
+  const chunkSize = 50;
+  for (let i = 0; i < members.length; i += chunkSize) {
+    const chunk = members.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(
+      chunk.map(async ({ id }) => ((await canUserAccessSpace(id, spaceId)) ? id : null))
+    );
+    for (const id of chunkResults) {
+      if (id !== null) {
+        recipients.push(id);
+      }
+    }
+  }
 
   if (recipients.length) {
-    await prisma.notification.createMany({
-      data: recipients.map((id) => ({ userId: id, ...notification })),
+    // Announcement fan-out can be retried after a timeout. Serialize one
+    // announcement's delivery and skip recipients that already have its
+    // deterministic metadata record.
+    const announcementId = notification.metadata.announcementId;
+    await prisma.$transaction(async (tx) => {
+      if (announcementId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`announcement:${announcementId}`}))`;
+      const existing = announcementId
+        ? await tx.notification.findMany({ where: { userId: { in: recipients }, type: notification.type, metadata: { equals: notification.metadata } }, select: { userId: true } })
+        : [];
+      const delivered = new Set(existing.map((item) => item.userId));
+      const pending = recipients.filter((id) => !delivered.has(id));
+      if (pending.length) await tx.notification.createMany({ data: pending.map((id) => ({ userId: id, ...notification })) });
     });
   }
 }
@@ -63,9 +83,19 @@ async function notifyPollMembers(
     select: { id: true },
   });
 
-  const recipients = (await Promise.all(
-    members.map(async ({ id }) => ((await canUserAccessPoll(id, poll)) ? id : null))
-  )).filter((id): id is string => id !== null && id !== poll.authorId);
+  const recipients: string[] = [];
+  const chunkSize = 50;
+  for (let i = 0; i < members.length; i += chunkSize) {
+    const chunk = members.slice(i, i + chunkSize);
+    const chunkResults = await Promise.all(
+      chunk.map(async ({ id }) => ((await canUserAccessPoll(id, poll)) ? id : null))
+    );
+    for (const id of chunkResults) {
+      if (id !== null && id !== poll.authorId) {
+        recipients.push(id);
+      }
+    }
+  }
 
   if (recipients.length) {
     await prisma.notification.createMany({
@@ -125,19 +155,47 @@ router.get('/announcements', async (req: AuthRequest, res: Response, next: NextF
     const spaceIds = spaces.map((space) => space.id);
     if (!spaceIds.length) return res.json({ announcements: [], page, hasMore: false });
 
-    const announcements = await prisma.announcement.findMany({
+    const rawAnnouncements = await prisma.announcement.findMany({
       where: { spaceId: { in: spaceIds }, status: AnnouncementStatus.PUBLISHED, ...(category ? { category } : {}), OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
       include: {
-        space: { select: { id: true, name: true,  } },
+        space: { select: { id: true, name: true, type: true } },
         author: { select: { id: true, firstName: true, lastName: true, role: true } },
         reads: { where: { userId: req.user!.userId }, select: { readAt: true } },
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit + 1,
+      take: 200,
     });
-    const hasMore = announcements.length > limit;
-    res.json({ announcements: announcements.slice(0, limit).map(({ reads, ...announcement }) => ({ ...announcement, isRead: reads.length > 0, readAt: reads[0]?.readAt ?? null })), page, hasMore });
+
+    // Deduplicate announcements that were broadcasted to multiple spaces accessible to this user
+    const seenSignatures = new Map<string, typeof rawAnnouncements[0]>();
+    for (const item of rawAnnouncements) {
+      const timeBucket = Math.floor(new Date(item.createdAt).getTime() / (5 * 60 * 1000)); // 5-minute broadcast window
+      const signature = `${item.authorId || 'sys'}_${(item.title || '').trim().toLowerCase()}_${(item.content || '').trim().toLowerCase()}_${timeBucket}`;
+      
+      const existing = seenSignatures.get(signature);
+      if (!existing) {
+        seenSignatures.set(signature, item);
+      } else {
+        // If one of the duplicates is already marked read, preserve that read state
+        if (item.reads.length > 0 && existing.reads.length === 0) {
+          existing.reads = item.reads;
+        }
+      }
+    }
+
+    const deduplicated = Array.from(seenSignatures.values());
+    const paginated = deduplicated.slice((page - 1) * limit, page * limit);
+    const hasMore = deduplicated.length > page * limit;
+
+    res.json({
+      announcements: paginated.map(({ reads, ...announcement }) => ({
+        ...announcement,
+        isRead: reads.length > 0,
+        readAt: reads[0]?.readAt ?? null,
+      })),
+      page,
+      hasMore,
+    });
   } catch (error) {
     next(error);
   }
@@ -482,7 +540,7 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    await notifyPollMembers({
+    notifyPollMembers({
       id: poll.id,
       question: poll.question,
       authorId: poll.authorId,
@@ -490,7 +548,7 @@ router.post('/spaces/:id/polls', async (req: AuthRequest, res: Response, next: N
       audiences: poll.audiences,
       unitId: poll.unitId,
       space: { id: poll.space.id, communityId: poll.space.communityId },
-    });
+    }).catch(console.error);
 
     res.status(201).json(poll);
   } catch (error) {
@@ -652,12 +710,12 @@ router.post('/announcements/broadcast', async (req: AuthRequest, res: Response, 
     }
 
     if ((status || AnnouncementStatus.PUBLISHED) === AnnouncementStatus.PUBLISHED) {
-      await Promise.all(created.map((announcement) => notifySpaceMembers(announcement.spaceId, {
+      Promise.all(created.map((announcement) => notifySpaceMembers(announcement.spaceId, {
         type: 'ANNOUNCEMENT_PUBLISHED',
         title: announcement.title,
         message: announcement.content.slice(0, 180),
         metadata: { announcementId: announcement.id, spaceId: announcement.spaceId, navigation: '/community' },
-      })));
+      }))).catch(console.error);
     }
 
     res.status(201).json({ announcements: created, audiences: selectedAudiences });
@@ -719,7 +777,7 @@ router.post('/spaces/:id/announcements', async (req: AuthRequest, res: Response,
     }
 
     if (announcement.status === AnnouncementStatus.PUBLISHED) {
-      await notifySpaceMembers(spaceId, { type: 'ANNOUNCEMENT_PUBLISHED', title: announcement.title, message: announcement.content.slice(0, 180), metadata: { announcementId: announcement.id, spaceId, navigation: '/community' } });
+      notifySpaceMembers(spaceId, { type: 'ANNOUNCEMENT_PUBLISHED', title: announcement.title, message: announcement.content.slice(0, 180), metadata: { announcementId: announcement.id, spaceId, navigation: '/community' } }).catch(console.error);
     }
 
     res.status(201).json(announcement);
@@ -752,7 +810,7 @@ router.patch('/announcements/:id', async (req: AuthRequest, res: Response, next:
       include: { author: { select: { id: true, firstName: true, lastName: true, role: true } } },
     });
     if (current.status !== AnnouncementStatus.PUBLISHED && announcement.status === AnnouncementStatus.PUBLISHED) {
-      await notifySpaceMembers(current.spaceId, { type: 'ANNOUNCEMENT_PUBLISHED', title: announcement.title, message: announcement.content.slice(0, 180), metadata: { announcementId: announcement.id, spaceId: current.spaceId, navigation: '/community' } });
+      notifySpaceMembers(current.spaceId, { type: 'ANNOUNCEMENT_PUBLISHED', title: announcement.title, message: announcement.content.slice(0, 180), metadata: { announcementId: announcement.id, spaceId: current.spaceId, navigation: '/community' } }).catch(console.error);
     }
     res.json({ announcement });
   } catch (error) {
@@ -799,10 +857,10 @@ router.patch('/polls/:id', async (req: AuthRequest, res: Response, next: NextFun
       },
     });
     if (values.status === 'CLOSED') {
-      await notifyPollMembers(
+      notifyPollMembers(
         { ...current, ...poll, space: current.space },
         { type: 'POLL_CLOSED', title: 'Community poll closed' },
-      );
+      ).catch(console.error);
     }
     res.json({ poll });
   } catch (error) {

@@ -28,7 +28,8 @@ export interface CommunityPoll {
 
 async function getDefaultSpaceId() {
   const spaces = await communityApi.getSpaces();
-  const spaceId = spaces.spaces[0]?.id;
+  const residentSpace = spaces.spaces.find((s) => s.type === 'RESIDENT_COMMUNITY');
+  const spaceId = residentSpace?.id || spaces.spaces[0]?.id;
   if (!spaceId) throw new Error('No community space is available.');
   return spaceId;
 }

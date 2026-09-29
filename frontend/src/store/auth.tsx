@@ -56,11 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = !!user && !!accessToken;
 
-  const updateTokensAndUser = useCallback((newAccessToken: string, newRefreshToken: string, newUser: UserProfile) => {
+  const updateTokensAndUser = useCallback(async (newAccessToken: string, newRefreshToken: string, newUser: UserProfile) => {
     setAccessToken(newAccessToken);
     setAccessTokenState(newAccessToken);
     setUser(newUser);
-    storage.saveRefreshToken(newRefreshToken);
+    await storage.saveRefreshToken(newRefreshToken);
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (payload: LoginPayload, options?: { navigate?: boolean }) => {
     const data = await authApi.login(payload);
-    updateTokensAndUser(data.accessToken, data.refreshToken, data.user);
+    await updateTokensAndUser(data.accessToken, data.refreshToken, data.user);
     if (options?.navigate !== false) {
       if (data.user.isOnboarded === false && !data.user.isPendingApproval) {
         router.replace('/(auth)/onboarding/relationship');
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (payload: RegisterPayload) => {
     const data = await authApi.register(payload);
-    updateTokensAndUser(data.accessToken, data.refreshToken, data.user);
+    await updateTokensAndUser(data.accessToken, data.refreshToken, data.user);
     router.replace('/(auth)/onboarding/relationship');
   };
 

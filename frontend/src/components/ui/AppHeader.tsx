@@ -3,10 +3,12 @@ import { View, StyleSheet, Image, Animated, Easing, Platform } from 'react-nativ
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { Text } from './Text';
 import { PremiumPressable } from './PremiumPressable';
 import { theme } from '../../theme';
 import { smartBack } from '../../navigation/history';
+import { api } from '../../api/client';
 
 export type HeaderVariant = 'home' | 'subscreen' | 'tabroot';
 
@@ -60,10 +62,23 @@ export function AppHeader({
   showNotification = true,
   showAvatar = true,
   firstName = 'Resident',
-  hasUnreadNotifications = true,
+  hasUnreadNotifications: propHasUnread,
 }: AppHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  // Dynamically fetch actual notification unread count from API if not explicitly overridden
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: async () => {
+      const res = await api.get('/notifications/unread-count');
+      return res.data;
+    },
+    enabled: showNotification && propHasUnread === undefined,
+    staleTime: 30000,
+  });
+
+  const hasUnreadNotifications = propHasUnread !== undefined ? propHasUnread : (unreadData?.count > 0);
 
   const handleBack = () => {
     if (onBackPress) {

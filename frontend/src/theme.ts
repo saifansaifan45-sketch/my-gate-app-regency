@@ -8,6 +8,9 @@ export const theme = {
     onPrimary: '#FFFFFF',
     background: '#F4F6F1',
     surface: '#FCFDF9',
+    surfaceInput: '#F9FAFB',
+    surfaceOverlay: '#FCFDF9',
+    surfaceWarm: '#F8F6F0',
     surfaceMuted: '#E9EEE7',
     surfacePressed: '#DEE7E0',
     surfaceGreen: '#E9F4EA',
@@ -25,6 +28,7 @@ export const theme = {
     errorBackground: '#FDECEA',
     success: '#256B43',
     successBackground: '#E7F3EA',
+    onSurface: '#FFFFFF',
   },
   status: {
     success: { foreground: '#256B43', background: '#E7F3EA', border: '#B9D9C2', icon: 'check-circle' },

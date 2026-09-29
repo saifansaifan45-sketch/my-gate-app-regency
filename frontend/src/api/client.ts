@@ -31,6 +31,10 @@ const getBaseUrl = () => {
 
 const BASE_URL = getBaseUrl();
 
+if (!__DEV__ && !BASE_URL.startsWith('https://')) {
+  throw new Error('Production authentication requires an HTTPS API URL.');
+}
+
 /**
  * Create an AbortController tied to a component lifecycle.
  * Returns { signal, cancel } — call cancel() in useEffect cleanup.
@@ -52,6 +56,7 @@ export function withCancel(signal?: AbortSignal | null, config?: AxiosRequestCon
 }
 
 let inMemoryAccessToken: string | null = null;
+let refreshInFlight: Promise<string> | null = null;
 let onAuthFailureCallback: (() => void) | null = null;
 let onResidenceAuthFailureCallback: ((msg?: string) => void) | null = null;
 
@@ -121,18 +126,24 @@ api.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        // Call refresh endpoint directly using raw axios to avoid interceptor recursion
-        const res = await axios.post(`${BASE_URL}/auth/refresh`, {
-          refreshToken: storedRefreshToken,
-        });
-
-        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = res.data;
-
-        // Update in-memory access token & secure storage refresh token
-        setAccessToken(newAccessToken);
-        if (newRefreshToken) {
-          await storage.saveRefreshToken(newRefreshToken);
+        // Share one rotation request across simultaneous 401s. Refresh-token
+        // rotation is intentionally single-use, so parallel refreshes must not
+        // invalidate one another.
+        if (!refreshInFlight) {
+          refreshInFlight = (async () => {
+            const res = await axios.post(`${BASE_URL}/auth/refresh`, {
+              refreshToken: storedRefreshToken,
+            });
+            const { accessToken: newAccessToken, refreshToken: newRefreshToken } = res.data;
+            setAccessToken(newAccessToken);
+            if (!newRefreshToken) throw new Error('Refresh response did not include a refresh token');
+            await storage.saveRefreshToken(newRefreshToken);
+            return newAccessToken as string;
+          })().finally(() => {
+            refreshInFlight = null;
+          });
         }
+        const newAccessToken = await refreshInFlight;
 
         // Retry original request with new token
         if (originalRequest.headers) {

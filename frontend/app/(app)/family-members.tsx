@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useMemo, useState } from 'react';
 import {
@@ -13,12 +13,13 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord, PermanentPassRecord } from '../../src/api/household';
+import { householdApi, HouseholdMemberRecord, HouseholdPetRecord, HouseholdVehicleRecord } from '../../src/api/household';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { Button } from '../../src/components/ui/Button';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { AnimatedEntrance } from '../../src/components/ui/AnimatedEntrance';
 import { Text } from '../../src/components/ui/Text';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
 import { smartBack } from '../../src/navigation/history';
@@ -26,6 +27,9 @@ import { useToast } from '../../src/store/toast';
 import { useSession } from '../../src/store/auth';
 import { theme } from '../../src/theme';
 import { cardSystem } from '../../src/components/ui/cardSystem';
+import { getPetIconInfo } from '../../src/utils/petIcons';
+import { InviteMemberModal } from '../../src/components/InviteMemberModal';
+import { ConfirmationModal } from '../../src/components/ui/ConfirmationModal';
 
 type RecordTab = 'members' | 'vehicles' | 'pets';
 type FormValues = Record<string, string>;
@@ -38,7 +42,7 @@ const TABS: { id: RecordTab; label: string; icon: React.ComponentProps<typeof Fe
 
 const EMPTY_FORMS: Record<RecordTab, FormValues> = {
   members: { name: '', relationship: '', phone: '', email: '' },
-  vehicles: { registrationNumber: '', make: '', model: '', color: '' },
+  vehicles: { registrationNumber: '', vehicleType: '', make: '', model: '', color: '' },
   pets: { name: '', species: '', breed: '', color: '' },
 };
 
@@ -50,19 +54,73 @@ const TAB_LABELS: Record<RecordTab, string> = {
   members: 'family members', vehicles: 'vehicles', pets: 'pets',
 };
 
+const VEHICLE_TYPE_OPTIONS: { value: string; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
+  { value: 'TWO_WHEELER', label: '2-Wheeler', icon: 'motorbike' },
+  { value: 'FOUR_WHEELER', label: '4-Wheeler', icon: 'car' },
+  { value: 'OTHER', label: 'Other', icon: 'bus' },
+];
+
+const TYPE_THEMES: Record<RecordTab, { accent: string; accentLight: string; accentBg: string; heroIcon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; buttonIcon: React.ComponentProps<typeof Feather>['name']; title: string; subtitle: string; saveLabel: string }> = {
+  members: {
+    accent: '#143D2A',
+    accentLight: '#2D6A4F',
+    accentBg: '#E8F5E9',
+    heroIcon: 'account-group',
+    buttonIcon: 'user-plus',
+    title: 'Add a family member',
+    subtitle: 'They\'ll appear in your household records so the gate team recognizes them instantly.',
+    saveLabel: 'Add Member',
+  },
+  vehicles: {
+    accent: '#D97706',
+    accentLight: '#B45309',
+    accentBg: '#FFF3D6',
+    heroIcon: 'car',
+    buttonIcon: 'truck',
+    title: 'Register a vehicle',
+    subtitle: 'Gate cameras will match this vehicle to your unit for smoother entry.',
+    saveLabel: 'Register Vehicle',
+  },
+  pets: {
+    accent: '#BE185D',
+    accentLight: '#9D174D',
+    accentBg: '#FCE7F3',
+    heroIcon: 'paw',
+    buttonIcon: 'heart',
+    title: 'Add a pet',
+    subtitle: 'Your neighbours and security will know who\'s part of the household.',
+    saveLabel: 'Add Pet',
+  },
+};
+
+const PET_SPECIES_OPTIONS: { label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
+  { label: 'Cat', icon: 'cat' },
+  { label: 'Dog', icon: 'dog' },
+  { label: 'Fish', icon: 'fish' },
+  { label: 'Bird', icon: 'bird' },
+  { label: 'Rabbit', icon: 'rabbit' },
+  { label: 'Other', icon: 'paw' },
+];
+
 export default function FamilyMembersScreen() {
   const router = useRouter();
   const { top, bottomClearance } = useScreenInsets(false);
   const { showToast } = useToast();
-  const { user } = useSession();
+  const { user, hasOwnership, primaryOwnership, primaryResidency } = useSession();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<RecordTab>('members');
   const [formVisible, setFormVisible] = useState(false);
   const [form, setForm] = useState<FormValues>(EMPTY_FORMS.members);
   const [deleteTarget, setDeleteTarget] = useState<{ type: RecordTab; id: string; title: string } | null>(null);
+  const [statusTarget, setStatusTarget] = useState<{ id: string; name: string; status: 'ACTIVE' | 'PAUSED' | 'REVOKED' } | null>(null);
+  const [passPauseTarget, setPassPauseTarget] = useState<{ id: string; name: string } | null>(null);
+  const [inviteVisible, setInviteVisible] = useState(false);
   const recordsQuery = useQuery({ queryKey: ['household-records'], queryFn: householdApi.getRecords });
   const records = recordsQuery.data;
   const canManage = records?.canManageAssets ?? false;
+  const canInvite = hasOwnership() || primaryResidency?.relationshipType === 'CO_OWNER';
+  const inviteUnitId = primaryOwnership?.unitId || primaryResidency?.unitId;
+  const inviteUnitNumber = primaryOwnership?.unitNumber || primaryResidency?.unitNumber;
   const residentName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'you';
 
   // Permanent passes
@@ -158,6 +216,16 @@ export default function FamilyMembersScreen() {
     },
   });
 
+  const pausePassMutation = useMutation({
+    mutationFn: (id: string) => householdApi.updatePermanentPassStatus(id, 'PAUSED'),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permanent-passes'] });
+      setPassPauseTarget(null);
+      showToast({ title: 'Pass paused', message: 'This pass will no longer admit the holder until it is restored.', type: 'success' });
+    },
+    onError: () => showToast({ title: 'Could not pause pass', message: 'Please try again.', type: 'error' }),
+  });
+
   const itemCount = useMemo(() => records?.[activeTab]?.length ?? 0, [activeTab, records]);
   const openForm = () => {
     if (!canManage) {
@@ -169,7 +237,7 @@ export default function FamilyMembersScreen() {
   };
   const submit = () => {
     const primary = activeTab === 'vehicles' ? form.registrationNumber : form.name;
-    const secondary = activeTab === 'members' ? form.relationship : activeTab === 'pets' ? form.species : activeTab === 'vehicles' ? form.make : '';
+    const secondary = activeTab === 'members' ? form.relationship : activeTab === 'pets' ? form.species : activeTab === 'vehicles' ? form.vehicleType : '';
     if (!primary?.trim() || !secondary?.trim()) {
       showToast({ title: 'Add the required details', message: 'Complete the required household information to continue.', type: 'error' });
       return;
@@ -185,7 +253,8 @@ export default function FamilyMembersScreen() {
     }
     if (activeTab === 'vehicles') {
       const vehicle = item as HouseholdVehicleRecord;
-      return [vehicle.make, vehicle.model, vehicle.color].filter(Boolean).join(' · ') || 'Vehicle enrolled for gate recognition';
+      const typeLabel = VEHICLE_TYPE_OPTIONS.find((o) => o.value === vehicle.vehicleType)?.label || vehicle.vehicleType || '';
+      return [typeLabel, vehicle.make, vehicle.model, vehicle.color].filter(Boolean).join(' · ') || 'Vehicle enrolled for gate recognition';
     }
     const pet = item as HouseholdPetRecord;
     return [pet.species, pet.breed, pet.color].filter(Boolean).join(' · ');
@@ -205,6 +274,15 @@ export default function FamilyMembersScreen() {
               <Text style={styles.introText}>Keep family members, registered vehicles, and pets ready for the gate team.</Text>
             </View>
           </View>
+          {canInvite ? (
+            <Button
+              label="Invite a resident"
+              icon="user-plus"
+              variant="outline"
+              onPress={() => setInviteVisible(true)}
+              style={styles.inviteButton}
+            />
+          ) : null}
         </ScreenEntrance>
 
         <ScreenEntrance delay={80}>
@@ -240,10 +318,16 @@ export default function FamilyMembersScreen() {
         {!recordsQuery.isLoading && records?.[activeTab]?.map((item) => (
           <ScreenEntrance key={item.id} delay={110}>
             <View style={styles.recordRow}>
-              <View style={[styles.recordIcon, activeTab === 'vehicles' && styles.vehicleIcon, activeTab === 'pets' && styles.petIcon]}><Feather name={RECORD_ICONS[activeTab]} size={19} color={activeTab === 'vehicles' ? '#A16207' : activeTab === 'pets' ? '#BE185D' : theme.colors.primary} /></View>
+              <View style={[styles.recordIcon, activeTab === 'vehicles' && styles.vehicleIcon, activeTab === 'pets' && { backgroundColor: getPetIconInfo((item as HouseholdPetRecord).species).bgColor }]}>
+                {activeTab === 'pets' ? (
+                  <MaterialCommunityIcons name={getPetIconInfo((item as HouseholdPetRecord).species).iconName} size={19} color={getPetIconInfo((item as HouseholdPetRecord).species).color} />
+                ) : (
+                  <Feather name={RECORD_ICONS[activeTab]} size={19} color={activeTab === 'vehicles' ? '#A16207' : theme.colors.primary} />
+                )}
+              </View>
               <View style={styles.recordInfo}>
-                <Text style={styles.recordTitle}>{titleFor(item)}</Text>
-                <Text style={styles.recordDetail}>{detailFor(item)}</Text>
+                <Text style={styles.recordTitle} numberOfLines={1}>{titleFor(item)}</Text>
+                <Text style={styles.recordDetail} numberOfLines={2}>{detailFor(item)}</Text>
                 {activeTab === 'members' && (item as HouseholdMemberRecord).status && (item as HouseholdMemberRecord).status !== 'ACTIVE' && (
                   <View style={[styles.statusBadge, (item as HouseholdMemberRecord).status === 'PAUSED' ? styles.statusPaused : styles.statusRevoked]}>
                     <Text style={[styles.statusBadgeText, (item as HouseholdMemberRecord).status === 'PAUSED' ? styles.statusPausedText : styles.statusRevokedText]}>
@@ -258,7 +342,7 @@ export default function FamilyMembersScreen() {
                     <>
                       {(item as HouseholdMemberRecord).status === 'ACTIVE' ? (
                         <PremiumPressable
-                          onPress={() => statusMutation.mutate({ id: item.id, status: 'PAUSED' })}
+                          onPress={() => setStatusTarget({ id: item.id, name: titleFor(item), status: 'PAUSED' })}
                           style={styles.actionButton}
                           accessibilityLabel={`Pause ${titleFor(item)}`}
                         >
@@ -266,7 +350,7 @@ export default function FamilyMembersScreen() {
                         </PremiumPressable>
                       ) : (item as HouseholdMemberRecord).status === 'PAUSED' ? (
                         <PremiumPressable
-                          onPress={() => statusMutation.mutate({ id: item.id, status: 'ACTIVE' })}
+                          onPress={() => setStatusTarget({ id: item.id, name: titleFor(item), status: 'ACTIVE' })}
                           style={styles.actionButton}
                           accessibilityLabel={`Resume ${titleFor(item)}`}
                         >
@@ -274,7 +358,7 @@ export default function FamilyMembersScreen() {
                         </PremiumPressable>
                       ) : null}
                       <PremiumPressable
-                        onPress={() => statusMutation.mutate({ id: item.id, status: 'REVOKED' })}
+                        onPress={() => setStatusTarget({ id: item.id, name: titleFor(item), status: 'REVOKED' })}
                         style={styles.actionButton}
                         accessibilityLabel={`Revoke ${titleFor(item)}`}
                       >
@@ -356,7 +440,7 @@ export default function FamilyMembersScreen() {
                         )}
                         {!isExpired && !isPaused && (
                           <PremiumPressable
-                            onPress={() => householdApi.updatePermanentPassStatus(pass.id, 'PAUSED').then(() => queryClient.invalidateQueries({ queryKey: ['permanent-passes'] }))}
+                            onPress={() => setPassPauseTarget({ id: pass.id, name: pass.name })}
                             style={styles.actionButton}
                             accessibilityLabel={`Pause pass for ${pass.name}`}
                           >
@@ -379,6 +463,38 @@ export default function FamilyMembersScreen() {
           </>
         )}
       </ScrollView>
+
+      <InviteMemberModal
+        visible={inviteVisible}
+        onClose={() => setInviteVisible(false)}
+        unitId={inviteUnitId}
+        unitNumber={inviteUnitNumber}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['invitations'] });
+        }}
+      />
+
+      <ConfirmationModal
+        visible={Boolean(statusTarget)}
+        onClose={() => setStatusTarget(null)}
+        onConfirm={() => { if (statusTarget) statusMutation.mutate({ id: statusTarget.id, status: statusTarget.status }); }}
+        title={statusTarget?.status === 'REVOKED' ? 'Revoke household access?' : statusTarget?.status === 'PAUSED' ? 'Pause household access?' : 'Restore household access?'}
+        message={statusTarget ? `${statusTarget.name} will ${statusTarget.status === 'REVOKED' ? 'lose gate access immediately and need a new approval' : statusTarget.status === 'PAUSED' ? 'temporarily lose gate access' : 'regain gate access'}.` : ''}
+        confirmLabel={statusTarget?.status === 'REVOKED' ? 'Revoke access' : statusTarget?.status === 'PAUSED' ? 'Pause access' : 'Restore access'}
+        variant={statusTarget?.status === 'REVOKED' ? 'danger' : statusTarget?.status === 'PAUSED' ? 'warning' : 'default'}
+        loading={statusMutation.isPending}
+      />
+
+      <ConfirmationModal
+        visible={Boolean(passPauseTarget)}
+        onClose={() => setPassPauseTarget(null)}
+        onConfirm={() => { if (passPauseTarget) pausePassMutation.mutate(passPauseTarget.id); }}
+        title="Pause gate pass?"
+        message={passPauseTarget ? `${passPauseTarget.name} will be refused at the gate until this pass is restored.` : ''}
+        confirmLabel="Pause pass"
+        variant="warning"
+        loading={pausePassMutation.isPending}
+      />
 
       {/* ── Issue Pass Modal ── */}
       <Modal visible={passFormVisible} transparent animationType="fade" onRequestClose={() => setPassFormVisible(false)} statusBarTranslucent>
@@ -515,68 +631,160 @@ export default function FamilyMembersScreen() {
       </Modal>
 
       {/* ── Add Record Modal (Members / Vehicles / Pets) ── */}
-      <Modal visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)} statusBarTranslucent>
+      {(() => { const typeTheme = TYPE_THEMES[activeTab]; return (
+      <Modal key={activeTab} visible={formVisible} transparent animationType="fade" onRequestClose={() => setFormVisible(false)} statusBarTranslucent>
         <View style={[styles.modalOverlay, { paddingTop: Math.max(top, 16), paddingBottom: Math.max(bottomClearance + 16, 24) }]}>
           <Pressable style={styles.modalBackdrop} onPress={() => setFormVisible(false)} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
             <View style={styles.dialogCard}>
-              <View style={styles.dialogHeader}>
-                <View style={styles.dialogHeaderCopy}>
-                  <Text style={styles.dialogTitle}>Add a {activeTab === 'members' ? 'Family Member' : activeTab === 'vehicles' ? 'Vehicle' : 'Pet'}</Text>
-                  <Text style={styles.dialogSubtitle}>
-                    {activeTab === 'vehicles'
-                      ? 'Register your vehicle for automated gate recognition'
-                      : activeTab === 'pets'
-                      ? 'Keep your household records up to date'
-                      : `Relationships recorded relative to ${residentName}`}
-                  </Text>
+              {/* ── Type-specific hero banner ── */}
+              <AnimatedEntrance delay={0} distance={8} duration={320}>
+                <View style={[styles.heroBanner, { backgroundColor: typeTheme.accentBg }]}>
+                  <View style={[styles.heroIconWrap, { backgroundColor: typeTheme.accent }]}>
+                    <MaterialCommunityIcons name={typeTheme.heroIcon} size={26} color={'#FFFFFF'} />
+                  </View>
+                  <View style={styles.heroCopy}>
+                    <Text style={[styles.heroTitle, { color: typeTheme.accent }]}>{typeTheme.title}</Text>
+                    <Text style={styles.heroSubtitle}>{typeTheme.subtitle}</Text>
+                  </View>
+                  <PremiumPressable
+                    style={styles.heroCloseBtn}
+                    onPress={() => setFormVisible(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close"
+                  >
+                    <Feather name="x" size={16} color={typeTheme.accent} />
+                  </PremiumPressable>
                 </View>
-                <PremiumPressable
-                  style={styles.dialogCloseBtn}
-                  onPress={() => setFormVisible(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                >
-                  <Feather name="x" size={18} color={theme.colors.textSecondary} />
-                </PremiumPressable>
-              </View>
+              </AnimatedEntrance>
 
               <ScrollView showsVerticalScrollIndicator={false} style={styles.dialogBody} contentContainerStyle={styles.dialogBodyContent}>
-                {activeTab === 'members' ? (
-                  <View style={styles.relationshipContext}>
-                    <Feather name="users" size={16} color={theme.colors.primary} />
-                    <Text style={styles.relationshipContextText}>
-                      {form.relationship.trim() ? `${form.relationship.trim()} of ${residentName}` : `e.g. Father of ${residentName}`}
-                    </Text>
-                  </View>
-                ) : null}
+                {/* Relationship context (members only) */}
+                {activeTab === 'members' && (
+                  <AnimatedEntrance delay={60} distance={6} duration={280}>
+                    <View style={[styles.contextPill, { backgroundColor: '#EDF6F0' }]}>
+                      <Feather name="users" size={15} color={'#143D2A'} />
+                      <Text style={[styles.contextPillText, { color: '#143D2A' }]}>
+                        {form.relationship.trim() ? `${form.relationship.trim()} of ${residentName}` : `e.g. Father of ${residentName}`}
+                      </Text>
+                    </View>
+                  </AnimatedEntrance>
+                )}
 
-                {Object.keys(EMPTY_FORMS[activeTab]).map((key) => (
-                  <View key={key} style={styles.field}>
-                    <Text style={styles.fieldLabel}>
-                      {key === 'relationship' ? `Relationship to ${residentName} *` : fieldLabel(key)}
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={form[key]}
-                      onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))}
-                      placeholder={key === 'relationship' ? 'e.g. Father, Mother, Spouse' : undefined}
-                      placeholderTextColor={theme.colors.textSecondary}
-                      autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'}
-                      keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'}
-                    />
-                  </View>
-                ))}
+                {/* Pet species quick-select chips */}
+                {activeTab === 'pets' && !form.species && (
+                  <AnimatedEntrance delay={50} distance={8} duration={300}>
+                    <View style={styles.chipsSection}>
+                      <Text style={styles.chipsHint}>What kind of pet?</Text>
+                      <View style={styles.chipsRow}>
+                        {PET_SPECIES_OPTIONS.map((opt, i) => {
+                          const petInfo = getPetIconInfo(opt.label);
+                          return (
+                            <AnimatedEntrance key={opt.label} delay={80 + i * 40} distance={6} duration={240}>
+                              <PremiumPressable
+                                style={[styles.speciesChip, { backgroundColor: petInfo.bgColor }]}
+                                onPress={() => setForm((c) => ({ ...c, species: opt.label }))}
+                              >
+                                <MaterialCommunityIcons name={opt.icon} size={16} color={petInfo.color} />
+                                <Text style={[styles.speciesChipText, { color: petInfo.color }]}>{opt.label}</Text>
+                              </PremiumPressable>
+                            </AnimatedEntrance>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </AnimatedEntrance>
+                )}
+
+                {/* Vehicle type picker */}
+                {activeTab === 'vehicles' && (
+                  <AnimatedEntrance delay={50} distance={8} duration={280}>
+                    <View style={styles.field}>
+                      <Text style={[styles.fieldLabel, { color: typeTheme.accent }]}>Vehicle type <Text style={styles.requiredStar}>*</Text></Text>
+                      <View style={styles.pickerRow}>
+                        {VEHICLE_TYPE_OPTIONS.map((opt, i) => (
+                          <AnimatedEntrance key={opt.value} delay={80 + i * 50} distance={6} duration={240}>
+                            <PremiumPressable
+                              style={[styles.pickerPill, form.vehicleType === opt.value && { backgroundColor: typeTheme.accent }]}
+                              onPress={() => setForm((c) => ({ ...c, vehicleType: opt.value }))}
+                              accessibilityRole="radio"
+                              accessibilityState={{ checked: form.vehicleType === opt.value }}
+                            >
+                              <MaterialCommunityIcons name={opt.icon} size={16} color={form.vehicleType === opt.value ? '#FFFFFF' : theme.colors.textSecondary} />
+                              <Text style={[styles.pickerPillText, form.vehicleType === opt.value && styles.pickerPillTextSelected]}>{opt.label}</Text>
+                            </PremiumPressable>
+                          </AnimatedEntrance>
+                        ))}
+                      </View>
+                    </View>
+                  </AnimatedEntrance>
+                )}
+
+                {/* Form fields */}
+                {Object.keys(EMPTY_FORMS[activeTab]).map((key, fieldIdx) => {
+                  if (activeTab === 'vehicles' && key === 'vehicleType') return null;
+                  if (activeTab === 'pets' && key === 'species' && !form.species) return null;
+                  return (
+                    <AnimatedEntrance key={key} delay={100 + fieldIdx * 45} distance={6} duration={260}>
+                      <View style={styles.field}>
+                        <Text style={[styles.fieldLabel, { color: typeTheme.accent }]}
+                        >
+                          {key === 'relationship' ? `Relationship to ${residentName} *` : fieldLabel(key)}
+                        </Text>
+                        <TextInput
+                          style={[styles.input, { borderColor: form[key] ? typeTheme.accent : theme.colors.border }]}
+                          value={form[key]}
+                          onChangeText={(value) => setForm((current) => ({ ...current, [key]: value }))}
+                          placeholder={key === 'relationship' ? 'e.g. Father, Mother, Spouse' : undefined}
+                          placeholderTextColor={theme.colors.textSecondary}
+                          autoCapitalize={key === 'email' ? 'none' : key === 'registrationNumber' ? 'characters' : 'words'}
+                          keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'}
+                        />
+                      </View>
+                    </AnimatedEntrance>
+                  );
+                })}
+
+                {/* Species override input when chip is selected */}
+                {activeTab === 'pets' && form.species && (
+                  <AnimatedEntrance delay={60} distance={6} duration={260}>
+                    <View style={styles.field}>
+                      <Text style={[styles.fieldLabel, { color: typeTheme.accent }]}>Pet type <Text style={styles.requiredStar}>*</Text></Text>
+                      <View style={styles.speciesInputRow}>
+                        <TextInput
+                          style={[styles.input, { flex: 1, borderColor: typeTheme.accent }]}
+                          value={form.species}
+                          onChangeText={(value) => setForm((current) => ({ ...current, species: value }))}
+                          placeholder="e.g. Cat, Dog, Fish"
+                          placeholderTextColor={theme.colors.textSecondary}
+                        />
+                        <PremiumPressable
+                          style={[styles.speciesClearBtn, { backgroundColor: typeTheme.accentBg }]}
+                          onPress={() => setForm((c) => ({ ...c, species: '' }))}
+                        >
+                          <Feather name="x" size={14} color={typeTheme.accent} />
+                        </PremiumPressable>
+                      </View>
+                    </View>
+                  </AnimatedEntrance>
+                )}
               </ScrollView>
 
-              <View style={styles.dialogFooter}>
+              <View style={[styles.dialogFooter, { borderTopColor: typeTheme.accentBg }]}>
                 <Button label="Cancel" variant="outline" onPress={() => setFormVisible(false)} style={styles.footerBtnCancel} />
-                <Button label="Save Record" onPress={submit} loading={addMutation.isPending} style={styles.footerBtnSubmit} />
+                <Button
+                  label={typeTheme.saveLabel}
+                  icon={typeTheme.buttonIcon}
+                  onPress={submit}
+                  loading={addMutation.isPending}
+                  style={[styles.footerBtnSubmit, { backgroundColor: typeTheme.accent }]}
+                />
               </View>
             </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      ); })()}
 
       {/* ── Delete Record Confirmation Modal ── */}
       <Modal visible={Boolean(deleteTarget)} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)} statusBarTranslucent>
@@ -607,7 +815,7 @@ export default function FamilyMembersScreen() {
 }
 
 function fieldLabel(key: string) {
-  const labels: Record<string, string> = { name: 'Name *', relationship: 'Relationship *', phone: 'Phone number', email: 'Email address', registrationNumber: 'Registration number *', make: 'Make *', model: 'Model', color: 'Colour', species: 'Pet type *', breed: 'Breed' };
+  const labels: Record<string, string> = { name: 'Name *', relationship: 'Relationship *', phone: 'Phone number', email: 'Email address', registrationNumber: 'Registration number *', vehicleType: 'Vehicle type *', make: 'Make', model: 'Model', color: 'Colour', species: 'Pet type *', breed: 'Breed' };
   return labels[key];
 }
 
@@ -615,6 +823,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   content: { paddingHorizontal: cardSystem.pagePadding, paddingTop: 16 },
   intro: { flexDirection: 'row', backgroundColor: '#EDF6F0', padding: 16, borderRadius: 16, marginBottom: 22 },
+  inviteButton: { alignSelf: 'stretch', marginTop: -10, marginBottom: 18 },
   introIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#D6EBDD', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   introCopy: { flex: 1 },
   introTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 },
@@ -636,10 +845,10 @@ const styles = StyleSheet.create({
   recordRow: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 10, ...theme.shadows.card },
   recordIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   vehicleIcon: { backgroundColor: '#FFF3D6' },
-  petIcon: { backgroundColor: '#FCE7F3' },
-  recordInfo: { flex: 1 },
-  recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3 },
-  recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary },
+
+  recordInfo: { flex: 1, minWidth: 0 },
+  recordTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: theme.colors.textPrimary, marginBottom: 3, flexShrink: 1 },
+  recordDetail: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, color: theme.colors.textSecondary, flexShrink: 1 },
   statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 98, marginTop: 4 },
   statusPaused: { backgroundColor: '#FEF3C7' },
   statusRevoked: { backgroundColor: '#FEE2E2' },
@@ -649,6 +858,105 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', gap: 4 },
   actionButton: { width: 34, height: 34, borderRadius: 100, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
   removeButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  pickerRow: { flexDirection: 'row', gap: 8 },
+  pickerPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 12, backgroundColor: '#ECECE5' },
+  pickerPillSelected: { backgroundColor: theme.colors.primary, ...theme.shadows.card },
+  pickerPillText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+  pickerPillTextSelected: { color: '#FFFFFF' },
+
+  /* ── Hero banner (modal header) ── */
+  heroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 18,
+    gap: 14,
+  },
+  heroIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroCopy: { flex: 1 },
+  heroTitle: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 17,
+    letterSpacing: -0.3,
+    marginBottom: 3,
+  },
+  heroSubtitle: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: theme.colors.textSecondary,
+  },
+  heroCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* ── Context pill (members relationship) ── */
+  contextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 14,
+  },
+  contextPillText: {
+    flex: 1,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+  },
+
+  /* ── Pet species chips ── */
+  chipsSection: {
+    marginBottom: 16,
+  },
+  chipsHint: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 12.5,
+    color: theme.colors.textSecondary,
+    marginBottom: 10,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  speciesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  speciesChipText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+  },
+  speciesInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  speciesClearBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   // Standard Centered Modal Design (matching AddVisitorModal / Impeccable system)
   modalOverlay: {

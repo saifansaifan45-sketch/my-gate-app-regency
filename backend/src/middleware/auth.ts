@@ -109,6 +109,16 @@ export const requireWorkforce = async (req: AuthRequest, res: Response, next: Ne
     return res.status(401).json({ error: { message: 'Unauthorized' } });
   }
 
+  const personnel = await prisma.personnel.findUnique({
+    where: { userId: req.user.userId },
+  });
+  if (personnel && personnel.employmentStatus === 'SUSPENDED') {
+    return res.status(403).json({ error: { message: 'Access denied: Account is suspended' } });
+  }
+  if (personnel && personnel.employmentStatus === 'TERMINATED') {
+    return res.status(403).json({ error: { message: 'Access denied: Employment has been terminated' } });
+  }
+
   // Strict database check: must have active APPROVED membership
   const membership = await prisma.membership.findFirst({
     where: {
@@ -120,16 +130,6 @@ export const requireWorkforce = async (req: AuthRequest, res: Response, next: Ne
 
   if (!membership) {
     return res.status(403).json({ error: { message: 'Access denied: Active Workforce membership required' } });
-  }
-
-  // If workforce role, verify employment status is not TERMINATED
-  if (membership.role === Role.WORKFORCE) {
-    const personnel = await prisma.personnel.findUnique({
-      where: { userId: req.user.userId },
-    });
-    if (personnel && personnel.employmentStatus === 'TERMINATED') {
-      return res.status(403).json({ error: { message: 'Access denied: Employment has been terminated' } });
-    }
   }
 
   return next();
@@ -159,6 +159,59 @@ export const requireSecurityOrLeadership = async (req: AuthRequest, res: Respons
     if (!personnel || personnel.category !== 'SECURITY' || personnel.employmentStatus === 'TERMINATED') {
       return res.status(403).json({ error: { message: 'Access denied: Only Security personnel are authorized' } });
     }
+  }
+
+  return next();
+};
+
+export const requireManagerOnly = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: { message: 'Unauthorized' } });
+  }
+
+  const managerMembership = await prisma.membership.findFirst({
+    where: {
+      userId: req.user.userId,
+      role: Role.MANAGER,
+      status: 'APPROVED',
+    },
+  });
+
+  if (managerMembership) {
+    return next();
+  }
+
+  return res.status(403).json({ error: { message: 'Access denied: Active Manager membership required' } });
+};
+
+export const requireWatchman = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: { message: 'Unauthorized' } });
+  }
+
+  const personnel = await prisma.personnel.findUnique({
+    where: { userId: req.user.userId },
+  });
+  if (!personnel || personnel.employmentStatus === 'TERMINATED') {
+    return res.status(403).json({ error: { message: 'Access denied: Active workforce employment required' } });
+  }
+  if (personnel.employmentStatus === 'SUSPENDED') {
+    return res.status(403).json({ error: { message: 'Access denied: Account is suspended' } });
+  }
+  if (personnel.category !== 'SECURITY') {
+    return res.status(403).json({ error: { message: 'Access denied: Only Watchman (Security) personnel are authorized' } });
+  }
+
+  const membership = await prisma.membership.findFirst({
+    where: {
+      userId: req.user.userId,
+      role: Role.WORKFORCE,
+      status: 'APPROVED',
+    },
+  });
+
+  if (!membership) {
+    return res.status(403).json({ error: { message: 'Access denied: Active Workforce membership required' } });
   }
 
   return next();

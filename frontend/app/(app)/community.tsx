@@ -2,7 +2,7 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { Platform, View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert, InteractionManager } from 'react-native';
+import { View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert, InteractionManager, FlatList, Platform } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -31,7 +31,11 @@ export default function CommunityScreen() {
   const spacesQuery = useQuery({ queryKey: ['community', 'spaces'], queryFn: communityApi.getSpaces });
   const announcementsQuery = useQuery({ queryKey: ['community', 'announcements', category], queryFn: () => communityApi.getAnnouncements(undefined, category) });
   const pollsQuery = useQuery({ queryKey: ['community', 'polls'], queryFn: () => communityApi.getPolls() });
-  const defaultSpaceId = spacesQuery.data?.spaces[0]?.id;
+  const defaultSpaceId = useMemo(() => {
+    const spaces = spacesQuery.data?.spaces ?? [];
+    const residentSpace = spaces.find((s) => s.type === 'RESIDENT_COMMUNITY');
+    return residentSpace?.id || spaces[0]?.id;
+  }, [spacesQuery.data?.spaces]);
   const isManagement = hasManagerAccess() || hasApprovedMembership('LEADERSHIP');
   const householdUnitId = primaryResidency?.unitId || primaryOwnership?.unitId;
   const canCreateHouseholdPoll = (hasOwnerAccess() || hasResidentAccess()) && Boolean(householdUnitId);
@@ -47,26 +51,23 @@ export default function CommunityScreen() {
 
     Animated.spring(slideAnim, {
       toValue,
-      useNativeDriver: false,
+      useNativeDriver: Platform.OS !== 'web',
       damping: 18,
       stiffness: 200,
     }).start();
 
     Animated.timing(contentOpacity, {
       toValue: 0,
-      duration: 120,
-      useNativeDriver: false,
+      duration: 100,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
-      InteractionManager.runAfterInteractions(() => {
-        setActiveTab(tab);
-        requestAnimationFrame(() => {
-          Animated.timing(contentOpacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: false,
-          }).start(() => setIsTransitioning(false));
-        });
-      });
+      setActiveTab(tab);
+      setIsTransitioning(false);
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
     });
   }, [activeTab, slideAnim, contentOpacity]);
 
@@ -76,14 +77,14 @@ export default function CommunityScreen() {
       toValue: 0.4,
       duration: 100,
       easing: Easing.inOut(Easing.ease),
-      useNativeDriver: false,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setCategory(item);
       Animated.timing(contentOpacity, {
         toValue: 1,
         duration: 200,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start();
     });
   }, [category, contentOpacity]);
@@ -108,74 +109,72 @@ export default function CommunityScreen() {
     await refreshCommunity();
   };
 
-  const announcementsContent = useMemo(() => {
-    if (announcementsQuery.isLoading) {
-      return (
-        <View style={{ gap: 14 }}>
-          {[1, 2, 3].map((key) => (
-            <View key={key} style={styles.skeletonCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Skeleton width={80} height={20} borderRadius={100} />
-                <Skeleton width={60} height={14} borderRadius={6} />
-              </View>
-              <Skeleton width="80%" height={18} borderRadius={8} style={{ marginBottom: 8 }} />
-              <Skeleton width="100%" height={14} borderRadius={6} style={{ marginBottom: 4 }} />
-              <Skeleton width="60%" height={14} borderRadius={6} />
-            </View>
-          ))}
-        </View>
-      );
-    }
+  const uniqueAnnouncements = useMemo(() => {
     const announcements = announcementsQuery.data?.announcements ?? [];
-    if (!announcements.length) return <EmptyState icon="bell" title="No community updates yet" description="Published notices from your community will appear here." />;
-    
-    // Safety deduplication on client
     const seen = new Set<string>();
-    const uniqueAnnouncements = announcements.filter((a) => {
+    return announcements.filter((a) => {
       const key = a.id || `${a.title}_${a.content}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+  }, [announcementsQuery.data?.announcements]);
 
-    return uniqueAnnouncements.map((announcement) => (
-      <AnnouncementCard
-        key={announcement.id}
-        announcement={announcement}
-        onRead={async () => {
-          if (!announcement.isRead) {
-            await communityApi.markAnnouncementRead(announcement.id);
-            await refreshCommunity();
-          }
-        }}
-      />
-    ));
-  }, [announcementsQuery.data?.announcements, announcementsQuery.isLoading]);
+  const polls = useMemo(() => pollsQuery.data?.polls ?? [], [pollsQuery.data?.polls]);
 
-  const pollsContent = useMemo(() => {
-    if (pollsQuery.isLoading) {
-      return (
-        <View style={{ gap: 14 }}>
-          {[1, 2].map((key) => (
-            <View key={key} style={styles.skeletonCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Skeleton width={90} height={20} borderRadius={100} />
-                <Skeleton width={70} height={14} borderRadius={6} />
-              </View>
-              <Skeleton width="85%" height={18} borderRadius={8} style={{ marginBottom: 12 }} />
-              <Skeleton width="100%" height={38} borderRadius={10} style={{ marginBottom: 8 }} />
-              <Skeleton width="100%" height={38} borderRadius={10} />
-            </View>
-          ))}
+  const renderAnnouncement = useCallback(({ item: announcement }: { item: CommunityAnnouncement }) => (
+    <AnnouncementCard
+      announcement={announcement}
+      onRead={async () => {
+        if (!announcement.isRead) {
+          await communityApi.markAnnouncementRead(announcement.id);
+          await refreshCommunity();
+        }
+      }}
+    />
+  ), []);
+
+  const renderPoll = useCallback(({ item: poll }: { item: CommunityPoll }) => (
+    <PollCard
+      poll={poll}
+      isManagement={isManagement}
+      onVote={async (optionId) => { await communityApi.vote(poll.id, optionId); await refreshCommunity(); }}
+      onDelete={isManagement ? async () => { await communityApi.deletePoll(poll.id); await refreshCommunity(); } : undefined}
+    />
+  ), [isManagement]);
+
+  const renderSkeletons = () => (
+    <View style={{ gap: 14 }}>
+      {[1, 2, 3].map((key) => (
+        <View key={key} style={styles.skeletonCard}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Skeleton width={80} height={20} borderRadius={100} />
+            <Skeleton width={60} height={14} borderRadius={6} />
+          </View>
+          <Skeleton width="80%" height={18} borderRadius={8} style={{ marginBottom: 8 }} />
+          <Skeleton width="100%" height={14} borderRadius={6} style={{ marginBottom: 4 }} />
+          <Skeleton width="60%" height={14} borderRadius={6} />
         </View>
-      );
-    }
-    const polls = pollsQuery.data?.polls ?? [];
-    if (!polls.length) return <EmptyState icon="pie-chart" title="No active polls" description="Community polls will appear here when management opens one." />;
-    return polls.map((poll) => (
-      <PollCard key={poll.id} poll={poll} isManagement={isManagement} onVote={async (optionId) => { await communityApi.vote(poll.id, optionId); await refreshCommunity(); }} onDelete={isManagement ? async () => { await communityApi.deletePoll(poll.id); await refreshCommunity(); } : undefined} />
-    ));
-  }, [pollsQuery.data?.polls, pollsQuery.isLoading, isManagement]);
+      ))}
+    </View>
+  );
+
+  const listHeader = activeTab === 'announcements' ? (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      {([undefined, 'GENERAL', 'MAINTENANCE', 'SECURITY', 'EVENT', 'EMERGENCY'] as const).map((item) => (
+        <PremiumPressable 
+          key={item ?? 'ALL'} 
+          style={[styles.filterChip, category === item && styles.filterChipActive]} 
+          onPress={() => changeCategory(item)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={[styles.filterText, category === item && styles.filterTextActive]}>
+            {item ? item.charAt(0) + item.slice(1).toLowerCase() : 'All'}
+          </Text>
+        </PremiumPressable>
+      ))}
+    </ScrollView>
+  ) : null;
 
   return (      <View style={styles.container}>
       <AppHeader
@@ -213,26 +212,43 @@ export default function CommunityScreen() {
 
       <Animated.View style={[styles.feedOuter, { opacity: contentOpacity }]}>
         {!isTransitioning && activeTab === 'announcements' ? (
-          <ScrollView contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-              {([undefined, 'GENERAL', 'MAINTENANCE', 'SECURITY', 'EVENT', 'EMERGENCY'] as const).map((item) => (
-                <PremiumPressable 
-                  key={item ?? 'ALL'} 
-                  style={[styles.filterChip, category === item && styles.filterChipActive]} 
-                  onPress={() => changeCategory(item)}
-                >
-                  <Text style={[styles.filterText, category === item && styles.filterTextActive]}>
-                    {item ? item.charAt(0) + item.slice(1).toLowerCase() : 'All'}
-                  </Text>
-                </PremiumPressable>
-              ))}
-            </ScrollView>
-            {isTransitioning ? null : announcementsContent}
-          </ScrollView>
-        ) : !isTransitioning ? (
-          <ScrollView contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}>
-            {isTransitioning ? null : pollsContent}
-          </ScrollView>
+          announcementsQuery.isLoading ? (
+            <View style={[styles.feed, { paddingBottom: bottomClearance }]}>{listHeader}{renderSkeletons()}</View>
+          ) : uniqueAnnouncements.length === 0 ? (
+            <View style={[styles.feed, { paddingBottom: bottomClearance }]}>
+              {listHeader}
+              <EmptyState icon="bell" title="No community updates yet" description="Published notices from your community will appear here." />
+            </View>
+          ) : (
+            <FlatList
+              data={uniqueAnnouncements}
+              keyExtractor={(item) => item.id}
+              renderItem={renderAnnouncement}
+              contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}
+              ListHeaderComponent={listHeader}
+              initialNumToRender={5}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+            />
+          )
+        ) : !isTransitioning && activeTab === 'polls' ? (
+          pollsQuery.isLoading ? (
+            <View style={[styles.feed, { paddingBottom: bottomClearance }]}>{renderSkeletons()}</View>
+          ) : polls.length === 0 ? (
+            <View style={[styles.feed, { paddingBottom: bottomClearance }]}>
+              <EmptyState icon="pie-chart" title="No active polls" description="Community polls will appear here when management opens one." />
+            </View>
+          ) : (
+            <FlatList
+              data={polls}
+              keyExtractor={(item) => item.id}
+              renderItem={renderPoll}
+              contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}
+              initialNumToRender={5}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+            />
+          )
         ) : null}
       </Animated.View>
 
@@ -337,8 +353,8 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 97 },
   badgeText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 11, letterSpacing: 0.2, textTransform: 'uppercase' },
   time: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: '#9CA3AF' },
-  cardTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, lineHeight: 20, color: theme.colors.textPrimary, marginBottom: 6 },
-  cardBody: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 18, color: theme.colors.textSecondary },
+  cardTitle: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, lineHeight: 20, color: theme.colors.textPrimary, marginBottom: 6, flexShrink: 1 },
+  cardBody: { fontFamily: 'PlusJakartaSans_400Regular', fontSize: 13, lineHeight: 18, color: theme.colors.textSecondary, flexShrink: 1 },
   readMore: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 13, color: theme.colors.primary, marginTop: 6 },
   pollAuthor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -1, marginBottom: 12 },
   pollAuthorText: { fontFamily: 'PlusJakartaSans_500Medium', fontSize: 11, color: theme.colors.textSecondary },
@@ -351,7 +367,7 @@ const styles = StyleSheet.create({
   pollTopRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   deleteBtn: { padding: 6, borderRadius: 100, backgroundColor: '#FDEBEC' },
   filterRow: { gap: 8, paddingBottom: 4 },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 97, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+  filterChip: { minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 97, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
   filterChipActive: { backgroundColor: '#EEF8F1', borderColor: theme.colors.primary },
   filterText: { fontFamily: 'PlusJakartaSans_600SemiBold', fontSize: 12, color: theme.colors.textSecondary },
   filterTextActive: { color: theme.colors.primary },
@@ -374,7 +390,21 @@ function AnnouncementCard({ announcement, onRead }: { announcement: CommunityAnn
     }
     router.push(`/announcement/${announcement.id}`);
   };
-  return <PremiumPressable onPress={open}><Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: colors.bg }]}><Text style={[styles.badgeText, { color: colors.text }]}>{announcement.category}</Text></View><Text style={styles.time}>{announcement.isRead ? relativeTime(announcement.createdAt) : 'New · ' + relativeTime(announcement.createdAt)}</Text></View><Text style={styles.cardTitle}>{announcement.title}</Text><Text style={styles.cardBody} numberOfLines={3}>{announcement.content}</Text>{announcement.content.length > 140 ? <Text style={styles.readMore}>Tap to read more</Text> : null}</Card></PremiumPressable>;
+  return (
+    <PremiumPressable onPress={open}>
+      <Card style={styles.updateCard}>
+        <View style={styles.updateTop}>
+          <View style={[styles.badge, { backgroundColor: colors.bg, flexShrink: 1 }]}>
+            <Text style={[styles.badgeText, { color: colors.text }]} numberOfLines={1}>{announcement.category}</Text>
+          </View>
+          <Text style={[styles.time, { flexShrink: 0, marginLeft: 8 }]}>{announcement.isRead ? relativeTime(announcement.createdAt) : 'New · ' + relativeTime(announcement.createdAt)}</Text>
+        </View>
+        <Text style={styles.cardTitle} numberOfLines={2}>{announcement.title}</Text>
+        <Text style={styles.cardBody} numberOfLines={3}>{announcement.content}</Text>
+        {announcement.content.length > 140 ? <Text style={styles.readMore}>Tap to read more</Text> : null}
+      </Card>
+    </PremiumPressable>
+  );
 }
 
 function PollCard({ poll, onVote, onDelete, isManagement }: { poll: CommunityPoll; onVote: (optionId: string) => Promise<void>; onDelete?: () => Promise<void>; isManagement?: boolean }) {
@@ -386,5 +416,35 @@ function PollCard({ poll, onVote, onDelete, isManagement }: { poll: CommunityPol
   const authorName = `${poll.author?.firstName || ''} ${poll.author?.lastName || ''}`.trim() || 'Community member';
   const authorRole = poll.author?.role ? poll.author.role.charAt(0) + poll.author.role.slice(1).toLowerCase() : 'Member';
   const audienceLabel = (poll.audiences?.length ? poll.audiences : [poll.audience]).map((audience) => audience === 'HOUSEHOLD' ? 'Your residence' : audience.charAt(0) + audience.slice(1).toLowerCase()).join(', ');
-  return <Card style={styles.updateCard}><View style={styles.updateTop}><View style={[styles.badge, { backgroundColor: '#EAF0FF' }]}><Text style={[styles.badgeText, { color: '#3159A5' }]}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text></View><View style={styles.pollTopRight}>{isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}<Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text></View></View><Text style={styles.cardTitle}>{poll.question}</Text><View style={styles.pollAuthor}><Feather name="user" size={13} color={theme.colors.textSecondary} /><Text style={styles.pollAuthorText}>Posted by {authorName} · {authorRole}</Text></View><Text style={styles.pollAudience}>Visible to {audienceLabel}</Text><View style={styles.pollOptions}>{poll.options.map((option) => <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}><Text style={styles.pollOptionText}>{option.text}</Text>{poll.userHasVoted || expired ? <Text style={styles.pollCount}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />}</PremiumPressable>)}</View></Card>;
+  
+  return (
+    <Card style={styles.updateCard}>
+      <View style={styles.updateTop}>
+        <View style={[styles.badge, { backgroundColor: '#EAF0FF', flexShrink: 1 }]}>
+          <Text style={[styles.badgeText, { color: '#3159A5' }]} numberOfLines={1}>{expired ? 'CLOSED' : 'ACTIVE POLL'}</Text>
+        </View>
+        <View style={[styles.pollTopRight, { flexShrink: 0, marginLeft: 8 }]}>
+          {isManagement && onDelete ? <PremiumPressable style={styles.deleteBtn} onPress={handleDelete} disabled={deleting}><Feather name="trash-2" size={14} color="#B42318" /></PremiumPressable> : null}
+          <Text style={styles.time}>{poll.userHasVoted ? 'Vote recorded' : 'Choose one'}</Text>
+        </View>
+      </View>
+      <Text style={styles.cardTitle} numberOfLines={3}>{poll.question}</Text>
+      
+      <View style={styles.pollAuthor}>
+        <Feather name="user" size={13} color={theme.colors.textSecondary} />
+        <Text style={[styles.pollAuthorText, { flexShrink: 1 }]} numberOfLines={1}>Posted by {authorName} · {authorRole}</Text>
+      </View>
+      
+      <Text style={[styles.pollAudience, { flexShrink: 1 }]} numberOfLines={1}>Visible to {audienceLabel}</Text>
+      
+      <View style={styles.pollOptions}>
+        {poll.options.map((option) => (
+          <PremiumPressable key={option.id} style={[styles.pollOption, poll.userVotedOptionId === option.id && styles.pollOptionSelected]} onPress={() => vote(option.id)} disabled={voting || poll.userHasVoted || expired}>
+            <Text style={[styles.pollOptionText, { flexShrink: 1 }]}>{option.text}</Text>
+            {poll.userHasVoted || expired ? <Text style={[styles.pollCount, { flexShrink: 0, marginLeft: 8 }]}>{option.voteCount} votes</Text> : <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} style={{ flexShrink: 0, marginLeft: 8 }} />}
+          </PremiumPressable>
+        ))}
+      </View>
+    </Card>
+  );
 }

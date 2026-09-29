@@ -12,6 +12,7 @@ import { theme } from '../../src/theme';
 import { homeLayout, homeSurface } from '../../src/components/home/homeSurface';
 import { cardSystem } from '../../src/components/ui/cardSystem';
 import { useSession } from '../../src/store/auth';
+import { AvailabilityBadge } from '../../src/components/availability-badge';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function ProfileScreen() {
         title="Profile"
         rightAction={
           <PremiumPressable
-            onPress={() => router.push('/(app)/profile-settings')}
+            onPress={() => router.push('/profile-settings')}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.settingsIconBtn}
           >
@@ -69,9 +70,10 @@ export default function ProfileScreen() {
             />
             <View style={styles.profileInfo}>
               <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
+              <AvailabilityBadge status={user?.availabilityStatus} />
 
               <View style={styles.badgeRow}>
-                {primaryResidency ? (
+                {primaryResidency && (primaryResidency.relationshipType === 'OWNER' || primaryResidency.relationshipType === 'CO_OWNER') ? (
                   <View style={[styles.roleBadge, primaryResidency.status === 'PENDING' && { backgroundColor: '#FFF7ED' }]}>
                     <Text style={[styles.roleBadgeText, primaryResidency.status === 'PENDING' && { color: '#C2410C' }]}>
                       {primaryResidency.relationshipType} · {primaryResidency.status}
@@ -152,7 +154,7 @@ export default function ProfileScreen() {
                     {idx > 0 && <View style={styles.divider} />}
                     <PremiumPressable
                       style={styles.menuRow}
-                      onPress={() => router.push('/(app)/residency-requests')}
+                      onPress={() => router.push('/residency-requests')}
                     >
                       <View style={[styles.iconBox, { backgroundColor: '#D6EBDD' }]}>
                         <Feather name="key" size={20} color="#143D2A" />
@@ -294,7 +296,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7F3',
+    backgroundColor: theme.colors.background,
   },
   content: {
     paddingHorizontal: cardSystem.pagePadding,
@@ -316,7 +318,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: 'rgba(20, 61, 42, 0.06)',
     borderRadius: 20,

@@ -5,7 +5,7 @@ export type ServiceEntry = {
   label: string;
   description: string;
   icon: string;
-  route: any;
+  route: string;
   category: string;
   availableRoles: string[];
   isEmergency?: boolean;
@@ -25,6 +25,7 @@ export const QUICK_ACTION_VISUALS = {
 
 export const SERVICE_CATALOG: ServiceEntry[] = [
   { id: 'sos', label: 'SOS Alert', description: 'Emergency response', icon: 'alert-circle', route: '/home', category: 'Safety', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP', 'WORKFORCE'], isEmergency: true, requiresAuth: true },
+  { id: 'chat', label: 'Community Chat', description: 'Realtime channels & unit chat', icon: 'message-circle', route: '/chat', category: 'Community', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'MANAGER', 'LEADERSHIP'], requiresAuth: true },
   { id: 'add-visitor', label: 'Invite Guest', description: 'Pre-approve entry', icon: 'user-plus', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
   { id: 'cab-alert', label: 'Cab Arrival', description: 'Notify the gate', icon: 'navigation', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },
   { id: 'delivery', label: 'Delivery Arrival', description: 'Notify the gate', icon: 'package', route: '/visitors', category: 'Entry & Visitors', availableRoles: ['OWNER', 'TENANT', 'RESIDENT', 'LEADERSHIP'], requiresAuth: true },

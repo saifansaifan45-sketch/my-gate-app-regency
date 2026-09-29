@@ -30,6 +30,8 @@ export interface UnitResidencyRecord {
     lastName?: string;
     email: string;
     phoneNumber?: string;
+    availabilityStatus?: 'AVAILABLE' | 'AWAY' | 'HOLIDAY' | 'DO_NOT_DISTURB';
+    availabilityUntil?: string | null;
   };
   verifiedBy?: {
     id: string;
@@ -80,7 +82,7 @@ export const propertiesApi = {
     return res.data;
   },
 
-  requestResidency: async (unitId: string, relationshipType: 'TENANT' | 'FAMILY_MEMBER' = 'TENANT'): Promise<{ success: boolean; residency: UnitResidencyInfo; message: string }> => {
+  requestResidency: async (unitId: string, relationshipType: 'TENANT' | 'CO_OWNER' | 'FAMILY_MEMBER' = 'TENANT'): Promise<{ success: boolean; residency: UnitResidencyInfo; message: string }> => {
     const res = await api.post<{ success: boolean; residency: UnitResidencyInfo; message: string }>(`/properties/units/${unitId}/residency-request`, { relationshipType });
     return res.data;
   },
@@ -108,6 +110,18 @@ export const propertiesApi = {
     const res = await api.patch<{ success: boolean; message: string; residency: UnitResidencyRecord }>(
       `/properties/units/${unitId}/residencies/${residencyId}/access`,
       { action },
+    );
+    return res.data;
+  },
+
+  updateResidencyRole: async (
+    unitId: string,
+    residencyId: string,
+    relationshipType: 'TENANT' | 'CO_OWNER' | 'FAMILY_MEMBER',
+  ): Promise<{ success: boolean; message: string; residency: UnitResidencyRecord }> => {
+    const res = await api.patch<{ success: boolean; message: string; residency: UnitResidencyRecord }>(
+      `/properties/units/${unitId}/residencies/${residencyId}/role`,
+      { relationshipType },
     );
     return res.data;
   },

@@ -14,6 +14,7 @@ import {
   PersonnelActivityType,
   SpaceType,
 } from '@prisma/client';
+import { notifyUsers } from '../services/notificationService';
 
 const router = Router();
 
@@ -397,14 +398,11 @@ router.post('/tasks/:id/complete', async (req: AuthRequest, res: Response, next:
     });
 
     // Notify Resident
-    await prisma.notification.create({
-      data: {
-        userId: task.ticket.residentId,
-        type: 'WORK_COMPLETED',
-        title: `Work Completed: Ticket #${task.ticket.id.slice(0, 6)}`,
-        message: `${task.assignedPersonnel.name} has completed work on "${task.ticket.title}".`,
-        metadata: { ticketId: task.ticketId, taskId: task.id },
-      },
+    await notifyUsers([task.ticket.residentId], {
+      type: 'WORK_COMPLETED',
+      title: `Work Completed: Ticket #${task.ticket.id.slice(0, 6)}`,
+      message: `${task.assignedPersonnel.name} has completed work on "${task.ticket.title}".`,
+      metadata: { ticketId: task.ticketId, taskId: task.id },
     });
 
     res.json({

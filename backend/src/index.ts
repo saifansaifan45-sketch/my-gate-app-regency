@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import http from 'http';
 import { prisma } from './prisma';
 import authRoutes from './routes/auth';
 import managerRoutes from './routes/manager';
@@ -15,8 +16,11 @@ import emergencyRoutes from './routes/emergency';
 import householdRoutes from './routes/household';
 import activityLogRoutes from './routes/activity-log';
 import chatRoutes from './routes/chat';
-// Disabled feature: no lost-found route or persistence implementation exists yet.
-// import lostFoundRoutes from './routes/lost-found';
+import invitationsRoutes from './routes/invitations';
+import accessGrantRoutes from './routes/access-grants';
+import ownershipTransferRoutes from './routes/ownership-transfers';
+import profileAvailabilityRoutes from './routes/profile-availability';
+import { setupChatWebSocketServer } from './services/chatSocket';
 
 dotenv.config();
 
@@ -25,7 +29,6 @@ const app = express();
 // Trust proxy for accurate IP detection behind load balancers/CDNs
 // In production, set to the number of proxies or specific subnet
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
-
 
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
   ? process.env.CORS_ALLOWED_ORIGINS.split(',')
@@ -37,7 +40,10 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     // In development, allow all localhost and LAN IP origins for easy Expo testing
-    if (process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+/))) {
+    if (process.env.NODE_ENV !== 'production' && (
+      origin.startsWith('http://localhost:') ||
+      origin.match(/^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+/)
+    )) {
       return callback(null, true);
     }
     
@@ -101,6 +107,10 @@ app.use('/emergency', emergencyRoutes);
 app.use('/household', householdRoutes);
 app.use('/activity-log', activityLogRoutes);
 app.use('/chat', chatRoutes);
+app.use('/invitations', invitationsRoutes);
+app.use('/access-grants', accessGrantRoutes);
+app.use('/ownership-transfers', ownershipTransferRoutes);
+app.use('/profile', profileAvailabilityRoutes);
 
 // Keep time-bound gate passes accurate even when no watchman is actively viewing the queue.
 const visitorLifecycleTimer = setInterval(() => {
@@ -117,9 +127,6 @@ const idempotencyCleanupTimer = setInterval(async () => {
   }
 }, 24 * 60 * 60 * 1000);
 idempotencyCleanupTimer.unref?.();
-
-// Disabled feature: keep this unmounted until the lost-found backend is implemented.
-// app.use('/lost-found', lostFoundRoutes);
 
 // Centralized safe error handling — never leaks raw Zod or Prisma objects
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,11 +152,16 @@ app.use((_err: any, _req: express.Request, res: express.Response, _next: express
   });
 });
 
+const server = http.createServer(app);
+setupChatWebSocketServer(server);
+
+export { server };
 export default app;
 
 if (require.main === module) {
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`Server running on port ${port}`);
+  const host = process.env.HOST || '0.0.0.0';
+  server.listen(port, host, () => {
+    console.log(`Server running at http://${host}:${port}`);
   });
 }

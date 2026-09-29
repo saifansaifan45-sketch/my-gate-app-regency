@@ -38,6 +38,11 @@ export default function ResidencyRequestsScreen() {
     residentName: string;
     status: string;
   } | null>(null);
+  const [roleAction, setRoleAction] = useState<{
+    unitId: string;
+    residencyId: string;
+    residentName: string;
+  } | null>(null);
 
   const isOwner = hasOwnership();
   const myResidencies = user?.residencies || [];
@@ -112,6 +117,22 @@ export default function ResidencyRequestsScreen() {
       await loadData();
     } catch (err: unknown) {
       Alert.alert('Access Update Failed', getApiErrorMessage(err, 'Could not update resident access.'));
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handlePromoteToCoOwner = async () => {
+    if (!roleAction) return;
+    setActionInProgress(roleAction.residencyId);
+    try {
+      await propertiesApi.updateResidencyRole(roleAction.unitId, roleAction.residencyId, 'CO_OWNER');
+      Alert.alert('Co-owner added', `${roleAction.residentName} now has co-owner status for this unit.`);
+      setRoleAction(null);
+      await loadData();
+      await refreshProfile();
+    } catch (err: unknown) {
+      Alert.alert('Role update failed', getApiErrorMessage(err, 'Could not assign co-owner status.'));
     } finally {
       setActionInProgress(null);
     }
@@ -260,7 +281,7 @@ export default function ResidencyRequestsScreen() {
                               </Text>
                             </View>
 
-                            {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && (
+                            {(req.status === 'ACTIVE' || req.status === 'PAUSED') && req.relationshipType !== 'OWNER' && req.relationshipType !== 'CO_OWNER' && (
                               <TouchableOpacity
                                 style={styles.kebabBtn}
                                 onPress={() => setMenuAction({
@@ -295,7 +316,21 @@ export default function ResidencyRequestsScreen() {
           <Text style={styles.sheetTitle}>Manage Access</Text>
           <Text style={styles.sheetSubtitle}>{menuAction?.residentName}</Text>
 
-          <View style={styles.sheetOptions}>
+            <View style={styles.sheetOptions}>
+            <TouchableOpacity
+              style={styles.sheetOptionBtn}
+              onPress={() => {
+                const ma = menuAction;
+                setMenuAction(null);
+                if (ma) setRoleAction({ unitId: ma.unitId, residencyId: ma.residencyId, residentName: ma.residentName });
+              }}
+            >
+              <Feather name="user-check" size={20} color={theme.colors.primary} />
+              <Text style={styles.sheetOptionText}>Make co-owner</Text>
+            </TouchableOpacity>
+
+            <View style={styles.sheetDivider} />
+
             <TouchableOpacity
               style={styles.sheetOptionBtn}
               onPress={() => {
@@ -352,6 +387,16 @@ export default function ResidencyRequestsScreen() {
         confirmLabel={accessAction?.action === 'revoke' ? 'Revoke access' : accessAction?.action === 'pause' ? 'Pause access' : 'Restore access'}
         variant={accessAction?.action === 'revoke' ? 'danger' : accessAction?.action === 'pause' ? 'warning' : 'default'}
         loading={!!accessAction && actionInProgress === accessAction.residencyId}
+      />
+
+      <ConfirmationModal
+        visible={!!roleAction}
+        onClose={() => setRoleAction(null)}
+        onConfirm={handlePromoteToCoOwner}
+        title="Make co-owner?"
+        message={`${roleAction?.residentName || 'This resident'} will become a co-owner of the unit. Only two active co-owners are allowed besides the owner.`}
+        confirmLabel="Make co-owner"
+        loading={!!roleAction && actionInProgress === roleAction.residencyId}
       />
     </View>
   );

@@ -187,6 +187,57 @@ export async function seedDatabase() {
       },
     });
 
+    // --- Co-Owner (room 9B, co-owns with resident owner) ---
+    const coOwner = await prisma.user.upsert({
+      where: { email: 'coowner@regency.com' },
+      update: { role: Role.RESIDENT, unitNumber: '9B', passwordHash: defaultPassword },
+      create: {
+        email: 'coowner@regency.com',
+        passwordHash: defaultPassword,
+        firstName: 'Joseph',
+        lastName: 'Mehta',
+        phoneNumber: '+91 98765 00002',
+        unitNumber: '9B',
+        role: Role.RESIDENT,
+      },
+    });
+
+    await prisma.membership.upsert({
+      where: { userId_communityId_role: { userId: coOwner.id, communityId: community.id, role: Role.RESIDENT } },
+      update: { status: 'APPROVED' },
+      create: { userId: coOwner.id, communityId: community.id, unitId: units['9B'].id, role: Role.RESIDENT, status: 'APPROVED' },
+    });
+
+    await prisma.unitResidency.upsert({
+      where: { userId_unitId_relationshipType: { userId: coOwner.id, unitId: units['9B'].id, relationshipType: ResidencyType.CO_OWNER } },
+      update: { status: ResidencyStatus.ACTIVE, verifiedById: residentOwner.id, verifiedAt: new Date() },
+      create: {
+        userId: coOwner.id,
+        unitId: units['9B'].id,
+        relationshipType: ResidencyType.CO_OWNER,
+        status: ResidencyStatus.ACTIVE,
+        verifiedById: residentOwner.id,
+        verifiedAt: new Date(),
+      },
+    });
+
+    // Also create a HouseholdMember record for the co-owner
+    await prisma.householdMember.upsert({
+      where: { id: `coowner-household-${units['9B'].id}` },
+      update: {},
+      create: {
+        id: `coowner-household-${units['9B'].id}`,
+        unitId: units['9B'].id,
+        createdById: residentOwner.id,
+        name: 'Joseph Mehta',
+        relationship: 'Co-Owner',
+        phone: '+91 98765 00002',
+        email: 'coowner@regency.com',
+        status: 'ACTIVE',
+        communityId: community.id,
+      },
+    });
+
     // --- Manager ---
     const manager = await prisma.user.upsert({
       where: { email: 'manager@regency.com' },
@@ -320,6 +371,7 @@ export async function seedDatabase() {
     console.log('  leadership@regency.com  | password123 | LEADERSHIP  | Unit 9A');
     console.log('  resident@regency.com    | password123 | OWNER       | Unit 9B');
     console.log('  family@regency.com      | password123 | RESIDENT    | Unit 9B');
+    console.log('  coowner@regency.com     | password123 | RESIDENT    | Unit 9B (Co-Owner)');
     console.log('  manager@regency.com     | password123 | MANAGER     | —');
     console.log('  watchman@regency.com    | password123 | WORKFORCE   | SECURITY');
 
@@ -327,4 +379,11 @@ export async function seedDatabase() {
     console.error('Seed failed:', error);
     throw error;
   }
+}
+
+// Run directly when invoked as a script
+if (require.main === module) {
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
 }

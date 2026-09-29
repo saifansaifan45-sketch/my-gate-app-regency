@@ -45,7 +45,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
   const handleSave = async () => {
     setSaveLoading(true);
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
       onSave(localActions);
     } finally {
       setSaveLoading(false);
@@ -58,7 +58,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
     );
     if (updated.filter(a => a.visible).length === 0) return;
     setLocalActions(updated);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
   };
 
   const moveItem = (fromIndex: number, toIndex: number) => {
@@ -82,7 +82,7 @@ export function QuickActionsEditorModal({ visible, actions, onClose, onSave }: Q
         ]}
       >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { maxHeight: dialogHeight }]}>
+        <View style={[styles.sheet, { height: dialogHeight }]}>
 
         <View style={styles.header}>
           <Text style={styles.title}>Edit quick actions</Text>
@@ -179,6 +179,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     overflow: 'hidden',
+    flexShrink: 1,
+    flexDirection: 'column',
     shadowColor: '#143D2A',
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.2,

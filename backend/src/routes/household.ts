@@ -13,16 +13,23 @@ const householdDb: any = prisma;
 
 const memberSchema = z.object({
   name: z.string().trim().min(2, 'Member name is required'),
+  personType: z.string().trim().max(40).optional(),
   relationship: z.string().trim().min(2, 'Relationship is required'),
   phone: z.string().trim().max(30).optional(),
   email: z.string().trim().email('Enter a valid email address').optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 const vehicleSchema = z.object({
   registrationNumber: z.string().trim().min(3, 'Vehicle number is required').max(30),
+  vehicleType: z.enum(['TWO_WHEELER', 'FOUR_WHEELER', 'OTHER']).optional(),
   make: z.string().trim().max(60).optional(),
   model: z.string().trim().max(60).optional(),
   color: z.string().trim().max(40).optional(),
+  parkingCode: z.string().trim().max(60).optional(),
+  parkingSlot: z.string().trim().max(60).optional(),
+  status: z.enum(['ACTIVE', 'PAUSED', 'REVOKED']).optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 const petSchema = z.object({
@@ -40,16 +47,28 @@ async function getAccessibleUnit(userId: string) {
       residencies: { where: { status: ResidencyStatus.ACTIVE }, orderBy: { createdAt: 'asc' }, select: { unitId: true } },
     },
   });
-  return user?.ownerships[0]?.unitId || user?.residencies[0]?.unitId || null;
+  const directUnit = user?.ownerships[0]?.unitId || user?.residencies[0]?.unitId;
+  if (directUnit) return directUnit;
+  const grant = await prisma.accessGrant.findFirst({ where: { userId, status: 'ACTIVE', startsAt: { lte: new Date() }, OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }] }, orderBy: { createdAt: 'asc' }, select: { unitId: true } });
+  return grant?.unitId || null;
 }
 
 async function getOwnedUnit(userId: string) {
+  // Check direct ownership first
   const ownership = await prisma.unitOwnership.findFirst({
     where: { userId, status: OwnershipStatus.ACTIVE },
     orderBy: { createdAt: 'asc' },
     select: { unitId: true },
   });
-  return ownership?.unitId || null;
+  if (ownership?.unitId) return ownership.unitId;
+
+  // Also check CO_OWNER residency — co-owners can manage household
+  const coOwnerResidency = await prisma.unitResidency.findFirst({
+    where: { userId, relationshipType: 'CO_OWNER' as any, status: 'ACTIVE' as any },
+    orderBy: { createdAt: 'asc' },
+    select: { unitId: true },
+  });
+  return coOwnerResidency?.unitId || null;
 }
 
 async function getOwnerRecordId<T extends { id: string; unitId: string; relationship?: string }>(
@@ -176,7 +195,7 @@ router.post('/members', requireVerifiedResidence, async (req: AuthRequest, res: 
     if (!unitId) return res.status(403).json({ error: { message: 'Only an active property owner can update household records.' } });
     const data = memberSchema.parse(req.body);
     const member = await householdDb.householdMember.create({
-      data: { ...data, phone: data.phone || null, email: data.email || null, unitId, createdById: req.user!.userId },
+      data: { ...data, phone: data.phone || null, email: data.email || null, personType: data.personType || null, notes: data.notes || null, unitId, createdById: req.user!.userId },
       include: { createdBy: { select: { firstName: true, lastName: true } } },
     });
     res.status(201).json({ member });
@@ -188,7 +207,19 @@ router.post('/vehicles', requireVerifiedResidence, async (req: AuthRequest, res:
     const unitId = await getOwnedUnit(req.user!.userId);
     if (!unitId) return res.status(403).json({ error: { message: 'Only an active property owner can add vehicles.' } });
     const data = vehicleSchema.parse(req.body);
-    const vehicle = await householdDb.householdVehicle.create({ data: { ...data, registrationNumber: data.registrationNumber.toUpperCase(), make: data.make || null, model: data.model || null, color: data.color || null, unitId, createdById: req.user!.userId } });
+    const unit = await prisma.unit.findUniqueOrThrow({ where: { id: unitId }, select: { unitNumber: true, communityId: true } });
+    const vehicle = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${unitId}))`;
+      const assigned = await tx.householdVehicle.findMany({
+        where: { unitId, status: { not: 'REVOKED' } },
+        select: { parkingSlot: true },
+      });
+      const usedSlots = new Set(assigned.map((vehicle) => vehicle.parkingSlot).filter(Boolean));
+      let slotNumber = 1;
+      while (usedSlots.has(`${unit.unitNumber}-P${String(slotNumber).padStart(2, '0')}`)) slotNumber += 1;
+      const parkingSlot = `${unit.unitNumber}-P${String(slotNumber).padStart(2, '0')}`;
+      return tx.householdVehicle.create({ data: { ...data, registrationNumber: data.registrationNumber.toUpperCase(), vehicleType: data.vehicleType || null, make: data.make || null, model: data.model || null, color: data.color || null, parkingCode: `UNIT-${unit.unitNumber}`, parkingSlot, status: data.status || 'ACTIVE', notes: data.notes || null, unitId, communityId: unit.communityId, createdById: req.user!.userId } });
+    });
     res.status(201).json({ vehicle });
   } catch (error) { next(error); }
 });
@@ -254,27 +285,10 @@ router.patch('/members/:id/status', requireVerifiedResidence, async (req: AuthRe
       return res.status(400).json({ error: { message: 'Cannot pause or revoke the property owner.' } });
     }
     
-    const updated = await prisma.$transaction(async (tx) => {
-      const member = await tx.householdMember.update({
-        where: { id: record.id },
-        data: { status },
-        include: { createdBy: { select: { firstName: true, lastName: true } } },
-      });
-
-      // Atomically propagate member status to linked PermanentPass records
-      if (status === 'REVOKED') {
-        await tx.permanentPass.updateMany({
-          where: { householdMemberId: record.id, status: 'ACTIVE' },
-          data: { status: 'REVOKED' },
-        });
-      } else if (status === 'PAUSED') {
-        await tx.permanentPass.updateMany({
-          where: { householdMemberId: record.id, status: 'ACTIVE' },
-          data: { status: 'PAUSED' },
-        });
-      }
-
-      return member;
+    const updated = await householdDb.householdMember.update({
+      where: { id: record.id },
+      data: { status },
+      include: { createdBy: { select: { firstName: true, lastName: true } } },
     });
     
     res.json({ member: updated });
@@ -454,14 +468,6 @@ router.post('/permanent-passes/:id/renew', requireVerifiedResidence, async (req:
 
     const pass = await prisma.permanentPass.findFirst({ where: { id, unitId } });
     if (!pass) return res.status(404).json({ error: { message: 'Pass not found.' } });
-
-    // Guard: linked household member must be ACTIVE to renew
-    if (pass.householdMemberId) {
-      const linkedMember = await prisma.householdMember.findUnique({ where: { id: pass.householdMemberId } });
-      if (!linkedMember || linkedMember.status !== 'ACTIVE') {
-        return res.status(400).json({ error: { message: 'Linked household member is not active — cannot renew pass.' } });
-      }
-    }
 
     const now = new Date();
     const validUntil = new Date(now.getTime() + PASS_DURATION_DAYS * 24 * 60 * 60 * 1000);

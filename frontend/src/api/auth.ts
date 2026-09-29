@@ -4,7 +4,8 @@ export type UserRole = 'LEADERSHIP' | 'MANAGER' | 'WORKFORCE' | 'RESIDENT' | 'OW
 
 export type OwnershipStatus = 'ACTIVE' | 'INACTIVE' | 'TRANSFERRED';
 export type ResidencyStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'REVOKED' | 'REJECTED' | 'EXPIRED';
-export type ResidencyType = 'OWNER' | 'TENANT' | 'FAMILY_MEMBER';
+export type ResidencyType = 'OWNER' | 'CO_OWNER' | 'TENANT' | 'FAMILY_MEMBER';
+export type ResidentAvailabilityStatus = 'AVAILABLE' | 'AWAY' | 'HOLIDAY' | 'DO_NOT_DISTURB';
 export type EmployeeRole =
   | 'MANAGER'
   | 'SECURITY'
@@ -56,6 +57,8 @@ export interface UserProfile {
   ownerships?: UnitOwnershipInfo[];
   residencies?: UnitResidencyInfo[];
   createdAt?: string;
+  availabilityStatus?: ResidentAvailabilityStatus;
+  availabilityUntil?: string | null;
 }
 
 export interface AuthResponse {
@@ -78,6 +81,16 @@ export interface RegisterPayload {
   email: string;
   phoneNumber: string;
   password: string;
+  inviteToken?: string;
+}
+
+export interface InvitationPreview {
+  email: string;
+  name?: string | null;
+  role: 'OWNER' | 'CO_OWNER' | 'TENANT' | 'FAMILY_MEMBER';
+  communityName: string;
+  unitNumber: string;
+  expiresAt: string;
 }
 
 export interface OwnerOnboardingPayload {
@@ -89,7 +102,7 @@ export interface OwnerOnboardingPayload {
 export interface ResidentOnboardingPayload {
   floor?: string;
   flatNumber: string;
-  relationshipType?: 'TENANT' | 'FAMILY_MEMBER';
+  relationshipType?: 'TENANT' | 'CO_OWNER' | 'FAMILY_MEMBER';
 }
 
 export interface EmployeeOnboardingPayload {
@@ -100,6 +113,16 @@ export interface EmployeeOnboardingPayload {
 }
 
 export const authApi = {
+  getInvitation: async (token: string): Promise<{ invitation: InvitationPreview }> => {
+    const res = await api.get<{ invitation: InvitationPreview }>(`/auth/invitations/${encodeURIComponent(token)}`);
+    return res.data;
+  },
+
+  createInvitation: async (payload: { email: string; name?: string; role: InvitationPreview['role']; unitId: string; message?: string; expiresInDays?: number }) => {
+    const res = await api.post('/auth/invitations', payload);
+    return res.data;
+  },
+
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
     const res = await api.post<AuthResponse>('/auth/login', {
       email: payload.email.trim().toLowerCase(),

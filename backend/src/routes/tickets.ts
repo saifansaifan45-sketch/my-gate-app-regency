@@ -4,6 +4,7 @@ import { prisma } from '../prisma';
 import { requireAuth, requireVerifiedResidence, AuthRequest } from '../middleware/auth';
 import { TicketPriority, TicketStatus, Role, ResidencyStatus, OwnershipStatus } from '@prisma/client';
 import { broadcastTicketCreated } from '../services/spaceBroadcast';
+import { notifyUsers } from '../services/notificationService';
 
 const router = Router();
 
@@ -86,19 +87,15 @@ router.post('/', requireVerifiedResidence, async (req: AuthRequest, res: Respons
       },
     });
 
-    for (const mgr of managers) {
-      await prisma.notification
-        .create({
-          data: {
-            userId: mgr.id,
-            type: 'NEW_TICKET',
-            title: 'New maintenance request',
-            message: `${ticket.resident.firstName || 'Resident'} (${unitNumber}) reported: ${ticket.title}`,
-            metadata: { ticketId: ticket.id, unitNumber },
-          },
-        })
-        .catch(() => {});
-    }
+    await notifyUsers(
+      managers.map((m) => m.id),
+      {
+        type: 'NEW_TICKET',
+        title: 'New maintenance request',
+        message: `${ticket.resident.firstName || 'Resident'} (${unitNumber}) reported: ${ticket.title}`,
+        metadata: { ticketId: ticket.id, unitNumber },
+      }
+    );
 
     // Broadcast system event to Leadership & Community Spaces
     await broadcastTicketCreated({
@@ -176,14 +173,11 @@ router.post('/:id/verify', requireVerifiedResidence, async (req: AuthRequest, re
       if (latestTask && latestTask.assignedPersonnelId) {
         const personnel = await prisma.personnel.findUnique({ where: { id: latestTask.assignedPersonnelId } });
         if (personnel && personnel.userId) {
-          await prisma.notification.create({
-            data: {
-              userId: personnel.userId,
-              type: 'TICKET_REOPENED',
-              title: 'Task Reopened by Resident',
-              message: `The resident marked the issue as still existing. Note: ${note || 'None'}`,
-              metadata: { ticketId, taskId: latestTask.id },
-            },
+          await notifyUsers([personnel.userId], {
+            type: 'TICKET_REOPENED',
+            title: 'Task Reopened by Resident',
+            message: `The resident marked the issue as still existing. Note: ${note || 'None'}`,
+            metadata: { ticketId, taskId: latestTask.id },
           });
         }
       }
@@ -201,15 +195,15 @@ router.post('/:id/verify', requireVerifiedResidence, async (req: AuthRequest, re
         select: { id: true },
       });
       if (escalationRecipients.length > 0) {
-        await prisma.notification.createMany({
-          data: escalationRecipients.map((recipient) => ({
-            userId: recipient.id,
+        await notifyUsers(
+          escalationRecipients.map((r) => r.id),
+          {
             type: 'TICKET_CLOSED',
             title: `Ticket #${ticketId.slice(0, 6)} Closed`,
             message: `The resident confirmed that "${ticket.title}" is resolved.`,
             metadata: { ticketId, residentId: userId },
-          })),
-        });
+          }
+        );
       }
     }
 

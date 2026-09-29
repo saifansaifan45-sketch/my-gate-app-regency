@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { broadcastEmergencyAlert } from '../services/spaceBroadcast';
+import { notifyUsers } from '../services/notificationService';
 
 const router = Router();
 router.use(requireAuth);
@@ -74,14 +75,11 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
       createdAt: createdAt.toISOString(),
     };
 
-    await prisma.notification.createMany({
-      data: recipientIds.map((recipientId) => ({
-        userId: recipientId,
-        type: 'EMERGENCY_SOS',
-        title,
-        message: notificationMessage,
-        metadata,
-      })),
+    await notifyUsers(recipientIds, {
+      type: 'EMERGENCY_SOS',
+      title,
+      message: notificationMessage,
+      metadata,
     });
     await broadcastEmergencyAlert(communityId, title, notificationMessage, metadata);
 

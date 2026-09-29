@@ -25,6 +25,7 @@ import { TicketItem } from '../../src/api/manager';
 import { getHomeDashboard, homeDashboardQueryKey } from '../../src/api/home-dashboard';
 import { theme } from '../../src/theme';
 import { homeLayout } from '../../src/components/home/homeSurface';
+import { AvailabilityEditor } from '../../src/components/availability-editor';
 
 // Modular Home Components
 import {
@@ -431,6 +432,10 @@ export default function HomeScreen() {
         {/* Body Sections */}
         <ScreenEntrance delay={125} distance={28} style={[styles.bodyWrapper, { paddingBottom: bottomClearance + 20 }]}>
           <ResidenceGuardBanner />
+
+          <ScreenEntrance animation="rise" delay={120} distance={10}>
+            <AvailabilityEditor />
+          </ScreenEntrance>
 
           {/* At a glance */}
           <ScreenEntrance animation="rise" delay={125} distance={10}>

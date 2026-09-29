@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { View, StyleSheet, ScrollView, Image, RefreshControl } from 'react-native';
 import { getTimePeriod, TimePeriod } from '../../src/components/home/TimeBasedBackground';
@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
 import { ScreenEntrance } from '../../src/components/ui/ScreenEntrance';
+import { AnimatedEntrance } from '../../src/components/ui/AnimatedEntrance';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { useScreenInsets } from '../../src/hooks/useScreenInsets';
@@ -17,10 +18,15 @@ import { theme } from '../../src/theme';
 import { homeLayout, homeSurface } from '../../src/components/home/homeSurface';
 import { cardSystem } from '../../src/components/ui/cardSystem';
 import { householdApi } from '../../src/api/household';
+import { getPetIconInfo } from '../../src/utils/petIcons';
 import { propertiesApi, UnitResidencyRecord } from '../../src/api/properties';
+import { AvailabilityBadge } from '../../src/components/availability-badge';
+
+const VEHICLE_TYPE_LABELS: Record<string, string> = { TWO_WHEELER: '2-Wheeler', FOUR_WHEELER: '4-Wheeler', OTHER: 'Other' };
 
 const RELATIONSHIP_COLORS: Record<string, { bg: string; text: string }> = {
   OWNER: { bg: '#ECFDF5', text: '#047857' },
+  CO_OWNER: { bg: '#E0F2FE', text: '#0369A1' },
   TENANT: { bg: '#EFF6FF', text: '#1D4ED8' },
   FAMILY_MEMBER: { bg: '#FEF3C7', text: '#92400E' },
 };
@@ -47,7 +53,7 @@ const PERIOD_IMAGES: Record<TimePeriod, ReturnType<typeof require>> = {
 export default function MyHomeScreen() {
   const router = useRouter();
   const { bottomClearance } = useScreenInsets(false);
-  const { user, primaryResidency } = useSession() || {};
+  const { user, primaryResidency, hasOwnership } = useSession() || {};
 
   const unitNumber = primaryResidency?.unitNumber || user?.unitNumber || '9A';
   const unitId = primaryResidency?.unitId;
@@ -85,13 +91,17 @@ export default function MyHomeScreen() {
         variant="subscreen"
         title={`Unit ${unitNumber}`}
         rightAction={
-          <PremiumPressable
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={() => router.push('/profile-settings')}
-            style={styles.settingsBtn}
-          >
-            <Feather name="settings" size={18} color={theme.colors.textSecondary} />
-          </PremiumPressable>
+          <View style={styles.headerActions}>
+            <PremiumPressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => router.push('/access-management')} style={styles.settingsBtn} accessibilityLabel="Manage residence access">
+              <Feather name="key" size={18} color={theme.colors.textSecondary} />
+            </PremiumPressable>
+            {hasOwnership() && <PremiumPressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => router.push('/ownership-transfer')} style={styles.settingsBtn} accessibilityLabel="Manage ownership handover">
+              <Feather name="repeat" size={18} color={theme.colors.textSecondary} />
+            </PremiumPressable>}
+            <PremiumPressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => router.push('/profile-settings')} style={styles.settingsBtn} accessibilityLabel="Open settings">
+              <Feather name="settings" size={18} color={theme.colors.textSecondary} />
+            </PremiumPressable>
+          </View>
         }
       />
 
@@ -170,12 +180,15 @@ export default function MyHomeScreen() {
                                 <Text style={styles.youBadgeText}>You</Text>
                               </View>
                             )}
+                            <AvailabilityBadge status={res.user.availabilityStatus} compact />
                           </View>
-                          <View style={[styles.relPill, { backgroundColor: relColor.bg }]}>
-                            <Text style={[styles.relPillText, { color: relColor.text }]}>
-                              {res.relationshipType.replace('_', ' ')}
-                            </Text>
-                          </View>
+                          {(res.relationshipType === 'OWNER' || res.relationshipType === 'CO_OWNER') && (
+                            <View style={[styles.relPill, { backgroundColor: relColor.bg }]}>
+                              <Text style={[styles.relPillText, { color: relColor.text }]}>
+                                {res.relationshipType.replace('_', ' ')}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                         <Feather name="chevron-right" size={16} color={theme.colors.textSecondary} />
                       </PremiumPressable>
@@ -211,15 +224,17 @@ export default function MyHomeScreen() {
               <View style={homeSurface}>
                 {householdMembers.map((m, index) => (
                   <React.Fragment key={m.id}>
+                    <AnimatedEntrance delay={120 + index * 45} distance={8}>
                     <View style={styles.recordRow}>
                       <View style={styles.recordIconBox}>
                         <Feather name="user" size={18} color={theme.colors.primary} />
                       </View>
                       <View style={styles.recordInfo}>
                         <Text style={styles.recordTitle}>{m.name}</Text>
-                        <Text style={styles.recordDetail}>{m.relationship}</Text>
+                        <Text style={styles.recordDetail} numberOfLines={2}>{m.relationship}</Text>
                       </View>
                     </View>
+                    </AnimatedEntrance>
                     {index < householdMembers.length - 1 && <View style={styles.divider} />}
                   </React.Fragment>
                 ))}
@@ -260,17 +275,19 @@ export default function MyHomeScreen() {
               ) : (
                 vehicles.map((v, index) => (
                   <React.Fragment key={v.id}>
+                    <AnimatedEntrance delay={140 + index * 45} distance={8}>
                     <View style={styles.recordRow}>
                       <View style={[styles.recordIconBox, { backgroundColor: '#FFF3D6' }]}>
                         <Feather name="truck" size={18} color="#D97706" />
                       </View>
                       <View style={styles.recordInfo}>
                         <Text style={styles.recordTitle}>{v.registrationNumber}</Text>
-                        <Text style={styles.recordDetail}>
-                          {[v.make, v.model, v.color].filter(Boolean).join(' · ') || 'Vehicle'}
+                        <Text style={styles.recordDetail} numberOfLines={2}>
+                          {[VEHICLE_TYPE_LABELS[v.vehicleType || ''] || v.vehicleType || '', v.make, v.model, v.color].filter(Boolean).join(' · ') || 'Vehicle'}
                         </Text>
                       </View>
                     </View>
+                    </AnimatedEntrance>
                     {index < vehicles.length - 1 && <View style={styles.divider} />}
                   </React.Fragment>
                 ))
@@ -304,24 +321,26 @@ export default function MyHomeScreen() {
               ) : pets.length === 0 ? (
                 <View style={styles.emptyRow}>
                   <View style={[styles.recordIconBox, { backgroundColor: '#FCE7F3' }]}>
-                    <Feather name="heart" size={18} color="#BE185D" />
+                    <MaterialCommunityIcons name="paw" size={18} color="#BE185D" />
                   </View>
                   <Text style={styles.emptyText}>No pets registered</Text>
                 </View>
               ) : (
                 pets.map((p, index) => (
                   <React.Fragment key={p.id}>
+                    <AnimatedEntrance delay={160 + index * 45} distance={8}>
                     <View style={styles.recordRow}>
-                      <View style={[styles.recordIconBox, { backgroundColor: '#FCE7F3' }]}>
-                        <Feather name="heart" size={18} color="#BE185D" />
+                      <View style={[styles.recordIconBox, { backgroundColor: getPetIconInfo(p.species).bgColor }]}>
+                        <MaterialCommunityIcons name={getPetIconInfo(p.species).iconName} size={18} color={getPetIconInfo(p.species).color} />
                       </View>
                       <View style={styles.recordInfo}>
                         <Text style={styles.recordTitle}>{p.name}</Text>
-                        <Text style={styles.recordDetail}>
+                        <Text style={styles.recordDetail} numberOfLines={2}>
                           {[p.species, p.breed, p.color].filter(Boolean).join(' · ') || 'Pet'}
                         </Text>
                       </View>
                     </View>
+                    </AnimatedEntrance>
                     {index < pets.length - 1 && <View style={styles.divider} />}
                   </React.Fragment>
                 ))
@@ -368,6 +387,7 @@ export default function MyHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   settingsBtn: {
     width: 36,
     height: 36,
@@ -493,6 +513,7 @@ const styles = StyleSheet.create({
   },
   recordInfo: {
     flex: 1,
+    minWidth: 0,
     gap: 5,
   },
   nameRow: {
@@ -510,6 +531,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
     color: theme.colors.textSecondary,
+    flexShrink: 1,
   },
   youBadge: {
     backgroundColor: '#ECFDF5',

@@ -41,8 +41,24 @@ enum ResidencyStatus {
 
 enum ResidencyType {
   OWNER
+  CO_OWNER
   TENANT
   FAMILY_MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum OwnershipTransferStatus {
+  PROPOSED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+  EXPIRED
 }
 
 enum SpaceType {
@@ -166,6 +182,13 @@ enum AvailabilityStatus {
   LEAVE
 }
 
+enum ResidentAvailabilityStatus {
+  AVAILABLE
+  AWAY
+  HOLIDAY
+  DO_NOT_DISTURB
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
@@ -229,45 +252,58 @@ enum VisitorType {
 }
 
 model User {
-  id                      String             @id @default(uuid())
-  email                   String             @unique
+  id                      String                     @id @default(uuid())
+  email                   String                     @unique
   passwordHash            String
-  tokenVersion            Int                @default(0)
+  tokenVersion            Int                        @default(0)
   resetTokenHash          String?
   resetTokenExpiresAt     DateTime?
   firstName               String?
   lastName                String?
   phoneNumber             String?
   unitNumber              String?
-  role                    Role?              @default(RESIDENT)
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  pushToken               String?
+  role                    Role?                      @default(RESIDENT)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  availabilityStatus      ResidentAvailabilityStatus @default(AVAILABLE)
+  availabilityUntil       DateTime?
   memberships             Membership[]
-  ownerships              UnitOwnership[]    @relation("UserOwnerships")
-  residencies             UnitResidency[]    @relation("UserResidencies")
-  verifiedResidencies     UnitResidency[]    @relation("VerifiedResidencies")
+  ownerships              UnitOwnership[]            @relation("UserOwnerships")
+  residencies             UnitResidency[]            @relation("UserResidencies")
+  verifiedResidencies     UnitResidency[]            @relation("VerifiedResidencies")
   sessions                Session[]
-  auditLogsActor          AuditLog[]         @relation("AuditActor")
-  auditLogsTarget         AuditLog[]         @relation("AuditTarget")
-  staffRequests           StaffRequest[]     @relation("RequestedByUser")
-  tickets                 Ticket[]           @relation("ResidentTickets")
-  assignedTasks           Task[]             @relation("ManagerTasks")
-  notifications           Notification[]     @relation("UserNotifications")
-  posts                   CommunityPost[]    @relation("UserPosts")
-  polls                   Poll[]             @relation("UserPolls")
-  pollVotes               PollVote[]         @relation("UserPollVotes")
-  announcements           Announcement[]     @relation("UserAnnouncements")
+  auditLogsActor          AuditLog[]                 @relation("AuditActor")
+  auditLogsTarget         AuditLog[]                 @relation("AuditTarget")
+  staffRequests           StaffRequest[]             @relation("RequestedByUser")
+  tickets                 Ticket[]                   @relation("ResidentTickets")
+  assignedTasks           Task[]                     @relation("ManagerTasks")
+  notifications           Notification[]             @relation("UserNotifications")
+  posts                   CommunityPost[]            @relation("UserPosts")
+  polls                   Poll[]                     @relation("UserPolls")
+  pollVotes               PollVote[]                 @relation("UserPollVotes")
+  announcements           Announcement[]             @relation("UserAnnouncements")
   lostAndFoundItems       LostAndFoundItem[]
   announcementReads       AnnouncementRead[]
-  visitors                Visitor[]          @relation("UserVisitors")
-  hostedVisitors           Visitor[]          @relation("UserHostedVisitors")
-  householdMembers        HouseholdMember[]  @relation("HouseholdMemberCreator")
-  householdVehicles       HouseholdVehicle[] @relation("HouseholdVehicleCreator")
-  householdPets           HouseholdPet[]     @relation("HouseholdPetCreator")
-  personnelProfile        Personnel?         @relation("UserPersonnel")
-  householdHelps          HouseholdHelp[]    @relation("HouseholdHelpCreator")
-  permanentPasses         PermanentPass[]    @relation("PermanentPassCreator")
-  attendanceConfirmations Attendance[]       @relation("AttendanceConfirmer")
+  visitors                Visitor[]                  @relation("UserVisitors")
+  hostedVisitors          Visitor[]                  @relation("UserHostedVisitors")
+  householdMembers        HouseholdMember[]          @relation("HouseholdMemberCreator")
+  householdVehicles       HouseholdVehicle[]         @relation("HouseholdVehicleCreator")
+  householdPets           HouseholdPet[]             @relation("HouseholdPetCreator")
+  personnelProfile        Personnel?                 @relation("UserPersonnel")
+  householdHelps          HouseholdHelp[]            @relation("HouseholdHelpCreator")
+  permanentPasses         PermanentPass[]            @relation("PermanentPassCreator")
+  attendanceConfirmations Attendance[]               @relation("AttendanceConfirmer")
+  chatMessages            ChatMessage[]              @relation("UserChatMessages")
+  sentInvitations         Invitation[]               @relation("UserInvitations")
+  acceptedInvitations     Invitation[]               @relation("AcceptedInvitations")
+  accessGrantsReceived    AccessGrant[]              @relation("AccessGrantRecipient")
+  accessGrantsIssued      AccessGrant[]              @relation("AccessGrantIssuer")
+  accessGrantsRevoked     AccessGrant[]              @relation("AccessGrantRevoker")
+  tenantClauseAcceptances TenantClauseAcceptance[]
+  acceptedTenantClauses   TenantClauseAcceptance[]   @relation("TenantClauseAcceptedBy")
+  ownershipTransfersFrom  OwnershipTransfer[]        @relation("OwnershipTransferFrom")
+  ownershipTransfersTo    OwnershipTransfer[]        @relation("OwnershipTransferTo")
 }
 
 model Community {
@@ -291,6 +327,8 @@ model Community {
   permanentPasses   PermanentPass[]
   announcements     Announcement[]
   lostAndFoundItems LostAndFoundItem[]
+  chatMessages      ChatMessage[]
+  invitations       Invitation[]
 }
 
 model HouseholdMember {
@@ -298,9 +336,11 @@ model HouseholdMember {
   unitId       String
   createdById  String
   name         String
+  personType   String?
   relationship String
   phone        String?
   email        String?
+  notes        String?
   status       String     @default("ACTIVE") // ACTIVE, PAUSED, REVOKED
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -317,9 +357,14 @@ model HouseholdVehicle {
   unitId             String
   createdById        String
   registrationNumber String
+  vehicleType        String? // TWO_WHEELER, FOUR_WHEELER, OTHER
   make               String?
   model              String?
   color              String?
+  parkingCode        String?
+  parkingSlot        String?
+  status             String     @default("ACTIVE")
+  notes              String?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   unit               Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -374,26 +419,26 @@ model HouseholdHelp {
 }
 
 model PermanentPass {
-  id              String   @id @default(uuid())
-  unitId          String
-  communityId     String
-  createdById     String
-  name            String
-  phone           String?
-  vehicleNumber   String?
-  purpose         String?  @default("Family member access")
+  id                String    @id @default(uuid())
+  unitId            String
+  communityId       String
+  createdById       String
+  name              String
+  phone             String?
+  vehicleNumber     String?
+  purpose           String?   @default("Family member access")
   householdMemberId String?
-  status          String   @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED
-  validFrom       DateTime @default(now())
-  validUntil      DateTime
-  lastUsedAt      DateTime?
-  useCount        Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status            String    @default("ACTIVE") // ACTIVE, PAUSED, EXPIRED
+  validFrom         DateTime  @default(now())
+  validUntil        DateTime
+  lastUsedAt        DateTime?
+  useCount          Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  createdBy       User      @relation("PermanentPassCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("PermanentPassCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([unitId])
   @@index([communityId])
@@ -401,26 +446,31 @@ model PermanentPass {
 }
 
 model Unit {
-  id                String             @id @default(uuid())
-  communityId       String
-  unitNumber        String // e.g. "9A", "A-101", "A-302"
-  floor             String? // e.g. "9", "1"
-  block             String? // e.g. "Tower A", "Tower B"
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  community         Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  ownerships        UnitOwnership[]    @relation("UnitOwnerships")
-  residencies       UnitResidency[]    @relation("UnitResidencies")
-  memberships       Membership[]
-  staffRequests     StaffRequest[]
-  tickets           Ticket[]
-  visitors          Visitor[]
-  householdMembers  HouseholdMember[]
-  householdVehicles HouseholdVehicle[]
-  householdPets     HouseholdPet[]
-  householdHelps    HouseholdHelp[]
-  permanentPasses   PermanentPass[]
-  polls             Poll[]
+  id                      String                   @id @default(uuid())
+  communityId             String
+  unitNumber              String // e.g. "9A", "A-101", "A-302"
+  floor                   String? // e.g. "9", "1"
+  block                   String? // e.g. "Tower A", "Tower B"
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  community               Community                @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  ownerships              UnitOwnership[]          @relation("UnitOwnerships")
+  residencies             UnitResidency[]          @relation("UnitResidencies")
+  memberships             Membership[]
+  staffRequests           StaffRequest[]
+  tickets                 Ticket[]
+  visitors                Visitor[]
+  householdMembers        HouseholdMember[]
+  householdVehicles       HouseholdVehicle[]
+  householdPets           HouseholdPet[]
+  householdHelps          HouseholdHelp[]
+  permanentPasses         PermanentPass[]
+  polls                   Poll[]
+  chatMessages            ChatMessage[]
+  invitations             Invitation[]
+  accessGrants            AccessGrant[]
+  tenantClauseAcceptances TenantClauseAcceptance[]
+  ownershipTransfers      OwnershipTransfer[]
 
   @@unique([communityId, unitNumber])
 }
@@ -438,6 +488,31 @@ model UnitOwnership {
   @@unique([userId, unitId])
   @@index([unitId])
   @@index([userId])
+}
+
+model OwnershipTransfer {
+  id                String                  @id @default(uuid())
+  unitId            String
+  fromOwnerId       String
+  toOwnerId         String
+  status            OwnershipTransferStatus @default(PROPOSED)
+  clauseId          String
+  clauseVersion     String
+  clauseText        String
+  effectiveAt       DateTime
+  documentReference String?
+  proposedAt        DateTime                @default(now())
+  acceptedAt        DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  unit              Unit                    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  fromOwner         User                    @relation("OwnershipTransferFrom", fields: [fromOwnerId], references: [id], onDelete: Cascade)
+  toOwner           User                    @relation("OwnershipTransferTo", fields: [toOwnerId], references: [id], onDelete: Cascade)
+
+  @@index([unitId, status])
+  @@index([toOwnerId, status])
 }
 
 model UnitResidency {
@@ -504,20 +579,20 @@ model CommunityPost {
 }
 
 model Poll {
-  id        String       @id @default(uuid())
+  id        String         @id @default(uuid())
   spaceId   String
   authorId  String
   unitId    String?
   question  String
-  status    PollStatus   @default(ACTIVE)
-  audience  PollAudience @default(RESIDENTS)
+  status    PollStatus     @default(ACTIVE)
+  audience  PollAudience   @default(RESIDENTS)
   audiences PollAudience[] @default([RESIDENTS])
   expiresAt DateTime?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  space     Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  author    User         @relation("UserPolls", fields: [authorId], references: [id], onDelete: Cascade)
-  unit      Unit?        @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  space     Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  author    User           @relation("UserPolls", fields: [authorId], references: [id], onDelete: Cascade)
+  unit      Unit?          @relation(fields: [unitId], references: [id], onDelete: Cascade)
   options   PollOption[]
   votes     PollVote[]
 
@@ -596,19 +671,19 @@ model SpaceMessage {
 }
 
 model Membership {
-  id          String           @id @default(uuid())
-  userId      String
-  communityId String
-  unitId      String? // Nullable for community-wide leadership/workforce/managers
-  role        Role
-  status      MembershipStatus @default(APPROVED)
-  requestedCategory String?
+  id                  String           @id @default(uuid())
+  userId              String
+  communityId         String
+  unitId              String? // Nullable for community-wide leadership/workforce/managers
+  role                Role
+  status              MembershipStatus @default(APPROVED)
+  requestedCategory   String?
   requestedDepartment String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  unit        Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community           Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unit                Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   @@unique([userId, communityId, role])
 }
@@ -774,12 +849,18 @@ model Visitor {
   id                    String        @id @default(uuid())
   name                  String
   phone                 String?
-  purpose               String?
+  purpose               String
+  partySize             Int           @default(1)
+  admittedCount         Int           @default(0)
   vehicleNumber         String?
+  vehicleMake           String?
   visitorType           VisitorType   @default(GUEST)
   status                VisitorStatus @default(PENDING)
   otp                   String?
+  otpExpiresAt          DateTime?
   otpFailedAttempts     Int           @default(0)
+  acknowledgedAt        DateTime?
+  acknowledgedById      String?
   isPreApproved         Boolean       @default(false)
   createdById           String
   createdBy             User          @relation("UserVisitors", fields: [createdById], references: [id], onDelete: Cascade)
@@ -796,8 +877,6 @@ model Visitor {
   provider              String?
   orderReference        String?
   packageCount          Int?
-  partySize             Int           @default(1)
-  admittedCount         Int           @default(0)
   handoffSuggestionType String?
   handoffSuggestionName String?
   handoffRecipientType  String?
@@ -851,14 +930,111 @@ model LostAndFoundItem {
 }
 
 model IdempotencyKey {
-  id          String   @id @default(uuid())
-  key         String   @unique
-  endpoint    String
-  userId      String
-  response    Json?
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime
+  id        String   @id @default(uuid())
+  key       String   @unique
+  endpoint  String
+  userId    String
+  response  Json?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
 
   @@index([userId, endpoint])
   @@index([expiresAt])
+}
+
+enum ChatChannelType {
+  UNIT
+  OWNERS
+  LEADERSHIP_MANAGEMENT
+}
+
+model ChatMessage {
+  id            String          @id @default(uuid())
+  communityId   String
+  channelType   ChatChannelType
+  channelId     String // "unit:<unitId>", "channel:owners", "channel:leadership_management"
+  unitId        String?
+  senderId      String
+  content       String
+  attachmentUrl String?
+  createdAt     DateTime        @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  sender    User      @relation("UserChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  unit      Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([communityId, channelType, createdAt])
+  @@index([channelId, createdAt])
+  @@index([senderId])
+}
+
+model Invitation {
+  id           String           @id @default(uuid())
+  email        String
+  name         String?
+  role         ResidencyType    @default(TENANT)
+  unitId       String
+  communityId  String
+  invitedById  String
+  token        String           @unique
+  status       InvitationStatus @default(PENDING)
+  message      String?
+  acceptedById String?
+  expiresAt    DateTime
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  unit       Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  community  Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  invitedBy  User      @relation("UserInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedBy User?     @relation("AcceptedInvitations", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@unique([email, unitId, status])
+  @@index([token])
+  @@index([email])
+  @@index([unitId])
+  @@index([invitedById])
+}
+
+model AccessGrant {
+  id          String    @id @default(uuid())
+  userId      String
+  unitId      String
+  grantedById String
+  revokedById String?
+  accessType  String
+  permissions Json?
+  status      String    @default("ACTIVE")
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User  @relation("AccessGrantRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  unit      Unit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  grantedBy User  @relation("AccessGrantIssuer", fields: [grantedById], references: [id], onDelete: Cascade)
+  revokedBy User? @relation("AccessGrantRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, unitId, status])
+  @@index([unitId, status, startsAt, endsAt])
+  @@index([grantedById])
+}
+
+model TenantClauseAcceptance {
+  id            String   @id @default(uuid())
+  userId        String
+  unitId        String
+  clauseId      String
+  clauseVersion String
+  acceptedAt    DateTime @default(now())
+  acceptedById  String
+  createdAt     DateTime @default(now())
+
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit       Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  acceptedBy User @relation("TenantClauseAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict)
+
+  @@unique([userId, unitId, clauseId, clauseVersion])
+  @@index([unitId, userId])
 }

@@ -1,7 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../prisma';
-import { requireAuth, requireManager, requireLeadership, requireWorkforceOrManager, AuthRequest, getApprovedCommunityIds } from '../middleware/auth';
+import { requireAuth, requireManager, requireManagerOnly, requireLeadership, requireWorkforceOrManager, AuthRequest, getApprovedCommunityIds } from '../middleware/auth';
 import * as XLSX from 'xlsx';
 import { generateAttendanceExportToken, verifyAttendanceExportToken } from '../utils/jwt';
 import {
@@ -13,6 +13,7 @@ import {
   AttendanceStatus,
   Role,
 } from '@prisma/client';
+import { notifyUsers } from '../services/notificationService';
 
 const router = Router();
 
@@ -404,7 +405,7 @@ const ALLOWED_TICKET_TRANSITIONS: Partial<Record<TicketStatus, TicketStatus[]>> 
   CANCELLED: [TicketStatus.REOPENED],
 };
 
-router.patch('/tickets/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.patch('/tickets/:id', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -450,14 +451,11 @@ router.patch('/tickets/:id', requireManager, async (req: AuthRequest, res: Respo
         message = `Your maintenance request "${existing.title}" has been closed.`;
       }
 
-      await prisma.notification.create({
-        data: {
-          userId: existing.residentId,
-          type: `TICKET_${data.status}`,
-          title,
-          message,
-          metadata: { ticketId: id },
-        },
+      await notifyUsers([existing.residentId], {
+        type: `TICKET_${data.status}`,
+        title,
+        message,
+        metadata: { ticketId: id },
       });
     }
 
@@ -476,7 +474,7 @@ const assignTaskSchema = z.object({
   remarks: z.string().optional(),
 });
 
-router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/tasks/assign', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -497,6 +495,14 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
       return res.status(404).json({ error: { message: 'Personnel not found' } });
     }
 
+    if (personnel.employmentStatus === 'SUSPENDED' || personnel.employmentStatus === 'TERMINATED') {
+      return res.status(400).json({
+        error: {
+          message: `Personnel ${personnel.name} is currently ${personnel.employmentStatus.toLowerCase()} and cannot receive assignments.`,
+        },
+      });
+    }
+
     // Strict validation: OFF_DUTY or LEAVE workers cannot receive tasks
     if (
       personnel.availabilityStatus === AvailabilityStatus.OFF_DUTY ||
@@ -505,14 +511,6 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
       return res.status(400).json({
         error: {
           message: `Personnel ${personnel.name} is currently ${personnel.availabilityStatus.toLowerCase().replace('_', ' ')} and cannot be assigned tasks.`,
-        },
-      });
-    }
-
-    if (personnel.employmentStatus === 'SUSPENDED' || personnel.employmentStatus === 'TERMINATED') {
-      return res.status(400).json({
-        error: {
-          message: `Personnel ${personnel.name} is currently ${personnel.employmentStatus.toLowerCase()} and cannot receive assignments.`,
         },
       });
     }
@@ -581,26 +579,20 @@ router.post('/tasks/assign', requireManager, async (req: AuthRequest, res: Respo
     }
 
     // 4. Send Notification to Resident
-    await prisma.notification.create({
-      data: {
-        userId: ticket.residentId,
-        type: 'TASK_ASSIGNED',
-        title: `Personnel Assigned to Ticket #${ticket.id.slice(0, 6)}`,
-        message: `${personnel.name} (${personnel.category}) has been assigned to your request: "${ticket.title}".`,
-        metadata: { ticketId, taskId: task.id, personnelId },
-      },
+    await notifyUsers([ticket.residentId], {
+      type: 'TASK_ASSIGNED',
+      title: `Personnel Assigned to Ticket #${ticket.id.slice(0, 6)}`,
+      message: `${personnel.name} (${personnel.category}) has been assigned to your request: "${ticket.title}".`,
+      metadata: { ticketId, taskId: task.id, personnelId },
     });
 
     // 5. If personnel has a linked app user, send them a task notification
     if (personnel.userId) {
-      await prisma.notification.create({
-        data: {
-          userId: personnel.userId,
-          type: 'NEW_TASK_ASSIGNED',
-          title: `New Task Assigned: Ticket #${ticket.id.slice(0, 6)}`,
-          message: `You have been assigned to "${ticket.title}".`,
-          metadata: { ticketId, taskId: task.id },
-        },
+      await notifyUsers([personnel.userId], {
+        type: 'NEW_TASK_ASSIGNED',
+        title: `New Task Assigned: Ticket #${ticket.id.slice(0, 6)}`,
+        message: `You have been assigned to "${ticket.title}".`,
+        metadata: { ticketId, taskId: task.id },
       });
     }
 
@@ -864,7 +856,7 @@ const createPersonnelSchema = z.object({
   communityId: z.string().uuid().optional(),
 });
 
-router.post('/personnel', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/personnel', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -948,7 +940,7 @@ const updatePersonnelSchema = z.object({
   availabilityStatus: z.enum(['AVAILABLE', 'BUSY', 'OFF_DUTY', 'LEAVE']).optional(),
 });
 
-router.patch('/personnel/:id', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.patch('/personnel/:id', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -1115,7 +1107,7 @@ const importPayloadSchema = z.object({
   records: z.array(importRowSchema),
 });
 
-router.post('/attendance/import', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/attendance/import', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -1224,7 +1216,7 @@ async function saveAttendance(personnelId: string, data: z.infer<typeof markAtte
   return attRecord;
 }
 
-router.post('/attendance', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/attendance', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -1242,7 +1234,7 @@ router.post('/attendance', requireManager, async (req: AuthRequest, res: Respons
   }
 });
 
-router.patch('/personnel/:id/attendance', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.patch('/personnel/:id/attendance', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -1383,7 +1375,7 @@ router.get('/workforce/pending', requireManager, async (req: AuthRequest, res: R
 // ----------------------------------------------------
 // 20. POST /manager/workforce/:id/approve
 // ----------------------------------------------------
-router.post('/workforce/:id/approve', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/workforce/:id/approve', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -1474,7 +1466,7 @@ router.post('/workforce/:id/approve', requireManager, async (req: AuthRequest, r
 // ----------------------------------------------------
 // 21. POST /manager/workforce/:id/reject
 // ----------------------------------------------------
-router.post('/workforce/:id/reject', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/workforce/:id/reject', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -1525,7 +1517,7 @@ const updatePersonnelStatusSchema = z.object({
   designation: z.string().optional(),
 });
 
-router.patch('/personnel/:id/status', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.patch('/personnel/:id/status', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     if (communityIds.length === 0) return res.status(403).json({ error: { message: 'No approved management community found.' } });
@@ -1616,7 +1608,7 @@ router.get('/personnel/:id/activities', requireManager, async (req: AuthRequest,
 // ----------------------------------------------------
 // POST /manager/tickets/:id/approve-work-completion
 // ----------------------------------------------------
-router.post('/tickets/:id/approve-work-completion', requireManager, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/tickets/:id/approve-work-completion', requireManagerOnly, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const communityIds = await getManagerCommunityIds(req.user!.userId);
     const ticketId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
