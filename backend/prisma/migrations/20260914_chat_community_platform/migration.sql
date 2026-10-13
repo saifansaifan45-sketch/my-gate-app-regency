@@ -171,10 +171,24 @@ ALTER TABLE "Visitor" ADD COLUMN IF NOT EXISTS "acknowledgedAt" TIMESTAMP(3);
 ALTER TABLE "Visitor" ADD COLUMN IF NOT EXISTS "acknowledgedById" TEXT;
 ALTER TABLE "Visitor" ADD COLUMN IF NOT EXISTS "vehicleMake" TEXT;
 
--- 6. User columns: push token, availability window, resident availability status
+-- 6. User columns: push token, availability window, resident availability status.
+-- NOTE: some databases applied an earlier revision of initial_schema that did
+-- not include User.availabilityStatus, so handle both cases: add the column
+-- with the new type when missing, otherwise convert the legacy
+-- AvailabilityStatus value (only User.availabilityStatus was vestigial in
+-- main; the Personnel model value is what backend code reads).
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "pushToken" TEXT;
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "availabilityUntil" TIMESTAMP(3);
-ALTER TABLE "User" ALTER COLUMN "availabilityStatus" TYPE "ResidentAvailabilityStatus" USING (
-  CASE "availabilityStatus"::text WHEN 'AVAILABLE' THEN 'AVAILABLE' ELSE 'AWAY' END::text::"ResidentAvailabilityStatus"
-);
-ALTER TABLE "User" ALTER COLUMN "availabilityStatus" SET DEFAULT 'AVAILABLE';
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'User' AND column_name = 'availabilityStatus'
+  ) THEN
+    ALTER TABLE "User" ADD COLUMN "availabilityStatus" "ResidentAvailabilityStatus" NOT NULL DEFAULT 'AVAILABLE';
+  ELSE
+    ALTER TABLE "User" ALTER COLUMN "availabilityStatus" TYPE "ResidentAvailabilityStatus" USING (
+      CASE "availabilityStatus"::text WHEN 'AVAILABLE' THEN 'AVAILABLE' ELSE 'AWAY' END::text::"ResidentAvailabilityStatus"
+    );
+    ALTER TABLE "User" ALTER COLUMN "availabilityStatus" SET DEFAULT 'AVAILABLE';
+  END IF;
+END $$;
