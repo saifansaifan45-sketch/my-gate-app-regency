@@ -302,7 +302,7 @@ export const managerApi = {
   },
 
   exportAttendance: async (date?: string): Promise<{ url: string }> => {
-    const baseURL = api.defaults.baseURL || 'http://localhost:3000';
+    const baseURL = api.defaults.baseURL || 'http://localhost:3005';
     const tokenRes = await api.get<{ token: string }>('/manager/attendance/export-token');
     const params = new URLSearchParams({ downloadToken: tokenRes.data.token });
     if (date) params.set('date', date);

@@ -87,7 +87,7 @@ export default function ActivityOverviewScreen() {
         <Feather name="arrow-right" size={16} color={theme.colors.textSecondary} />
         <View style={styles.dateInputWrap}><Text style={styles.dateInputLabel}>To</Text><TextInput style={styles.dateInput} value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textSecondary} autoCapitalize="none" maxLength={10} accessibilityLabel="End date" /></View>
       </View> : null}
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 16 }]} refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={() => refetch()} tintColor={theme.colors.primary} />}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 16 }]} refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={() => { void refetch(); }} tintColor={theme.colors.primary} />}>
         {isLoading ? <View style={styles.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View> : null}
         {!isLoading && activities.length === 0 ? <EmptyState icon="activity" title="No activity found" description={dateRange === 'CUSTOM' && (!isDateKey(startDate) || !isDateKey(endDate) || startDate > endDate) ? 'Enter valid dates in YYYY-MM-DD format, with the start date before the end date.' : filter === 'ALL' ? 'No household activity was recorded for this date range.' : 'No matching household activity was recorded for this date range.'} /> : null}
         {activities.map((activity, index) => {

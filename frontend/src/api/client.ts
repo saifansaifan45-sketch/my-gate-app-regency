@@ -10,20 +10,20 @@ const getBaseUrl = () => {
   }
   
   if (__DEV__) {
-    if (Platform.OS === 'web') return 'http://localhost:3000';
+    if (Platform.OS === 'web') return 'http://localhost:3005';
 
-    // When running in Expo Go on a physical phone, automatically use the Mac's LAN IP
+    // When running in Expo Go on a physical phone, automatically use the host's LAN IP
     const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
     if (hostUri) {
       const hostIp = hostUri.split(':')[0];
       if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
-        return `http://${hostIp}:3000`;
+        return `http://${hostIp}:3005`;
       }
     }
 
-    if (Platform.OS === 'ios') return 'http://localhost:3000'; 
-    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
+    if (Platform.OS === 'ios') return 'http://localhost:3005'; 
+    if (Platform.OS === 'android') return 'http://10.0.2.2:3005';
+    return 'http://localhost:3005';
   }
 
   throw new Error('EXPO_PUBLIC_API_URL must be defined in production.');
@@ -80,6 +80,7 @@ export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true',
   },
 });
 

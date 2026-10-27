@@ -278,9 +278,19 @@ export async function seedDatabase() {
       create: { userId: watchman.id, communityId: community.id, role: Role.WORKFORCE, status: 'APPROVED', requestedCategory: 'SECURITY', requestedDepartment: 'SECURITY' },
     });
 
-    // Create Personnel record for watchman
-    await prisma.personnel.create({
-      data: {
+    // Create Personnel record for watchman (idempotent upsert)
+    await prisma.personnel.upsert({
+      where: { userId: watchman.id },
+      update: {
+        name: 'Rajesh Kumar',
+        phone: '+91 98444 55667',
+        category: PersonnelCategory.SECURITY,
+        department: 'SECURITY',
+        designation: 'Main Gate Security Officer',
+        availabilityStatus: AvailabilityStatus.AVAILABLE,
+        communityId: community.id,
+      },
+      create: {
         name: 'Rajesh Kumar',
         phone: '+91 98444 55667',
         userId: watchman.id,

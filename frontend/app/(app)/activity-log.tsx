@@ -78,7 +78,8 @@ const SKELETON_COUNT = 6;
 export default function ActivityLogScreen() {
   const { bottomClearance } = useScreenInsets(false);
   const [filter, setFilter] = useState<FilterType>('ALL');
-  const scrollViewRef = useRef<ScrollView>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scrollViewRef = useRef<any>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const { data, isLoading, isError, isFetchingNextPage, hasNextPage, fetchNextPage, refetch } = useInfiniteQuery<

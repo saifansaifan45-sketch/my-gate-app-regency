@@ -32,21 +32,21 @@ class ChatSocketService {
   private isIntentionallyClosed = false;
 
   private getWebSocketUrl(): string {
-    let baseUrl = 'http://localhost:3000';
+    let baseUrl = 'http://localhost:3005';
     if (process.env.EXPO_PUBLIC_API_URL) {
       baseUrl = process.env.EXPO_PUBLIC_API_URL;
     } else if (__DEV__) {
       if (Platform.OS === 'web') {
-        baseUrl = 'http://localhost:3000';
+        baseUrl = 'http://localhost:3005';
       } else {
         const hostUri = Constants.expoConfig?.hostUri || (Constants as unknown as { manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } } })?.manifest2?.extra?.expoGo?.debuggerHost;
         if (hostUri) {
           const hostIp = hostUri.split(':')[0];
           if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
-            baseUrl = `http://${hostIp}:3000`;
+            baseUrl = `http://${hostIp}:3005`;
           }
         } else if (Platform.OS === 'android') {
-          baseUrl = 'http://10.0.2.2:3000';
+          baseUrl = 'http://10.0.2.2:3005';
         }
       }
     }

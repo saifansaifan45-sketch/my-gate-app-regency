@@ -74,7 +74,7 @@ export default function WorkTasksScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => { void refetch(); }} tintColor={theme.colors.primary} />}
       >
         <View style={styles.responsiveInner}>
         {isError ? (

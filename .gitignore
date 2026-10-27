@@ -272,3 +272,12 @@ backend/update_*.js
 backend/repair_*.js
 backend/patch_*.js
 backend/final_*.js
+
+# ======================
+# Playwright & Test Results
+# ======================
+test-results/
+e2e-report/
+e2e/evidence/*.png
+!e2e/evidence/.gitkeep
+regency_page_*.png

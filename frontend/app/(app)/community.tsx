@@ -2,7 +2,7 @@ import { PremiumPressable } from '../../src/components/ui/PremiumPressable';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert, InteractionManager, FlatList, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Animated, Easing, useWindowDimensions, Alert, FlatList, Platform } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text } from '../../src/components/ui/Text';
 import { AppHeader } from '../../src/components/ui/AppHeader';
@@ -225,7 +225,7 @@ export default function CommunityScreen() {
               keyExtractor={(item) => item.id}
               renderItem={renderAnnouncement}
               contentContainerStyle={[styles.feed, { paddingBottom: bottomClearance }]}
-              ListHeaderComponent={listHeader}
+              ListHeaderComponent={listHeader ?? undefined}
               initialNumToRender={5}
               maxToRenderPerBatch={5}
               windowSize={5}

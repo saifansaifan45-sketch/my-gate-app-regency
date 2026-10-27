@@ -401,7 +401,7 @@ export default function GateOperationsScreen() {
         <ScrollView
           contentContainerStyle={[styles.list, { paddingBottom: bottomClearance + 36 }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={viewMode === 'QUEUE' ? isRefetchingQueue : isFetchingHistory && !!historyData} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
+          refreshControl={<RefreshControl refreshing={viewMode === 'QUEUE' ? isRefetchingQueue : isFetchingHistory && !!historyData} onRefresh={() => { void handleRefresh(); }} tintColor={theme.colors.primary} />}
         >
           {isLoading ? (
             <View style={{ gap: 14 }}>

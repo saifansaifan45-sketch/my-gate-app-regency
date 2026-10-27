@@ -37,6 +37,8 @@ export function Button({ label, variant = 'primary', size = 'md', icon, iconPosi
         style,
       ]}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       scaleTo={0.97}
       activeOpacity={0.9}
       haptic="light"

@@ -158,7 +158,7 @@ export default function VisitorsScreen() {
 
       <ScrollView
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomClearance + 90 }]}
-        refreshControl={<RefreshControl refreshing={isRefetching && !isLoading} onRefresh={refetch} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefetching && !isLoading} onRefresh={() => { void refetch(); }} tintColor={theme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (

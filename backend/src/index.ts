@@ -58,6 +58,30 @@ app.use(cors({
 
 app.use(express.json());
 
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'Regency Salma API (Zobay Neighbourhood)',
+    status: 'online',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/auth',
+      visitors: '/visitors',
+      community: '/community',
+      manager: '/manager',
+      leadership: '/leadership',
+      work: '/work',
+      chat: '/chat',
+      tickets: '/tickets',
+      notifications: '/notifications',
+    },
+    clientInfo: {
+      expoMetro: 'http://192.168.0.139:8081',
+      mobileApp: 'Open Expo Go and enter exp://192.168.0.139:8081',
+    },
+  });
+});
+
 // Health Check with Database Connectivity Verification
 app.get('/health', async (_req, res) => {
   try {

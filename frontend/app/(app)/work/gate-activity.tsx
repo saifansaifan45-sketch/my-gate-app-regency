@@ -184,7 +184,7 @@ export default function GateActivityLog() {
             renderItem={renderLog}
             contentContainerStyle={[styles.listContent, { paddingBottom: bottomClearance + 24 }]}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />}
+            refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => { void refetch(); }} tintColor={theme.colors.primary} />}
             ListEmptyComponent={
               <ScreenEntrance delay={80}>
                 <View style={styles.emptyWrap}>
